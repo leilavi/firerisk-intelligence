@@ -1,6 +1,6 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-27 14:30 (UTC+7)**. A row is "Implemented" only with verification evidence.
+Status as of **2026-10-27 16:20 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
 Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
 **Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
@@ -31,6 +31,17 @@ add real photos/video when provided.
 | Backend API (`api.py`) | Implemented | New | — | API smoke test on real snapshot |
 | Dashboard: overview, alerts, alert detail (basis, verification, AI panel, signals, timeline, meter charts, links, evidence table, media), event history, data sources, media | Implemented | New | Live test on author's PC | Playwright run: no console errors; screenshots desktop + mobile |
 | Evidence drawer with source file / tab / row / record ID | Implemented | New | — | Playwright screenshot |
+| Status classes (open / degraded / paused / in progress / resolved / pass / unknown) with unmapped values flagged | Implemented | New | Map new status words as they appear | `test_unknown_status_is_not_treated_as_resolved`; real data: 2 unmapped-before values now mapped |
+| Duplicate record IDs kept and flagged; invalid meter values flagged (not dropped); missing timestamps flagged | Implemented | New | — | `test_pipeline.py` (3 tests) |
+| Generator duration 00:00 recomputed from start/end (skill §2.4 check) | Implemented | Modified (skill §2.4) | — | 6 real records corrected; test |
+| Overdue repairs, stale "Đang thi công", future timestamps | Implemented | Modified (skill §2.4, §10.4 ideas) | — | test; real: 1 overdue, 1 possibly stale |
+| Missing / corrupt workbook or tab → reported, analysis continues | Implemented | New | — | `test_missing_tab_does_not_stop_analysis`, `test_missing_and_corrupt_files_are_reported` |
+| Late-arriving records detected across runs | Implemented | New | — | `test_late_arrival_detected_across_runs` |
+| Exactly 4 conclusion labels for meter episodes | Implemented (corrected) | Modified (skill §5) | — | 4 tests; fifth label removed |
+| Meter signal levels per skill §5A.8 | Implemented (corrected) | Modified (skill §5A.8) | — | `test_meter_severity_mapping_skill_5a8` |
+| 14 alert fields per signal (skill §8) + short headline, assessment class, unknowns | Implemented | Modified (skill §8 structure) + New content | Review texts with site staff | `test_every_alert_has_the_14_fields` |
+| Human-only "Confirmed on site" verification state; first-detection time | Implemented | New | — | `test_status_change_and_confirmed_state` |
+| Dashboard v2: light theme, risk colours + icons + words, building zone panel, priority list, weekly fault chart, equipment page, 6-question alert detail, meter windows ±7 days, maintenance history, origin labels (source / derived / rule / AI / test) | Implemented | New | Live check on author's PC | Playwright desktop + tablet, no app errors (Google Fonts blocked in Claude's sandbox only) |
 | Media inventory (photo references found in logs; local files matched by name) | Implemented | New | Connect the real photo/video folder | 1,006 photo references found; 0 files available yet |
 | Video frame sampling (ffmpeg) | Implemented, not run | New | Test when a survey video is provided | — |
 | Muse Spark image description (`media.describe_image`) | Implemented, **not run** | New | Run on first real photos | Request format from official docs |

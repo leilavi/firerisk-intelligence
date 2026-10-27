@@ -77,3 +77,16 @@ Author clarified the project is an upgrade of their own earlier skill. The guide
 - Author connected GitHub and installed the Claude GitHub App on `leilavi`. First push attempts returned HTTP 403 until the installation propagated; then `main` (12 commits, dates preserved) was pushed to https://github.com/leilavi/firerisk-intelligence.
 - Git tags cannot be pushed through this environment's proxy (HTTP 403 on tag refs and on the refs API), so the baseline marker was published as branch `baseline-pre-hackathon` → `b79223f`.
 - Verification: repository visibility `public`; fresh clone contains no `data/`, no `.env`, and no building/operator/staff identifiers in any commit; tests on the fresh clone: 30 passed, 2 skipped (real-data tests skip without the private snapshot, by design).
+
+## 2026-10-27 15:53–16:20 — Pipeline hardening, skill alignment, dashboard v2
+**Author instruction (15:53):** complete reading/normalising/analysing/linking of real data for fire-risk detection (no media yet); keep labels, levels and 14 fields; redesign the dashboard (light, risk colours, evidence-first detail).
+
+**Audit findings on real data:** unmapped statuses ("3. Tạm dừng", "Đang thi công", empty); 6 generator runs with duration 00:00 although start ≠ end; one works record "Đang thi công" since August; a missing tab or corrupt file would have stopped the whole analysis. Gaps vs SKILL.md: a fifth episode label had been introduced; meter signals did not follow §5A.8 levels; alerts lacked several of the 14 §8 fields.
+
+**Changes:** `config.py` (STATUS_CLASS), `sources/normalize.py` (status class, dedupe, invalid values, units, generator duration, resilient loader), `engine.py` (record checks, resilient sources, DQ flags), `rules/meters.py` (4 labels + related-record rule, ongoing/near-zero), `hazards/pathways.py` (R8 per §5A.8), `alert_fields.py` (new: 14 fields, short texts, assessment class), `store.py` (late arrivals, first detection, "confirmed"), `api.py` (new endpoints), `web/*` (dashboard v2), tests `fixtures.py` (TEST fixture workbooks), `test_pipeline.py`, `test_api.py`, extra rule tests, `ARCHITECTURE.md`, `RISK_RULES.md`.
+
+**Tests:** 54 passed. Playwright on the real snapshot: overview, alerts, alert detail (+ AI panel against the mock server, labelled TEST), drawer, equipment, data sources, events, media, tablet 820 px — no application errors (only Google Fonts blocked by the sandbox proxy; fallback fonts used).
+
+**Effect on real data:** B1 stays High risk (water ingress not fixed; jammed blower with past burn-out). Water main and floor-2 AC meter now Warning (recurring episodes, skill §5A.8). Roof and F3 no longer raise a signal: their October episodes are "Insufficient data" because no vehicle counts exist after 30 Sep.
+
+**Not done:** live Drive sync; photos/video; SAM 3.1; live check of dashboard v2 on the author's PC.

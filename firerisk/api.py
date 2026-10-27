@@ -123,6 +123,11 @@ def status():
             "severity_labels": SEVERITY_LABEL, "evidence_count": len(res.evidence),
             "signal_count": len(res.signals), "data_quality_issues": len(res.data_quality),
             "sources_down": [s for s in res.source_status if s.get("error")],
+            "sources_stale": [s for s in res.source_status if s.get("stale")],
+            "zone_records": dict(Counter(e.zone or "Building" for e in res.evidence.values()
+                                         if e.kind in ("incident", "construction", "asset_service", "inspection_check",
+                                                       "generator_run", "meter_episode"))),
+            "zones": ZONE_LABELS,
             "ai": {"configured": cfg.configured, "model": cfg.model, "mode": _ai_mode(cfg.base_url)},
             "media": media_inventory(res)["summary"]}
 
@@ -138,7 +143,8 @@ def _alert_summary(a) -> dict:
     f = a.fields
     return {"alert_id": a.alert_id, "zone": a.zone, "zone_label": a.zone_label, "severity": a.severity,
             "severity_label": SEVERITY_LABEL[a.severity], "headline": f.get("headline"),
-            "why": f.get("why", [""])[0], "assessment_class": f.get("assessment_class"),
+            "why": (f.get("why_short") or [""])[0], "why_all": f.get("why_short", []),
+            "detected_at": state.store.first_detected(a.alert_id), "assessment_class": f.get("assessment_class"),
             "assessment_text": f.get("assessment_text"), "first_seen": a.first_seen.isoformat() if a.first_seen else None,
             "last_seen": a.last_seen.isoformat() if a.last_seen else None, "open_items": a.open_items,
             "evidence_count": len(a.evidence_ids), "pathways": a.pathways,
@@ -189,6 +195,9 @@ def alert_detail(alert_id: str):
                            "unit": v.get("unit"), "unit_verified": v.get("unit_verified"), "label": v.get("label"),
                            "start": start, "end": v.get("end"), "median": v.get("median"),
                            "points": _window(res.meter_calendars.get(m, []), start, v.get("end") or start)})
+    # most relevant windows first: episodes linked to an equipment record, then recurring, then most recent
+    trends.sort(key=lambda t: ("record on measured equipment" not in (res.evidence[t["evidence_id"]].values.get("note") or ""),
+                               t["label"] != "Evidence-based risk", -(int(t["start"].replace("-", "") or 0))))
     meters = sorted({t["meter"] for t in trends} |
                     {m for m, feeds in METER_FEEDS.items() if any(e["asset_id"] in feeds for e in evidence)})
     # maintenance / incident history of the affected assets (all dates)
@@ -296,6 +305,17 @@ def _abnormal_assets(res) -> list[dict]:
 @app.get("/api/assets")
 def assets():
     return _abnormal_assets(state.get())
+
+
+@app.get("/api/assets/{asset_id:path}")
+def asset_detail(asset_id: str):
+    res = state.get()
+    recs = sorted((_ev(e) for e in res.evidence.values() if e.asset_id == asset_id and e.kind != "meter_reading"),
+                  key=lambda d: d["timestamp"] or "", reverse=True)
+    sigs = [s.to_dict() for s in res.signals if any((res.evidence.get(i) and res.evidence[i].asset_id == asset_id)
+                                                    for i in s.evidence_ids)]
+    return {"asset_id": asset_id, "name": _asset_name(asset_id), "meta": ASSETS.get(asset_id) or METERS.get(asset_id),
+            "records": recs, "signals": sigs, "calendar": res.meter_calendars.get(asset_id, [])[-60:]}
 
 
 @app.get("/api/trends")

@@ -219,6 +219,30 @@ def signal_fields(sig, index: dict, now: datetime) -> dict:
     }
 
 
+def short_text(sig, index: dict) -> str:
+    """One short, plain sentence for lists and headlines (NEW). Facts only, from the signal's own evidence."""
+    items = [index[i] for i in sig.evidence_ids if i in index]
+    n_open = sum(1 for e in items if e.is_open)
+    unresolved = f", {n_open} not fixed" if n_open else ", all marked fixed"
+    p = sig.pathway
+    if p == "water_electrical":
+        return f"Water entering the electrical rooms ({len(items)} reports{unresolved})"
+    if p == "detection_impairment":
+        return f"Fire-detection fault reported {len(items)}× in the last 30 days{unresolved}"
+    if p == "motor_overheat":
+        burnt = any(t["tag"] == "burnt_overheat" for e in items for t in e.tags)
+        name = (ASSETS.get(sig.asset_id or "") or {}).get("name", "Motor")
+        return f"{name}: {'jammed again after a past motor burn-out' if burnt else 'motor or mechanical failure'}{unresolved}"
+    if p == "backup_power":
+        outages = sum(1 for e in items if e.kind == "generator_run")
+        return f"Generator battery fault and {outages} grid outage(s) in 60 days{unresolved}"
+    if p in ("electrical_anomaly", "consumption_anomaly"):
+        name = (METERS.get(sig.asset_id or "") or {}).get("name", sig.asset_id)
+        n = len(items)
+        return f"{name}: {n} unusual consumption period(s) in 30 days"
+    return f"{PATHWAYS[p]['title']} ({len(items)} record(s){unresolved})"
+
+
 def assessment_class(alert, signals) -> tuple[str, str]:
     """NEW: distinguishes data anomaly / risk indicator / insufficient evidence. 'Confirmed' is only ever set by a
     person (verification status 'confirmed'), never by the rules or the AI."""
@@ -236,6 +260,7 @@ def enrich_alerts(alerts, signals, index: dict, source_status: list[dict], now: 
     by_id = {s.signal_id: s for s in signals}
     for s in signals:
         s.fields = signal_fields(s, index, now)
+        s.fields["short"] = short_text(s, index)
     down = [f"{x['source']} / {x.get('sheet') or ''}: {x['error']}" for x in source_status if x.get("error")]
     stale = [f"{x['source']} / {x.get('sheet') or ''}: newest record {x.get('age_days')} days old" for x in source_status
              if x.get("stale")]
@@ -245,8 +270,24 @@ def enrich_alerts(alerts, signals, index: dict, source_status: list[dict], now: 
         cls, cls_text = assessment_class(a, sigs)
         open_sigs = [s for s in sigs if s.is_open]
         headline_sig = open_sigs[0] if open_sigs else top
+        why: list[str] = []
+        def bare(txt):
+            return re.sub(r", (\d+ not fixed|all marked fixed)\)?$", lambda m: ")" if m.group(0).endswith(")") else "", txt)
+        meter_paths = ("electrical_anomaly", "consumption_anomaly")
+        for s in sigs:
+            if s.is_open:
+                why.append(("Still ongoing: " if s.pathway in meter_paths else "Not fixed: ") + bare(s.fields["short"]))
+        others = [s for s in sigs if not s.is_open and s.severity in ("warning", "high", "emergency")]
+        for s in others[:2]:
+            why.append(("Repeated: " if s.pathway in meter_paths else "Recurring, marked fixed: ") + bare(s.fields["short"]))
+        hazard_types = {s.pathway for s in sigs} - {"electrical_anomaly", "consumption_anomaly"}
+        if len(hazard_types) >= 2:
+            why.append(f"{len(hazard_types)} kinds of fire-safety problem in the same zone")
+        if not why:
+            why.append(top.fields["short"])
         a.fields = {
-            "headline": f"{headline_sig.title} — {headline_sig.basis}",
+            "headline": headline_sig.fields["short"],
+            "why_short": why,
             "assessment_class": cls, "assessment_text": cls_text,
             "why": a.severity_basis,
             "urgency": top.fields["urgency"], "deadline": top.fields["deadline"],

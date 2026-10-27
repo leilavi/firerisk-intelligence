@@ -103,6 +103,11 @@ class Store:
             r = c.execute("SELECT * FROM alert_state WHERE alert_id=? ORDER BY id DESC LIMIT 1", (alert_id,)).fetchone()
             return dict(r) if r else None
 
+    def first_detected(self, alert_id: str) -> str | None:
+        with self._conn() as c:
+            r = c.execute("SELECT changed_at FROM alert_state WHERE alert_id=? ORDER BY id LIMIT 1", (alert_id,)).fetchone()
+            return r["changed_at"] if r else None
+
     def status_log(self, alert_id: str) -> list[dict]:
         with self._conn() as c:
             return [dict(r) for r in c.execute("SELECT * FROM alert_state WHERE alert_id=? ORDER BY id DESC", (alert_id,))]

@@ -67,9 +67,21 @@ python -m firerisk.serve
 ```
 `scripts/check_meta_api.py` (or `run_api_check.bat`) checks the Meta API connection on its own.
 
+## Dashboard
+* **Overview** — building zone panel (Roof → B1) coloured by the highest rule level, counts of active / serious alerts,
+  equipment with signals, "needs attention now", weekly fault records by hazard type.
+* **Alerts** — one line per zone alert: level (colour + icon + word), zone, the key sign, detection time, one-line reason.
+* **Alert detail** — six questions in order: what is abnormal · what evidence supports it (source rows, values with
+  units, meter readings 7 days before/after) · why it is a risk · which area and equipment · what to do next ·
+  what is not verified. Muse Spark's explanation is a separate, labelled block.
+* **Equipment, Event history, Data sources, Photos & video.**
+Every piece of content is labelled: source record, derived from data, rule result, AI (Muse Spark) or test.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and source status.
+
 ## Tests
-`python -m pytest -q` — ported rules, new hazard rules, correlation, offline AI tests (fake HTTP transport,
-clearly not the real API), and an integration test on the real snapshot (skipped when the snapshot is absent).
+`python -m pytest -q` — 54 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
+on **test fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals), API, offline AI tests
+(fake HTTP transport, clearly not the real API), and integration tests on the real snapshot (skipped when absent).
 
 ## What is new in the Hackathon
 The earlier work was a Claude skill: a Markdown instruction file with **no code**. It is kept, redacted, in

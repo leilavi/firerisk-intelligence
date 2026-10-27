@@ -41,6 +41,28 @@ Routine maintenance without a fault word does not fire any rule (it is context e
 days), `same_zone_time_window` (same zone within 14 days — kept only with another reason or when both
 records carry hazard tags). Links are relationships worth checking, not causation.
 
+## Meter conclusion labels (PORTED, skill §5 table — exactly four)
+Reasonable variation · Anomaly to monitor · Evidence-based risk · Insufficient data. Evaluation order:
+MSB-only change with EVN normal → Insufficient data (reading error suspected, skill §5A.5) → activity explains a rise
+(vehicles ≥ 140% of median) → Reasonable variation → ≥ 3 days, repeated within 30 days, or an incident/repair on
+equipment the meter measures within 3 days → Evidence-based risk → no activity data → Insufficient data →
+otherwise Anomaly to monitor. *(Change 2026-10-27: an earlier build used a fifth label "Reading error (MSB only)";
+it was mapped back to the skill's four labels.)*
+
+## R8 meter signal levels (PORTED, skill §5A.8)
+Anomaly to monitor → Watch; Evidence-based risk → Warning; main water rise still ongoing on the latest reading, or
+main electricity near zero (≤ 10% of baseline) on the latest reading → High. Reasonable variation and Insufficient data
+never raise a signal. *(Change 2026-10-27: previously all meter signals were Watch.)*
+
+## Deadlines and confidence (PORTED structure, skill §8 fields 11 and 13; values preliminary)
+Emergency: immediately · High: within 24 hours · Warning: within 7 days · Watch: next routine inspection.
+Confidence: High = ≥ 2 records of ≥ 2 record types; Medium = several records of one type or one record;
+Low = derived meter analysis only; Insufficient data = all records carry data-quality flags.
+
+## Assessment class (NEW)
+Data anomaly (meter pattern only) · Risk indicator (recorded faults, not confirmed) · Not enough data to confirm ·
+Confirmed — only when a person sets the verification status "Confirmed on site"; rules and AI never set it.
+
 ## Meter rules (PORTED, skill Stage 2B and §5A) — `firerisk/rules/meters.py`
 Consumption day attribution, averaged gaps, excluded decreasing readings, 28-day median/MAD baseline
 (3 × MAD × 1.4826, or <50% / >150% of median, with per-meter minimum deltas), episodes, EVN-vs-MSB

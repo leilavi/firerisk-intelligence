@@ -4,30 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FireRisk Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Noto+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="flame" aria-hidden="true"></span><div><strong>FireRisk Intelligence</strong><small id="building">—</small></div></div>
-  <nav>
+  <a class="brand" href="#/" aria-label="FireRisk Intelligence home">
+    <svg width="22" height="26" viewBox="0 0 22 26" aria-hidden="true"><path d="M11 1c1.5 4.2 6.5 6.7 6.5 12.4A6.5 6.5 0 0 1 4.5 13.4C4.5 10 6.6 8.6 7.6 6c1 2.4 2.2 3.3 3.4 3.6C11.4 7 11.6 4 11 1z" fill="#F07A1A"/><path d="M11 13.5c1.2 1.6 2.6 2.4 2.6 4.4a2.6 2.6 0 0 1-5.2 0c0-1.4.8-2.1 1.3-3 .4.8.8 1.1 1.3 1.2.1-.9.1-1.7 0-2.6z" fill="#FFD27A"/></svg>
+    <span><strong>FireRisk Intelligence</strong><small id="building">—</small></span>
+  </a>
+  <nav aria-label="Main">
     <a href="#/" data-nav="overview">Overview</a>
     <a href="#/alerts" data-nav="alerts">Alerts</a>
+    <a href="#/equipment" data-nav="equipment">Equipment</a>
     <a href="#/events" data-nav="events">Event history</a>
     <a href="#/quality" data-nav="quality">Data sources</a>
-    <a href="#/media" data-nav="media">Images &amp; video</a>
+    <a href="#/media" data-nav="media">Photos &amp; video</a>
   </nav>
   <div class="run">
-    <span id="ai-status" class="pill">AI: …</span>
-    <span id="generated" class="muted">—</span>
+    <span id="freshness" class="fresh">—</span>
+    <span id="ai-status" class="aipill">AI —</span>
     <button id="refresh" class="btn">Re-run analysis</button>
   </div>
 </header>
-<main id="app"><p class="muted pad">Loading analysis…</p></main>
-<aside id="drawer" class="drawer" hidden>
-  <div class="drawer-head"><strong>Evidence</strong><button class="btn ghost" id="drawer-close">Close</button></div>
+<main id="app" tabindex="-1"><p class="loading">Loading analysis…</p></main>
+<aside id="drawer" class="drawer" hidden aria-label="Source record">
+  <div class="drawer-head"><h2>Source record</h2><button class="btn quiet" id="drawer-close">Close</button></div>
   <div id="drawer-body"></div>
 </aside>
-<footer class="foot">Decision-support tool. Rule severities are preliminary and documented; AI output is hypothesis, not confirmation. It does not replace certified fire systems or qualified professionals.</footer>
+<footer class="foot">
+  <span class="legend-origin"><span class="org source">Source record</span><span class="org derived">Derived from data</span><span class="org rule">Rule result</span><span class="org ai">AI (Muse Spark)</span><span class="org test">Test</span></span>
+  <p>Decision support. Rule levels are preliminary and documented in RISK_RULES.md; AI text is a hypothesis, not a measurement. It does not replace certified fire systems or qualified professionals.</p>
+</footer>
 <script src="/static/app.js"></script>
 </body>
 </html>
