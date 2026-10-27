@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FireRisk Intelligence</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="flame" aria-hidden="true"></span><div><strong>FireRisk Intelligence</strong><small id="building">—</small></div></div>
+  <nav>
+    <a href="#/" data-nav="overview">Overview</a>
+    <a href="#/alerts" data-nav="alerts">Alerts</a>
+    <a href="#/events" data-nav="events">Event history</a>
+    <a href="#/quality" data-nav="quality">Data sources</a>
+    <a href="#/media" data-nav="media">Images &amp; video</a>
+  </nav>
+  <div class="run">
+    <span id="ai-status" class="pill">AI: …</span>
+    <span id="generated" class="muted">—</span>
+    <button id="refresh" class="btn">Re-run analysis</button>
+  </div>
+</header>
+<main id="app"><p class="muted pad">Loading analysis…</p></main>
+<aside id="drawer" class="drawer" hidden>
+  <div class="drawer-head"><strong>Evidence</strong><button class="btn ghost" id="drawer-close">Close</button></div>
+  <div id="drawer-body"></div>
+</aside>
+<footer class="foot">Decision-support tool. Rule severities are preliminary and documented; AI output is hypothesis, not confirmation. It does not replace certified fire systems or qualified professionals.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

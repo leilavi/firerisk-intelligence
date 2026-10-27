@@ -1,48 +1,48 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-27 12:00 (UTC+7)** — initial audit. Nothing in the "New" rows has been implemented yet. A row moves to "Implemented" only with verification evidence (commit hash, test result, API log).
+Status as of **2026-10-27 15:00 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
-Origin: **Existing** = specified in the pre-existing skill (logic exists only as natural-language instructions, no code) · **Modified** = existing idea re-implemented/extended in code during the Hackathon · **New** = not present in the baseline.
+Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
+**Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
+**New** = not present in the baseline (marked `ORIGIN: NEW`).
 
-| Component or Feature | Current Status | Origin: Existing / Modified / New | Recommended Action | Verification Evidence |
+Direction change 2026-10-27 13:48 (author): use the **real operational data** instead of a synthetic scenario;
+add real photos/video when provided.
+
+| Component or Feature | Current Status | Origin | Recommended Action | Verification Evidence |
 |---|---|---|---|---|
-| Risk-alert skill v2.2 (SKILL.md, Vietnamese prompt) | Exists, works inside Claude only; no code | Existing | Keep unchanged as baseline; use as specification reference | `baseline/` redacted copy; Drive modifiedTime 2026-10-15; SHA-256 in `PRE_EXISTING_WORK.md` |
-| Google Drive / Sheets data reading (real building data) | Exists as instructions for Claude connectors | Existing | Do **not** reuse in the public app (private data, Claude-only connectors). Replace with file-based loaders for synthetic data | Skill §2 |
-| Data-quality checks (missing days, duplicates, rollback, row-limit truncation) | Specified in prose | Modified | Re-implement the generic checks in Python with tests | Skill §4 Stage 2/2B |
-| Spike/drop detection (median + MAD, 28-day baseline, min-delta) | Specified in prose | Modified | Port to a deterministic, tested Python module; generalise from water/electricity meters to temperature, load, gas | Skill §5A |
-| 4 conclusion labels + 5 severity levels | Specified in prose | Modified | Reuse the taxonomy in the rule engine; add fire-specific escalation states (observed anomaly / elevated risk / plausible pathway / confirmed alarm) | Skill §5, §7 |
-| 14-field alert structure | Specified in prose | Modified | Convert into a JSON schema used for Muse Spark structured output | Skill §8 |
-| Rule: no invented probabilities / dates; facts vs hypotheses labels (DL/BT/GT/DB/KN) | Specified in prose | Modified | Enforce in schema (`claim_type` field) and in validation code | Skill §5, §9 |
-| HTML report template (Vietnamese, Chart.js) | Exists on Drive | Existing | Not reused; new English dashboard | Drive metadata 2026-10-08 |
-| E-mail alerts, Alert_Log, reminders via Gmail/Drive | Specified for Claude connectors | Existing | Out of MVP scope; at most an alert-status field in the app | Skill §10 |
-| Fire-safety-specific data model (fire alarm panel events, smoke/heat/gas sensors, HVAC/ventilation status, suppression system status) | Not present | New | Define canonical schema + synthetic dataset | — |
-| Synthetic demo dataset (telemetry, maintenance, events, image) | Not present | New | Generate reproducibly with a seeded script; label as synthetic | — |
-| Cross-source evidence correlation (same asset / zone / time window / system dependency) | Not present (baseline only compares meters with vehicle counts) | New | Core module; explicit, testable linking rules with a reason per link | — |
-| Event timeline construction | Not present | New | Build ordered, source-linked timeline per incident cluster | — |
-| Root-cause investigation with evidence chain, alternatives, missing information | Partly specified as prose ("possible causes + basis") | New (code + Muse) | Muse Spark reasoning over the correlated evidence package; output validated against schema; every claim cites evidence IDs | — |
-| Fire/explosion escalation-pathway assessment | Not present | New | Rule-based escalation states + Muse explanation; no numeric probabilities | — |
-| Response recommendations with urgency | Specified generally | Modified | Generate per pathway; deterministic urgency floor from rules | — |
-| Meta Model API client (Muse Spark, `muse-spark-1.3`) | Connection check implemented and passed against the real API (not yet the product client) | New | OpenAI-compatible client, timeouts, retries, schema validation, offline mode clearly labelled | Docs verified 2026-10-27 (see below) |
-| SAM 3.1 visual evidence (`sam-3.1`) | Not present | New (optional, Priority 6) | Segment e.g. cable tray / panel / blocked vent in a prepared image; attach as evidence item | — |
-| Muse Spark image understanding | Not present | New (optional) | Describe segmented region as supporting evidence | — |
-| Evidence traceability (claim → evidence → source row) | Partly specified (source field) | Modified | Evidence IDs end to end; UI drill-down | — |
-| AI-failure fallback (deterministic alert still produced) | Not present | New | Rule engine output always shown; AI section marked unavailable | — |
-| Dashboard: building/zone-level fire-risk alert + evidence detail screen | Not present (old dashboard is operations, Vietnamese) | New | English web UI | — |
-| Automated tests | Not present | New | pytest for loaders, rules, correlation, schema validation, API error handling | — |
+| Risk-alert skill v2.2 (SKILL.md) | Unchanged; still used inside Claude | Existing | Keep as baseline | `baseline/`, `PRE_EXISTING_WORK.md`, tag `baseline-pre-hackathon` |
+| Claude-only Drive/Gmail workflow, Vietnamese HTML report, e-mail alerts | Unchanged, not part of this app | Existing | Keep running separately | Skill §10–14 |
+| Real-data loaders with row-level source references (`firerisk/sources`) | Implemented | New | Add live Google Drive sync | `test_real_snapshot.py`: every meter row loaded and traceable; 1,254 evidence records from real snapshot |
+| Scope filter and test-record flags (`rules/scope.py`) | Implemented | Modified (skill §2.3) | — | `test_rules_ported.py` (2 tests) |
+| Daily consumption, gaps, decreasing readings (`rules/meters.py`) | Implemented | Modified (skill Stage 2B) | — | 4 tests |
+| Median/MAD spike & drop detection, episodes, EVN/MSB cross-check, labels | Implemented | Modified (skill §5A) | — | 5 tests; real run reproduces skill observations (e.g. XLNT meter drop 21/10 & 23/10) |
+| Severity scale and "consequence, not % change" principle | Implemented as vocabulary | Modified (skill §7) | — | `config.py`, `RISK_RULES.md` |
+| Fire-safety hazard tagging of Vietnamese records (`hazards/tagging.py`) | Implemented | New | Extend vocabulary as new records appear | `test_hazards_new.py` (3 tagging tests) |
+| Hazard pathway rules R1–R9 (`hazards/pathways.py`) | Implemented | New | Review thresholds with the building's fire-safety officer | 5 rule tests; documented in `RISK_RULES.md` |
+| Context / contradicting evidence (checklists, scheduled generator runs) | Implemented | New | — | Attached to signals; shown in dashboard |
+| Cross-source evidence links with reasons (`correlation.py`) | Implemented | New | Tune link noise | `test_links_explain_their_reason_and_meter_dependency`; all link IDs resolve (`test_real_snapshot.py`) |
+| Zone-level alert aggregation + compound-risk rule | Implemented | New | — | `test_compound_rule_raises_one_level_but_never_to_emergency` |
+| Event timeline per alert | Implemented | New | — | Dashboard screenshot check |
+| Personal-data pseudonymisation before AI calls (`ai/redact.py`) | Implemented | New | — | 2 offline tests (no e-mails/names in payload) |
+| Meta Muse Spark client (`ai/muse.py`) | Implemented; connection verified live | New | — | Real call PASS `evidence/api_check_20261027_133317.json`; offline error-handling tests (401/429/400/invalid JSON/not configured) |
+| Muse Spark root-cause investigation with evidence-ID validation (`ai/investigation.py`) | Implemented; **tested offline only** | New | Run live on author's PC and save evidence | 4 offline tests + end-to-end UI run against a local mock server labelled MOCK |
+| SQLite store: runs, alert history, verification status, AI results (`store.py`) | Implemented | New (replaces skill's Sheet Alert_Log for this app) | — | API smoke test (status change saved) |
+| Backend API (`api.py`) | Implemented | New | — | API smoke test on real snapshot |
+| Dashboard: overview, alerts, alert detail (basis, verification, AI panel, signals, timeline, meter charts, links, evidence table, media), event history, data sources, media | Implemented | New | Live test on author's PC | Playwright run: no console errors; screenshots desktop + mobile |
+| Evidence drawer with source file / tab / row / record ID | Implemented | New | — | Playwright screenshot |
+| Media inventory (photo references found in logs; local files matched by name) | Implemented | New | Connect the real photo/video folder | 1,006 photo references found; 0 files available yet |
+| Video frame sampling (ffmpeg) | Implemented, not run | New | Test when a survey video is provided | — |
+| Muse Spark image description (`media.describe_image`) | Implemented, **not run** | New | Run on first real photos | Request format from official docs |
+| SAM 3.1 segmentation | **Not implemented** | New (planned) | Read official output-format docs, then implement | Model listed for the key |
+| Live Google Drive sync (without Claude) | **Not implemented**; snapshot taken via Claude's Drive connector | New (planned) | OAuth desktop client or export folder | — |
 
-## Verified Meta Model API facts (official docs, read 2026-10-27)
-
+## Verified Meta Model API facts
 | Fact | Value | Source |
 |---|---|---|
-| Base URL | `https://api.meta.ai/v1` (OpenAI-compatible) | dev.meta.ai/docs/quickstart |
-| Auth | `Authorization: Bearer <key>`; docs use env var `MODEL_API_KEY` | quickstart |
-| Endpoints | `/v1/chat/completions`, `/v1/responses` | protocols/chat-completions |
-| Reasoning model ID | `muse-spark-1.3` (also `muse-spark-1.1`) | quickstart |
-| Structured output | `response_format: {type: "json_schema", json_schema: {...}}`, optional `strict` | structured-output |
-| Unsupported on chat completions | `stop`, `logprobs`, `n>1`, `frequency/presence_penalty`, `reasoning_effort: "none"` | protocols/chat-completions |
-| Errors | 400 invalid/too long, 429 rate limit (backoff), 504 long non-streaming | protocols/chat-completions |
-| SAM model ID | `sam-3.1` via `/v1/responses`; text noun-phrase or point/box prompt; image or video; output is special-token text parsed by `@meta-sam/parser` | sam/overview |
-| Multimodal input for 1.3 | text, image, video, PDF (reported by a third-party integration page; to be confirmed on official model page) | promptfoo docs — **unverified on official page** |
-| Pricing / rate limits | Not yet read | — |
-| Models available to the author's key (real call 2026-10-27) | `muse-image-1.0`, `muse-spark-1.1`, `muse-spark-1.2`, `muse-spark-1.2-contributor`, `muse-spark-1.3`, `muse-spark-1.3-contributor`, `muse-voice-transcribe-1.0`, `muse-wonder-1.0`, `sam-3.1` | `evidence/api_check_20261027_133317.json` |
-| Structured output with `strict: true` on `muse-spark-1.3` | Works (HTTP 200, schema-valid JSON, 2.7 s, 368 completion tokens of which 330 reasoning) | same evidence file |
+| Base URL / auth | `https://api.meta.ai/v1`, `Authorization: Bearer`, env `MODEL_API_KEY` | quickstart (docs) + real call |
+| Models available to the author's key | `muse-image-1.0`, `muse-spark-1.1`, `muse-spark-1.2`, `muse-spark-1.2-contributor`, `muse-spark-1.3`, `muse-spark-1.3-contributor`, `muse-voice-transcribe-1.0`, `muse-wonder-1.0`, `sam-3.1` | real call 2026-10-27 13:33 |
+| Structured output `json_schema` + `strict: true` on `muse-spark-1.3` | Works (HTTP 200, schema-valid, 2.7 s) | real call |
+| Image input (Chat Completions) | `{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,…"}}`, ≤50 images, ≤50 MB each | docs/image-understanding |
+| SAM 3.1 | `sam-3.1` on `/v1/responses`, noun-phrase or point/box prompts, image or video; special-token output parsed by `@meta-sam/parser` | docs/sam/overview (output parsing not yet verified) |
+| Not used on purpose | `*-contributor` models (Meta may use prompts for training) | promptfoo docs; privacy decision |

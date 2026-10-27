@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from .config import ASSET_DEPENDENCIES, METER_FEEDS, SEVERITY_ORDER, ZONE_LABELS
+from .config import ASSET_DEPENDENCIES, METER_FEEDS, SEVERITY_LABEL, SEVERITY_ORDER, ZONE_LABELS
 from .hazards.pathways import PATHWAYS
 from .models import Alert, Evidence, Signal
 
@@ -90,7 +90,7 @@ def aggregate_alerts(signals: list[Signal], evidence_index: dict[str, Evidence],
                          f"{len(open_paths)} with unresolved items (compound-risk rule)")
         elif len(hazard_paths) >= 2 and open_paths:
             basis.append(f"{len(hazard_paths)} distinct hazard pathways in the same zone, {len(open_paths)} with "
-                         f"unresolved items. Already at {sev}; the compound rule never raises to Emergency "
+                         f"unresolved items. Already at {SEVERITY_LABEL[sev]}; the compound rule never raises to Emergency "
                          f"(Emergency requires a reported fire/smoke event)")
         elif len(hazard_paths) >= 2:
             basis.append(f"{len(hazard_paths)} distinct hazard pathways in the same zone, all resolved (no level change)")

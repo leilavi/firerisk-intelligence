@@ -45,3 +45,16 @@ Author clarified the project is an upgrade of their own earlier skill. The guide
 - Author ran `run_api_check.bat` on their PC at 13:33 UTC+7.
 - Result: `GET /v1/models` HTTP 200 (2.2 s), 9 models; `POST /v1/chat/completions` to `muse-spark-1.3` with strict JSON schema HTTP 200 (2.7 s), schema-valid output, 507 tokens (330 reasoning).
 - Evidence: `evidence/api_check_20261027_133317.json` (checked: contains no key).
+
+## 2026-10-27 13:48–15:00 — Direction change to real data; core engine, Muse integration, dashboard
+**Author instruction (13:48):** use the real operational data, port skill rules to tested code, integrate Muse Spark with the real API, build a complete dashboard; prepare photo/video integration (no media yet); no synthetic data in place of real data.
+
+**Real data pulled (Claude Google Drive connector, read-only):** `Operations Data` (ODS export → xlsx; 838 meter/checklist rows, 37 asset rows, 142 incident/works rows, 49 generator rows; newest record 2026-10-27 06:27) and `Theo dõi lượt khách ra vào` (13 monthly sheets, 243 days, newest 2026-09-30). Drive modifiedTime of the main sheet (2026-10-08) lags behind its rows; freshness is now judged by newest record. Photo files referenced by the logs were not found in the author's Drive.
+
+**Code written:** `firerisk/` (config, models, sources/workbook+normalize, rules/scope+meters [PORTED], hazards/tagging+pathways [NEW], correlation [NEW], engine, ai/redact+muse+investigation [NEW], store, api, media, serve), `web/` dashboard, `tests/` (4 files), `requirements*.txt`, `install.bat`, `run_dashboard.bat`, `RISK_RULES.md`, `README.md`.
+
+**Tests:** `pytest` 32 passed (ported rules 11, new hazard rules 9, offline AI 10 [fake transport, not the real API], real-snapshot integrity 2). Playwright: 8 dashboard views, no console errors; AI panel exercised end-to-end against `tests/mock_meta_server.py` in **mock** mode (results labelled MOCK, stored only in a temporary test database).
+
+**Result on real data (deterministic, no AI):** Basement B1 = High risk — unresolved water ingress into MBA/MSB rooms (incident T10_140, repairs 059/060), open failure of XLNT blower AB-01A with a recorded burnt motor (Mainte-user3-034, Repair-user2-d0036), recurring heat-detector monitor fault (Repair-user1-068, T10_143), backup-power context (battery replacement, 3 grid outages). Four Watch-level zones (PA fault, meter anomalies).
+
+**Not done / limits:** live Muse investigation not yet run (needs author's PC); SAM 3.1 not implemented; live Drive sync not implemented; no real photos/video yet.
