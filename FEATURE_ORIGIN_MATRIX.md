@@ -1,6 +1,6 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-27 15:00 (UTC+7)**. A row is "Implemented" only with verification evidence.
+Status as of **2026-10-27 14:30 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
 Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
 **Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
@@ -24,9 +24,9 @@ add real photos/video when provided.
 | Cross-source evidence links with reasons (`correlation.py`) | Implemented | New | Tune link noise | `test_links_explain_their_reason_and_meter_dependency`; all link IDs resolve (`test_real_snapshot.py`) |
 | Zone-level alert aggregation + compound-risk rule | Implemented | New | — | `test_compound_rule_raises_one_level_but_never_to_emergency` |
 | Event timeline per alert | Implemented | New | — | Dashboard screenshot check |
-| Personal-data pseudonymisation before AI calls (`ai/redact.py`) | Implemented | New | — | 2 offline tests (no e-mails/names in payload) |
+| Personal-data pseudonymisation before AI calls (`ai/redact.py`) + opaque evidence-ID aliases (v2) | Implemented | New | — | Offline tests: no e-mails/names/real record IDs in payload; aliases mapped back |
 | Meta Muse Spark client (`ai/muse.py`) | Implemented; connection verified live | New | — | Real call PASS `evidence/api_check_20261027_133317.json`; offline error-handling tests (401/429/400/invalid JSON/not configured) |
-| Muse Spark root-cause investigation with evidence-ID validation (`ai/investigation.py`) | Implemented; **tested offline only** | New | Run live on author's PC and save evidence | 4 offline tests + end-to-end UI run against a local mock server labelled MOCK |
+| Muse Spark root-cause investigation with evidence-ID validation (`ai/investigation.py`) | Implemented; **live run verified** 2026-10-27 14:19 | New | Review output quality over more runs | Live run on author's PC: 12 facts, 5 hypotheses, 3 escalation steps, 7 actions, 0 invalid citations (`evidence/investigation_ZONE-B1_20261027_1419_summary.json`); offline tests |
 | SQLite store: runs, alert history, verification status, AI results (`store.py`) | Implemented | New (replaces skill's Sheet Alert_Log for this app) | — | API smoke test (status change saved) |
 | Backend API (`api.py`) | Implemented | New | — | API smoke test on real snapshot |
 | Dashboard: overview, alerts, alert detail (basis, verification, AI panel, signals, timeline, meter charts, links, evidence table, media), event history, data sources, media | Implemented | New | Live test on author's PC | Playwright run: no console errors; screenshots desktop + mobile |

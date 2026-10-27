@@ -1,0 +1,37 @@
+{
+  "evidence_type": "first_live_muse_spark_investigation (public summary)",
+  "note": "Full result kept private (contains real building records). Produced by the FireRisk app on the author's Windows PC calling the real Meta Model API.",
+  "alert_id": "ZONE-B1",
+  "created_at": "2026-10-27T14:19:18.670017+07:00",
+  "model": "muse-spark-1.3",
+  "seconds": 38.9,
+  "usage": {
+    "completion_tokens": 6535,
+    "prompt_tokens": 10652,
+    "total_tokens": 17187,
+    "completion_tokens_details": {
+      "reasoning_tokens": 2363
+    },
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "prompt_version": "investigation-v1",
+  "request_hash": "1d38f5e75457b97e",
+  "package_evidence_count": 33,
+  "redacted_names_and_emails": true,
+  "validation": {
+    "invalid_evidence_ids": [],
+    "unsupported_facts": [],
+    "ok": true
+  },
+  "output_counts": {
+    "observed_facts": 12,
+    "hypotheses": 5,
+    "escalation_pathway": 3,
+    "missing_information": 6,
+    "recommended_actions": 7
+  },
+  "ai_priority": "high",
+  "agrees_with_rule_severity": true
+}

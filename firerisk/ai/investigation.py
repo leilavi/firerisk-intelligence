@@ -17,7 +17,7 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v1"
+PROMPT_VERSION = "investigation-v2"  # v2: opaque evidence-ID aliases
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building
 fire and explosion risk. You receive an evidence package assembled by deterministic rules from real
@@ -96,10 +96,15 @@ def _clip(s: str, n: int = 600) -> str:
     return s if len(s) <= n else s[:n] + " …"
 
 
-def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, Redactor]:
+def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, Redactor, dict]:
+    """Returns (package, redactor, alias_to_real_id). Source record IDs can embed staff user names
+    (e.g. 'Repair-<user>-059'), so evidence IDs are replaced by opaque aliases E01, E02 ... before sending."""
     red = Redactor()
     ids = list(alert.evidence_ids) + [c for c in alert.context_ids if c not in alert.evidence_ids]
     items = [evidence_index[i] for i in ids if i in evidence_index]
+    items.sort(key=lambda e: e.timestamp.isoformat() if e.timestamp else "")
+    real_to_alias = {e.evidence_id: f"E{n:02d}" for n, e in enumerate(items, start=1)}
+    alias = lambda i: real_to_alias.get(i, i)
     for e in items:
         red.add_known(e.persons)
 
@@ -108,7 +113,7 @@ def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, 
 
     def item(e, role):
         return {
-            "evidence_id": e.evidence_id, "role": role, "kind": e.kind,
+            "evidence_id": alias(e.evidence_id), "role": role, "kind": e.kind,
             "time": e.timestamp.isoformat() if e.timestamp else None,
             "asset_id": e.asset_id, "asset_name": asset_name(e.asset_id), "zone": e.zone,
             "title": red.text(_clip(e.title, 200)), "text": red.text(_clip(e.text)),
@@ -119,6 +124,7 @@ def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, 
                 "action_type", "urgency", "report_type", "fuel_stock_l")},
             "source": f"{e.source.source_title} / {e.source.sheet} / row {e.source.row}" if e.source and e.source.row else
                       (e.source.source_title if e.source else None),
+            "same_asset_as_records": None,
         }
 
     sig_by_id = {s.signal_id: s for s in signals}
@@ -129,12 +135,13 @@ def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, 
         "rule_based_alert": {"severity": alert.severity, "severity_basis": alert.severity_basis,
                              "note": "Severity from documented preliminary rules; you may disagree in risk_assessment."},
         "signals": [{"rule": s.rule_id, "pathway": s.pathway, "mechanism": PATHWAYS[s.pathway]["mechanism"],
-                     "severity": s.severity, "basis": s.basis, "unresolved": s.is_open, "evidence_ids": s.evidence_ids,
-                     "context_evidence_ids": s.context_ids}
+                     "severity": s.severity, "basis": s.basis, "unresolved": s.is_open,
+                     "evidence_ids": [alias(i) for i in s.evidence_ids],
+                     "context_evidence_ids": [alias(i) for i in s.context_ids]}
                     for s in (sig_by_id[i] for i in alert.signal_ids if i in sig_by_id)],
         "evidence": [item(e, "context" if e.evidence_id in alert.context_ids and e.evidence_id not in alert.evidence_ids
-                          else "finding") for e in sorted(items, key=lambda e: e.timestamp.isoformat() if e.timestamp else "")],
-        "links": [{"a": l["a"], "b": l["b"], "types": l["types"], "reasons": l["reasons"]}
+                          else "finding") for e in items],
+        "links": [{"a": alias(l["a"]), "b": alias(l["b"]), "types": l["types"], "reasons": l["reasons"]}
                   for l in alert.links if not (l["types"] == ["same_zone_time_window"])][:80],
         "known_data_limits": [
             "Daily checklists keep only the latest result per checklist (no history in the source).",
@@ -143,12 +150,31 @@ def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, 
             "Photos referenced by the logs are not yet accessible to this system.",
         ],
     }
-    return package, red
+    for ev in package["evidence"]:
+        ev.pop("same_asset_as_records", None)
+    return package, red, {v: k for k, v in real_to_alias.items()}
 
 
-def validate(result: dict, package: dict) -> dict:
+def map_back(result: dict, alias_to_real: dict) -> dict:
+    """Replace aliases (E01...) in every evidence-ID list with the real evidence IDs. Unknown aliases are kept
+    as-is so validation reports them."""
+    def m(lst):
+        return [alias_to_real.get(i, i) for i in lst or []]
+    for f in result.get("observed_facts", []):
+        f["evidence_ids"] = m(f.get("evidence_ids"))
+    for h in result.get("hypotheses", []):
+        h["supporting_evidence_ids"] = m(h.get("supporting_evidence_ids"))
+        h["contradicting_evidence_ids"] = m(h.get("contradicting_evidence_ids"))
+    for x in result.get("escalation_pathway", []):
+        x["evidence_ids"] = m(x.get("evidence_ids"))
+    for a in result.get("recommended_actions", []):
+        a["evidence_ids"] = m(a.get("evidence_ids"))
+    return result
+
+
+def validate(result: dict, valid_ids) -> dict:
     """Drop citations to evidence IDs that are not in the package and report them."""
-    valid = {e["evidence_id"] for e in package["evidence"]}
+    valid = set(valid_ids)
     invalid: list[str] = []
 
     def clean(lst):
@@ -174,7 +200,7 @@ def validate(result: dict, package: dict) -> dict:
 
 def investigate(alert, signals, evidence_index, now: datetime, client: MuseClient | None = None) -> dict:
     client = client or MuseClient()
-    package, _ = build_package(alert, signals, evidence_index, now)
+    package, _, alias_to_real = build_package(alert, signals, evidence_index, now)
     user = ("Investigate this zone alert. Evidence package (JSON):\n" + json.dumps(package, ensure_ascii=False))
     request_hash = hashlib.sha256(user.encode("utf-8")).hexdigest()[:16]
     record = {"alert_id": alert.alert_id, "created_at": now.isoformat(), "prompt_version": PROMPT_VERSION,
@@ -185,6 +211,8 @@ def investigate(alert, signals, evidence_index, now: datetime, client: MuseClien
     except MuseError as err:
         record.update({"status": "failed", "error_kind": err.kind, "error": str(err)})
         return record
+    result = map_back(res.data, alias_to_real)
     record.update({"status": "ok", "model": res.model, "usage": res.usage, "seconds": res.seconds,
-                   "result": res.data, "validation": validate(res.data, package)})
+                   "result": result, "validation": validate(result, alias_to_real.values()),
+                   "evidence_ids_pseudonymised": True})
     return record

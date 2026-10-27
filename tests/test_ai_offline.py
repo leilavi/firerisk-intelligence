@@ -61,10 +61,11 @@ def test_redactor_removes_emails_and_names():
 
 def test_package_is_redacted_and_cites_only_known_ids():
     alert, sigs, idx = scenario()
-    pkg, _ = build_package(alert, sigs, idx, NOW)
+    pkg, _, alias = build_package(alert, sigs, idx, NOW)
     dumped = json.dumps(pkg, ensure_ascii=False)
     assert "gmail" not in dumped and "Nam" not in dumped
-    assert {e["evidence_id"] for e in pkg["evidence"]} == {"inc:1", "a:1"}
+    assert {e["evidence_id"] for e in pkg["evidence"]} == {"E01", "E02"}          # opaque aliases
+    assert set(alias.values()) == {"inc:1", "a:1"} and "inc:1" not in dumped and "a:1" not in dumped
 
 
 def test_schema_is_strict_compatible():
@@ -80,18 +81,17 @@ def test_schema_is_strict_compatible():
 
 
 def test_validate_drops_unknown_ids():
-    pkg = {"evidence": [{"evidence_id": "inc:1"}]}
     res = {"observed_facts": [{"statement": "x", "evidence_ids": ["inc:1", "bogus"]},
                               {"statement": "y", "evidence_ids": ["bogus2"]}],
            "hypotheses": [], "escalation_pathway": [], "recommended_actions": []}
-    v = validate(res, pkg)
+    v = validate(res, ["inc:1"])
     assert v["invalid_evidence_ids"] == ["bogus", "bogus2"] and v["unsupported_facts"] == ["y"]
     assert res["observed_facts"][0]["evidence_ids"] == ["inc:1"]
 
 
 def test_investigate_end_to_end_with_fake_transport():
     alert, sigs, idx = scenario()
-    answer = {"summary": "s", "observed_facts": [{"statement": "water in MSB room", "evidence_ids": ["inc:1"]}],
+    answer = {"summary": "s", "observed_facts": [{"statement": "water in MSB room", "evidence_ids": ["E02"]}],
               "hypotheses": [], "escalation_pathway": [],
               "risk_assessment": {"ai_priority": "high", "agrees_with_rule_severity": True, "rationale": "r"},
               "missing_information": [], "recommended_actions": [], "uncertainty": "u"}
@@ -105,6 +105,7 @@ def test_investigate_end_to_end_with_fake_transport():
     client = MuseClient(MuseConfig(api_key="k"), opener=fake_opener(check, json.dumps(answer)))
     rec = investigate(alert, sigs, idx, NOW, client)
     assert rec["status"] == "ok" and rec["validation"]["ok"]
+    assert rec["result"]["observed_facts"][0]["evidence_ids"] == ["inc:1"]        # mapped back to the real ID
 
 
 @pytest.mark.parametrize("status,kind", [(401, "auth"), (429, "rate_limited"), (400, "bad_response")])

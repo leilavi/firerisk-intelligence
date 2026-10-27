@@ -58,3 +58,11 @@ Author clarified the project is an upgrade of their own earlier skill. The guide
 **Result on real data (deterministic, no AI):** Basement B1 = High risk — unresolved water ingress into MBA/MSB rooms (incident T10_140, repairs 059/060), open failure of XLNT blower AB-01A with a recorded burnt motor (Mainte-user3-034, Repair-user2-d0036), recurring heat-detector monitor fault (Repair-user1-068, T10_143), backup-power context (battery replacement, 3 grid outages). Four Watch-level zones (PA fault, meter anomalies).
 
 **Not done / limits:** live Muse investigation not yet run (needs author's PC); SAM 3.1 not implemented; live Drive sync not implemented; no real photos/video yet.
+
+## 2026-10-27 14:13–14:30 — First LIVE Muse Spark investigation in the app
+- Author ran `install.bat` on the Windows PC: dependencies installed, **32 passed** on the PC (incl. real-snapshot tests). Console had been paused by QuickEdit "Select" mode; resumed with Esc.
+- Author ran `run_dashboard.bat`; analysis run 1 at 14:17:51; pressed "Run Muse Spark investigation" on ZONE-B1.
+- Result (read from the PC database `data/private/firerisk.db`, ai_investigations id 1): status ok, `muse-spark-1.3`, 38.9 s, 10,652 prompt + 6,535 completion tokens (2,363 reasoning), 33 evidence items sent (names/e-mails pseudonymised), validation ok (0 invalid IDs, 0 unsupported facts). Output: 12 observed facts, 5 hypotheses (incl. a data-quality alternative), 3 escalation steps, 6 missing-information items, 7 actions; AI priority High, agrees with rule severity; explicitly treats passing checklists as contradicting evidence and states coincidence ≠ causation.
+- Privacy finding: source record IDs embed staff user names (e.g. `Repair-<user>-059`) and were sent as evidence IDs in prompt v1. Fixed in prompt v2: opaque aliases E01…; mapped back after the response. Tests updated (32 passed).
+- Evidence: full result kept private (`data/private/evidence/`), public summary `evidence/investigation_ZONE-B1_20261027_1419_summary.json`.
+- Compliance R-02 → VERIFIED.
