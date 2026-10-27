@@ -11,7 +11,7 @@
 | Images / video | Prepared; **no real media yet** | `firerisk/media.py` |
 | SAM 3.1 | Not started (output format unverified) | — |
 | Live Drive sync | Not started (snapshot via Claude) | — |
-| Public GitHub repo | Not started | — |
+| Public GitHub repo | **Published** | https://github.com/leilavi/firerisk-intelligence |
 | Demo video | Not started | — |
 
 Deadline: Wed Nov 4, 9:00 PM ET = **Thu Nov 5, 09:00 UTC+7**.

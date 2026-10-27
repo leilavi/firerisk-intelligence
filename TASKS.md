@@ -9,6 +9,6 @@
 - [ ] Author: confirm U-05 (authority to process data / send redacted excerpts to Meta API).
 
 ## Later
-- [ ] Create public GitHub repo, push history, check no data/secrets.
+- [x] Public GitHub repo created and history pushed (2026-10-27), checked for data/secrets.
 - [ ] Demo script (≤ 3 min) showing only new work; record video without staff names.
 - [ ] Final compliance review.

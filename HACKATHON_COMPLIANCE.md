@@ -2,7 +2,7 @@
 
 **Official source used:** `Rule in Meta hackathon.txt` — "Meta Global AI Developer Hackathon Participant Guide" (attached to the Claude Project; section numbers below refer to that guide).
 **Not available:** any separate legal Terms & Conditions / Official Rules document. If one exists on the Cerebral Valley platform, it has not been reviewed yet (see U-01).
-**Last updated:** 2026-10-27 14:30 (UTC+7)
+**Last updated:** 2026-10-27 14:50 (UTC+7)
 
 Legend — Type: **M** mandatory · **C** conditional · **A** advisory / scoring. Basis: **EXPLICIT** (stated in the guide) · **INTERP** (our reading) · **DECISION** (our own choice, not a rule).
 
@@ -12,7 +12,7 @@ Legend — Type: **M** mandatory · **C** conditional · **A** advisory / scorin
 |---|---|---|---|---|---|---|---|---|
 | R-01 | Project must build toward one of two problem statements ("Build for Your World" or "Push the Frontier") | §1 | M | EXPLICIT | Positioning in README and video | Reviewer reads README + video | IN PROGRESS | Planned fit: **Build for Your World** (author's own building-operations domain). Stage One is pass/fail on theme fit (§8) |
 | R-02 | Project must incorporate Meta's models (Muse Spark series, Muse Wonder, Muse Image, Muse Voice Transcribe, SAM 3.1 via Meta Model API; or open weights Muse Glimmer / Muse Spark Open; Muse Code agent) | §1, §8 Stage One | M | EXPLICIT | Muse Spark (`muse-spark-1.3`) is the investigation engine inside the app | Real call logs (no secrets) + code | VERIFIED | 2026-10-27 14:19 UTC+7: the app on the author's PC ran a live Muse Spark investigation of alert ZONE-B1 (38.9 s, 17,187 tokens, schema-valid, 0 invalid evidence citations). Public summary `evidence/investigation_ZONE-B1_20261027_1419_summary.json`; full result kept private. SAM 3.1 still planned |
-| R-03 | Repository must be public | §4 | M | EXPLICIT | GitHub public repo | Open repo URL in a logged-out browser | NOT STARTED | Repo exists locally only |
+| R-03 | Repository must be public | §4 | M | EXPLICIT | GitHub public repo | GitHub API visibility check + fresh clone | VERIFIED | https://github.com/leilavi/firerisk-intelligence — visibility `public` (checked 2026-10-27 14:48); fresh clone has no private data or secrets. Re-check before submission |
 | R-04 | Max 4 team members; solo allowed | §4 | M | EXPLICIT | Submission form | Check form | IN PROGRESS | Author decision 2026-10-27: **solo** (1 member). Verify on submission form |
 | R-05 | Demo must only highlight features/code built during the Hackathon; judges must clearly identify what was created; failure ⇒ disqualification at judges' discretion | §4 | M | EXPLICIT | Video script, `FEATURE_ORIGIN_MATRIX.md`, README "What is new" | Script review against matrix | NOT STARTED | **Highest-risk rule.** Video must show only NEW items from the matrix |
 | R-06 | New work only: what is presented must be built during the event and this must be clear in the submission | §4 | M | EXPLICIT | Git history from 2026-10-27, `DEVELOPMENT_LOG.md`, `PRE_EXISTING_WORK.md` | Commit dates ≥ build period; log review | IN PROGRESS | Baseline commit `3219f8c` tagged `baseline-pre-hackathon` |
