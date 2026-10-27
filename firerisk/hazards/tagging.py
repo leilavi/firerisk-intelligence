@@ -2,7 +2,7 @@
 
 ORIGIN: NEW. Deterministic and explainable: every tag stores the exact matched term, so the
 dashboard can show *why* a record was tagged. Patterns were written against the real
-vocabulary found in the [Building] logs (2026-10-27).
+vocabulary found in the building's real logs (2026-10-27).
 """
 
 from __future__ import annotations

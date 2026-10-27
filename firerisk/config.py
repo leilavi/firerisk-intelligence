@@ -1,4 +1,7 @@
-"""Static configuration for the [Building] deployment.
+"""Static configuration for one building deployment.
+
+Building-identifying values (name, branch prefix used in the source logs) are NOT stored in the public
+repository. They are read from data/private/site_config.json (git-ignored) when present.
 
 Every entry records where the knowledge came from:
   "skill"  - stated in the pre-existing skill v2.2 (user-confirmed facts)
@@ -13,8 +16,16 @@ from datetime import timedelta, timezone
 # Vietnam has no daylight saving time; a fixed offset avoids needing tzdata on Windows.
 LOCAL_TZ = timezone(timedelta(hours=7), name="UTC+07:00")
 
-BUILDING_NAME = "[Building]"
-BRANCH_PREFIX = "BLD"   # skill §2.3: scope filter
+import json as _json
+from pathlib import Path as _Path
+
+_SITE_FILE = _Path(__file__).resolve().parent.parent / "data" / "private" / "site_config.json"
+_SITE = _json.loads(_SITE_FILE.read_text(encoding="utf-8")) if _SITE_FILE.exists() else {}
+
+BUILDING_NAME = _SITE.get("building_name", "Demo building")
+BRANCH_PREFIX = _SITE.get("branch_prefix", "BLD")   # skill §2.3: scope filter (prefix of Location_ID / Chi Nhánh)
+OPS_SOURCE_TITLE = _SITE.get("ops_source_title", "Operations Data")
+VEHICLE_SOURCE_TITLE = _SITE.get("vehicle_source_title", "Vehicle counts")
 ASSET_PREFIX = "P-"          # skill §2.3: Equipment_ID prefix for this building
 
 # --------------------------------------------------------------------------------------
@@ -42,7 +53,7 @@ METERS: dict[str, dict] = {
 
 # --------------------------------------------------------------------------------------
 # Assets that appear in the data. "zone" values come from Location_ID in the asset log
-# (e.g. "BLD-A-B1-Chung-") or from the skill/catalog; "fire_role" is a FireRisk
+# (e.g. "<BRANCH>-A-B1-Chung-") or from the skill/catalog; "fire_role" is a FireRisk
 # classification of how the asset relates to fire safety (rule).
 # --------------------------------------------------------------------------------------
 ASSETS: dict[str, dict] = {

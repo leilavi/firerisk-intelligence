@@ -1,7 +1,7 @@
 """Turn source tabs into Evidence records with exact source references.
 
 ORIGIN: NEW (canonical evidence model). Uses PORTED scope/test-record rules.
-Column names below are the real column names of the [Building] sources (read 2026-10-27).
+Column names below are the real column names of the building's operational sources (read 2026-10-27).
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _s(v) -> str:
 
 
 def zone_from_location(loc: str | None) -> str | None:
-    """'BLD-A-B1-Chung-' -> 'B1';  'BLD-A-F4--T09_119' -> 'F4'."""
+    """'<BRANCH>-A-B1-Chung-' -> 'B1';  '<BRANCH>-A-F4--T09_119' -> 'F4'."""
     if not loc:
         return None
     for tok in str(loc).split("-"):

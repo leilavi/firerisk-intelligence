@@ -15,7 +15,8 @@ def test_every_meter_reading_row_is_loaded_and_traceable():
     import openpyxl
     from firerisk.engine import run_analysis
     from firerisk.config import METERS
-    manifest_file = SNAPSHOT / "ops_data.xlsx"
+    import json
+    manifest_file = SNAPSHOT / json.loads((SNAPSHOT / "manifest.json").read_text(encoding="utf-8"))["files"]["ops_data"]["local_file"]
     wb = openpyxl.load_workbook(manifest_file, read_only=True, data_only=True)
     rows = [r for r in wb["chỉ số điện nước"].iter_rows(values_only=True) if any(r)][1:]
     expected = sum(1 for r in rows if r[1] in METERS and isinstance(r[15], (int, float)))

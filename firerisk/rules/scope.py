@@ -1,7 +1,7 @@
 """Scope filter and test-record detection.
 
 ORIGIN: PORTED from skill v2.2 §2.3:
-  - keep only records of [Building] (Location/Branch starts with "BLD", or Equipment_ID starts with "P-");
+  - keep only records of the configured building (Location/Branch starts with BRANCH_PREFIX, or Equipment_ID starts with "P-");
   - flag test records ("Test", "Chỉ test", placeholder technician names, "AAAAA") and exclude them
     from statistics, EXCEPT safety-related test records, which stay visible as "unverified".
 """

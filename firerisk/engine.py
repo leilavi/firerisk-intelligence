@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .config import LOCAL_TZ, METERS, SOURCE_CADENCE_DAYS
+from .config import LOCAL_TZ, METERS, OPS_SOURCE_TITLE, SOURCE_CADENCE_DAYS, VEHICLE_SOURCE_TITLE
 from .correlation import aggregate_alerts
 from .hazards.pathways import evaluate, meter_signals
 from .hazards.tagging import tag_evidence
@@ -63,7 +63,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
 
     ops_path = snapshot_dir / files.get("ops_data", {}).get("local_file", "ops_data.xlsx")
     if ops_path.exists():
-        ev, st = load_ops_workbook(ops_path, files.get("ops_data", {}).get("title", "Operations Data"))
+        ev, st = load_ops_workbook(ops_path, files.get("ops_data", {}).get("title", OPS_SOURCE_TITLE))
         evidence.extend(ev)
         for sheet, s in st.items():
             status.append({"source": "ops_data", "sheet": sheet, **s, **_freshness(s.get("latest_record"), now, SOURCE_CADENCE_DAYS.get(sheet)),
@@ -75,7 +75,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
     veh_path = snapshot_dir / files.get("vehicles", {}).get("local_file", "theo_doi_luot_khach.xlsx")
     vehicles: list[Evidence] = []
     if veh_path.exists():
-        vehicles, vst = load_vehicle_workbook(veh_path, files.get("vehicles", {}).get("title", "Theo dõi lượt khách ra vào"))
+        vehicles, vst = load_vehicle_workbook(veh_path, files.get("vehicles", {}).get("title", VEHICLE_SOURCE_TITLE))
         evidence.extend(vehicles)
         status.append({"source": "vehicles", "sheet": f"{vst['sheets']} monthly sheets", "rows_read": vst["days"],
                        "in_scope": vst["days"], "latest_record": vst["latest_record"],

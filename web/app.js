@@ -37,7 +37,7 @@ async function viewOverview() {
   const s = STATUS;
   const counts = SEV.slice().reverse().map((k) => `<div class="card kpi"><div class="l">${SEV_LABEL[k]}</div><div class="n">${s.alert_counts[k] || 0}</div></div>`).join("");
   const sources = s.sources.map((x) => `
-    <tr><td>${esc(x.source === "ops_data" ? "Operations Data" : "Vehicle counts")}<div class="muted">${esc(x.sheet || "")}</div></td>
+    <tr><td>${esc(x.source === "ops_data" ? "Operations data" : "Vehicle counts")}<div class="muted">${esc(x.sheet || "")}</div></td>
     <td>${x.error ? `<span class="tag open">${esc(x.error)}</span>` : esc(x.rows_read)}</td>
     <td>${fmt(x.latest_record)}</td>
     <td>${x.age_days ?? "—"} d ${x.stale ? '<span class="tag open">stale</span>' : ""}<div class="muted">${x.expected_cadence_days ? "expected ≤ " + x.expected_cadence_days + " d" : "event log"}</div></td>

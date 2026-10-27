@@ -24,9 +24,10 @@ def series(meter, start, increments, start_value=1000):
 
 
 # ---- scope (skill §2.3) ----
-def test_scope_keeps_building_and_p_assets():
-    assert in_scope(branch="BLD")
-    assert in_scope(location="BLD-A-B1-Chung-")
+def test_scope_keeps_configured_building_and_p_assets():
+    from firerisk.config import BRANCH_PREFIX
+    assert in_scope(branch=BRANCH_PREFIX)
+    assert in_scope(location=f"{BRANCH_PREFIX}-A-B1-Chung-")
     assert in_scope(asset_id="P-BG.TTC076")
     assert not in_scope(branch="SITE-2", location="SITE-2-B-F3-[Operator]-VP", asset_id="E-ML105")
 
