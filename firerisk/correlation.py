@@ -17,6 +17,7 @@ from .hazards.pathways import PATHWAYS
 from .models import Alert, Evidence, Signal
 
 LINK_WINDOW_DAYS = 14
+SUPPORTING_PATHWAYS = {"electrical_anomaly", "consumption_anomaly"}
 
 
 def _rank(sev: str) -> int:
@@ -81,7 +82,7 @@ def aggregate_alerts(signals: list[Signal], evidence_index: dict[str, Evidence],
         sigs.sort(key=lambda s: -_rank(s.severity))
         base = sigs[0].severity
         basis = [f"Highest single signal: {sigs[0].title} - {sigs[0].severity} ({sigs[0].basis})"]
-        hazard_paths = {s.pathway for s in sigs if s.pathway != "electrical_anomaly"}
+        hazard_paths = {s.pathway for s in sigs if s.pathway not in SUPPORTING_PATHWAYS}
         open_paths = {s.pathway for s in sigs if s.is_open}
         sev = base
         if len(hazard_paths) >= 2 and open_paths and _rank(sev) < _rank("high"):
@@ -107,7 +108,7 @@ def aggregate_alerts(signals: list[Signal], evidence_index: dict[str, Evidence],
         titles = []
         for s in sigs:  # already sorted by severity
             t = PATHWAYS[s.pathway]["title"]
-            if s.pathway != "electrical_anomaly" and t not in titles:
+            if s.pathway not in SUPPORTING_PATHWAYS and t not in titles:
                 titles.append(t)
         ctx: list[str] = []
         for s in sigs:

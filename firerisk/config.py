@@ -106,12 +106,24 @@ ZONE_LABELS: dict[str, str] = {
     "F4": "Floor 4", "Roof": "Roof", "Building": "Whole building",
 }
 
-# Status vocabularies observed in the data (source: data). True = open / unresolved.
-OPEN_STATUS = {
-    "3. Đang tìm PA": True, "2. Pending Repair": True, "1. Out of Order": True,
-    "3. Faulty but Operational": True, "6. Hoàn tất": False, "Hoàn tất thi công": False,
-    "4. Operational": False,
+# Status vocabularies observed in the data (source: data, checked 2026-10-27) -> canonical class.
+# Unknown values are kept, flagged "unmapped_status" and treated as "unknown" (never silently resolved).
+STATUS_CLASS: dict[str, str] = {
+    "3. Đang tìm PA": "open",            # seeking a solution
+    "2. Pending Repair": "open",
+    "1. Out of Order": "open",
+    "3. Faulty but Operational": "degraded",
+    "3. Tạm dừng": "paused",
+    "Đang thi công": "in_progress",       # skill §2.4: may not be updated after completion
+    "6. Hoàn tất": "resolved",
+    "Hoàn tất thi công": "resolved",
+    "4. Operational": "resolved",
+    "Đạt": "pass",                        # daily checklist passed
+    "Không đạt": "fail",
 }
+OPEN_CLASSES = {"open", "degraded", "paused", "in_progress", "fail"}
+# kept for backwards compatibility
+OPEN_STATUS = {k: v in OPEN_CLASSES for k, v in STATUS_CLASS.items()}
 
 # Severity levels (skill §7) and their rank.
 SEVERITY_ORDER = ["normal", "watch", "warning", "high", "emergency"]

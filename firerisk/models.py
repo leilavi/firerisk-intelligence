@@ -59,6 +59,7 @@ class Signal:
     is_open: bool
     origin: str              # "PORTED" or "NEW"
     context_ids: list[str] = field(default_factory=list)   # context / possibly contradicting evidence
+    fields: dict = field(default_factory=dict)              # the 14 skill alert fields (alert_fields.py)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -85,6 +86,7 @@ class Alert:
     last_seen: datetime | None
     open_items: int
     context_ids: list[str] = field(default_factory=list)
+    fields: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d = asdict(self)

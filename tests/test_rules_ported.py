@@ -94,7 +94,7 @@ def test_small_change_below_min_delta_is_not_a_spike():
 def test_msb_only_spike_labelled_reading_error():
     msb = M.Episode("P-BG.TTC071", "up", date(2026, 10, 3), date(2026, 10, 3), 1, 250000, 190000, 31.6, [])
     out = M.label_episodes([msb], {"P-BG.TTC071": [msb], "P-BG.TTC076": []}, {})
-    assert out[0].label == "Reading error (MSB only)"
+    assert out[0].label == "Insufficient data" and "reading error" in out[0].note
 
 
 def test_increase_with_high_vehicle_count_is_reasonable():
@@ -109,3 +109,46 @@ def test_long_episode_is_evidence_based_risk():
     ep = M.Episode("P-BG.TTC226", "down", date(2026, 10, 1), date(2026, 10, 3), 3, 2, 9, -77.8, [])
     out = M.label_episodes([ep], {"P-BG.TTC226": [ep]}, {date(2026, 10, 1): 300})
     assert out[0].label == "Evidence-based risk"
+
+
+# ---- four conclusion labels and §5A.8 severities ----
+def test_only_the_four_skill_labels_are_used():
+    eps = [M.Episode("P-BG.TTC226", "down", date(2026, 10, d), date(2026, 10, d), 1, 4, 10, -60.0, []) for d in (1, 20)]
+    M.label_episodes(eps, {"P-BG.TTC226": eps}, {})
+    assert all(e.label in M.LABELS for e in eps)
+
+
+def test_no_activity_data_gives_insufficient_data():
+    ep = M.Episode("P-BG.TTC104", "up", date(2026, 10, 10), date(2026, 10, 10), 1, 14, 9, 55.6, [])
+    M.label_episodes([ep], {"P-BG.TTC104": [ep]}, {})
+    assert ep.label == "Insufficient data"
+
+
+def test_related_equipment_record_makes_evidence_based_risk():
+    ep = M.Episode("P-BG.TTC226", "down", date(2026, 10, 21), date(2026, 10, 21), 1, 4, 10, -60.0, [])
+    M.label_episodes([ep], {"P-BG.TTC226": [ep]}, {}, {"P-BG.TTC167": [date(2026, 10, 21)]})
+    assert ep.label == "Evidence-based risk" and "P-BG.TTC167" in ep.note
+
+
+def _episode_ev(meter, label, ongoing=False, direction="up", near_zero=False, days_ago=3):
+    from datetime import timedelta
+    from firerisk.config import METERS
+    now = datetime(2026, 10, 27, 12, tzinfo=LOCAL_TZ)
+    return Evidence(f"episode:{meter}:{days_ago}", "meter_episode", now - timedelta(days=days_ago), meter,
+                    METERS[meter]["zone"], "", "", label, None,
+                    values={"label": label, "ongoing": ongoing, "direction": direction, "near_zero": near_zero},
+                    flags=["derived"]), now
+
+
+def test_meter_severity_mapping_skill_5a8():
+    from firerisk.hazards.pathways import meter_signals
+    e, now = _episode_ev("P-BG.TTC226", "Anomaly to monitor")
+    assert meter_signals([e], now)[0].severity == "watch"
+    e, now = _episode_ev("P-BG.TTC226", "Evidence-based risk")
+    assert meter_signals([e], now)[0].severity == "warning"
+    e, now = _episode_ev("P-BG.TTC172", "Evidence-based risk", ongoing=True, direction="up")
+    assert meter_signals([e], now)[0].severity == "high"
+    e, now = _episode_ev("P-BG.TTC076", "Anomaly to monitor", ongoing=True, direction="down", near_zero=True)
+    assert meter_signals([e], now)[0].severity == "high"
+    e, now = _episode_ev("P-BG.TTC226", "Insufficient data")
+    assert meter_signals([e], now) == []

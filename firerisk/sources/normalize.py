@@ -10,7 +10,7 @@ import re
 from datetime import date, datetime, time
 from pathlib import Path
 
-from ..config import ASSETS, INSPECTION_CHECKLISTS, LOCAL_TZ, METERS, OPEN_STATUS
+from ..config import ASSETS, INSPECTION_CHECKLISTS, LOCAL_TZ, METERS, OPEN_CLASSES, STATUS_CLASS
 from ..models import Evidence, SourceRef
 from ..rules.scope import classify_text_quality, in_scope
 from .workbook import TabData, read_tab
@@ -81,10 +81,38 @@ def _media(row: dict, cols: list[str]) -> list[str]:
     return [_s(row.get(c)) for c in cols if _s(row.get(c))]
 
 
+def status_class(status: str | None) -> str:
+    """Canonical status class; '' -> 'missing', unknown text -> 'unknown'."""
+    if not status or not str(status).strip() or str(status).strip() == "None":
+        return "missing"
+    return STATUS_CLASS.get(str(status).strip(), "unknown")
+
+
 def _open(status: str | None) -> bool | None:
-    if not status:
+    cls = status_class(status)
+    if cls in ("missing", "unknown"):
         return None
-    return OPEN_STATUS.get(status.strip())
+    return cls in OPEN_CLASSES
+
+
+def _status_flags(status: str | None) -> list[str]:
+    cls = status_class(status)
+    return ["unmapped_status"] if cls == "unknown" else (["missing_status"] if cls == "missing" else [])
+
+
+def finalize(items: list[Evidence]) -> list[Evidence]:
+    """Make evidence IDs unique (duplicates keep both records, flagged) and attach the status class."""
+    seen: dict[str, int] = {}
+    for e in items:
+        if e.evidence_id in seen:
+            seen[e.evidence_id] += 1
+            e.evidence_id = f"{e.evidence_id}#r{e.source.row if e.source else seen[e.evidence_id]}"
+            e.flags.append("duplicate_record_id")
+        else:
+            seen[e.evidence_id] = 1
+        if e.kind in ("incident", "construction", "asset_service", "inspection_check"):
+            e.values.setdefault("status_class", status_class(e.status))
+    return items
 
 
 # ---------------------------------------------------------------------------------------
@@ -119,14 +147,25 @@ def normalize_meters_tab(tab: TabData, source_title: str) -> list[Evidence]:
         else:
             reading = r.get("Chỉ_Số_Thiết_Bị")
             meter = METERS.get(asset or "", {})
+            bad_value = reading not in (None, "") and not isinstance(reading, (int, float))
+            if isinstance(reading, str):
+                try:
+                    reading = float(reading.replace(",", "."))
+                    bad_value = False
+                except ValueError:
+                    pass
             out.append(Evidence(
                 evidence_id=f"meter:{asset}:{rownum}",
                 kind="meter_reading", timestamp=ts, asset_id=asset, zone=meter.get("zone") or cfg_asset.get("zone"),
                 title=f"Meter reading {asset}",
                 text=notes, status=None, is_open=None,
                 values={"reading": reading if isinstance(reading, (int, float)) else None,
+                        "raw_reading": None if isinstance(reading, (int, float)) else _s(r.get("Chỉ_Số_Thiết_Bị")),
+                        "unit": meter.get("unit"), "unit_verified": bool(meter.get("multiplier")) and
+                        meter.get("multiplier_verified", True),
                         "daily_entered": r.get("Tiêu_Thụ_Ngày"), "system_code": _s(r.get("Tên_Hệ_Thống"))},
-                media_refs=media, flags=classify_text_quality(notes), source=ref))
+                media_refs=media, flags=classify_text_quality(notes) + (["invalid_reading"] if bad_value else [])
+                + ([] if ts else ["missing_timestamp"]), source=ref))
     return out
 
 
@@ -151,7 +190,8 @@ def normalize_assets_tab(tab: TabData, source_title: str) -> list[Evidence]:
                     "location_id": loc, "estimated_cost": r.get("Estimated_Cost"), "actual_cost": r.get("Actual_Cost"),
                     "expected_completion": _s(r.get("Expected_Completion_Date"))},
             persons=_persons(r.get("Requester"), r.get("Approving_Mgr"), r.get("Technician_Name")),
-            flags=classify_text_quality(problem, work, _s(r.get("Technician_Name"))) + ([] if ts else ["undated"]),
+            flags=classify_text_quality(problem, work, _s(r.get("Technician_Name"))) + ([] if ts else ["undated"])
+            + _status_flags(status),
             source=SourceRef("ops_data", source_title, tab.sheet, rownum, log_id or None)))
     return out
 
@@ -179,7 +219,7 @@ def normalize_incidents_tab(tab: TabData, source_title: str) -> list[Evidence]:
             values={"report_type": rtype, "urgency": _s(r.get("Mức độ khẩn cấp")),
                     "start": _s(r.get("Tg bắt đầu TC")), "done": _s(r.get("Tg Hoàn thành"))},
             persons=_persons(r.get("Người báo cáo")), media_refs=media,
-            flags=classify_text_quality(quick, detail),
+            flags=classify_text_quality(quick, detail) + _status_flags(status),
             source=SourceRef("ops_data", source_title, tab.sheet, rownum, code or None)))
     return out
 
@@ -193,6 +233,18 @@ def normalize_generator_tab(tab: TabData, source_title: str) -> list[Evidence]:
         rid = _s(r.get("ID"))
         dur = r.get("Thời_lượng_VH")
         minutes = dur.hour * 60 + dur.minute if isinstance(dur, time) else None
+        t0, t1 = r.get("Tg_bắt_đầu_VH"), r.get("Tg_kết_thúc_VH")
+        gflags: list[str] = []
+        if isinstance(t0, time) and isinstance(t1, time):
+            span = (t1.hour * 60 + t1.minute) - (t0.hour * 60 + t0.minute)
+            if span < 0:
+                span += 24 * 60
+            if minutes == 0 and span > 0:
+                # skill §2.4: duration 00:00 while start != end -> use start/end and flag it
+                gflags.append("duration_recomputed_from_start_end")
+                minutes = span
+            elif minutes is not None and abs(minutes - span) > 5:
+                gflags.append("duration_mismatch")
         reason = _s(r.get("Lý_do_Vận_Hành"))
         out.append(Evidence(
             evidence_id=f"gen:{rid or rownum}",
@@ -202,25 +254,41 @@ def normalize_generator_tab(tab: TabData, source_title: str) -> list[Evidence]:
             values={"reason": reason, "minutes": minutes, "fuel_before_l": r.get("Chỉ_số_trước_VH"),
                     "fuel_after_l": r.get("Chỉ-số_sau_VH"), "fuel_used_l": r.get("Tiêu_hao_nhiên_liệu"),
                     "fuel_stock_l": r.get("Nhiên_liệu_tồn"), "start": _s(r.get("Tg_bắt_đầu_VH")), "end": _s(r.get("Tg_kết_thúc_VH"))},
-            persons=_persons(r.get("Nhân_sự_VH")),
+            persons=_persons(r.get("Nhân_sự_VH")), flags=gflags,
             source=SourceRef("ops_data", source_title, tab.sheet, rownum, rid or None)))
     return out
 
 
 def load_ops_workbook(path: Path, source_title: str = "Operations Data") -> tuple[list[Evidence], dict]:
-    """Load the four operational tabs. Returns (evidence, per-tab stats)."""
-    from .workbook import suspicious_row_count
+    """Load the four operational tabs. A missing or unreadable tab is reported and skipped;
+    the other tabs are still loaded (a broken source must not stop the whole analysis)."""
+    from .workbook import list_tabs, suspicious_row_count
     evidence: list[Evidence] = []
     stats: dict = {}
+    try:
+        available = set(list_tabs(path))
+    except Exception as exc:  # corrupt / unreadable workbook
+        return [], {sheet: {"error": f"workbook unreadable: {type(exc).__name__}: {exc}"} for sheet in OPS_TABS.values()}
+    fns = {"meters": normalize_meters_tab, "assets": normalize_assets_tab,
+           "incidents": normalize_incidents_tab, "generator": normalize_generator_tab}
     for key, sheet in OPS_TABS.items():
-        tab = read_tab(path, sheet)
-        fn = {"meters": normalize_meters_tab, "assets": normalize_assets_tab,
-              "incidents": normalize_incidents_tab, "generator": normalize_generator_tab}[key]
-        items = fn(tab, source_title)
+        if sheet not in available:
+            stats[sheet] = {"error": "tab not found in workbook"}
+            continue
+        try:
+            tab = read_tab(path, sheet)
+            items = finalize(fns[key](tab, source_title))
+        except Exception as exc:
+            stats[sheet] = {"error": f"tab could not be processed: {type(exc).__name__}: {exc}"}
+            continue
         times = [e.timestamp for e in items if e.timestamp]
+        flags: dict[str, int] = {}
+        for e in items:
+            for f in e.flags:
+                flags[f] = flags.get(f, 0) + 1
         stats[sheet] = {"rows_read": tab.count, "in_scope": len(items), "excluded_out_of_scope": tab.count - len(items),
                         "latest_record": max(times).isoformat() if times else None,
-                        "test_records": sum("test_record" in e.flags for e in items),
+                        "test_records": flags.get("test_record", 0), "flag_counts": flags,
                         "suspicious_row_count": suspicious_row_count(tab.count)}
         evidence.extend(items)
     return evidence, stats

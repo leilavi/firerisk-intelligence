@@ -46,6 +46,8 @@ class Episode:
     evidence_ids: list[str]
     label: str = ""
     note: str = ""
+    ongoing: bool = False
+    near_zero: bool = False
 
     def to_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -166,9 +168,24 @@ def episodes(cal: list[DayValue], meter_id: str) -> list[Episode]:
     return out
 
 
+LABELS = ("Reasonable variation", "Anomaly to monitor", "Evidence-based risk", "Insufficient data")
+
+
 def label_episodes(eps: list[Episode], all_eps_by_meter: dict[str, list[Episode]],
-                   vehicles_by_day: dict[date, float]) -> list[Episode]:
-    """Skill §5A.5-7 conclusion labels."""
+                   vehicles_by_day: dict[date, float], records_by_asset: dict[str, list[date]] | None = None) -> list[Episode]:
+    """Skill §5A.5-7: exactly one of the four conclusion labels per episode (skill §5 table).
+
+    Order of evaluation (documented interpretation of the skill):
+      1. EVN normal + MSB-only episode -> reading error suspected; skill §5A.5 says this is not a consumption
+         alert -> label "Insufficient data" (sources contradict) with the reading-error note.
+      2. Increase while vehicle count >= 140% of median (activity explains it) -> "Reasonable variation".
+      3. Lasts >= 3 days, or same-direction episode again within 30 days, or an incident/repair record on
+         equipment measured by this meter within 3 days -> "Evidence-based risk".
+      4. No vehicle count for those days (activity cross-check impossible) -> "Insufficient data".
+      5. Otherwise -> "Anomaly to monitor".
+    """
+    from ..config import METER_FEEDS
+    records_by_asset = records_by_asset or {}
     evn_days = {d for e in all_eps_by_meter.get("P-BG.TTC076", [])
                 for d in (e.start + timedelta(days=i) for i in range(e.days))}
     veh_vals = list(vehicles_by_day.values())
@@ -176,18 +193,37 @@ def label_episodes(eps: list[Episode], all_eps_by_meter: dict[str, list[Episode]
     for ep in eps:
         ep_days = [ep.start + timedelta(days=i) for i in range(ep.days)]
         if ep.meter == "P-BG.TTC071" and not any(d in evn_days for d in ep_days):
-            ep.label, ep.note = "Reading error (MSB only)", "EVN main meter normal on the same day(s); skill §5A.5"
+            ep.label = "Insufficient data"
+            ep.note = "MSB-only change while the EVN main meter is normal: reading error suspected (skill §5A.5)"
             continue
-        same_dir_recent = [o for o in all_eps_by_meter.get(ep.meter, [])
-                           if o is not ep and o.direction == ep.direction and abs((o.start - ep.start).days) <= 30]
         veh = [vehicles_by_day[d] for d in ep_days if d in vehicles_by_day]
         if ep.direction == "up" and veh and veh_med and max(veh) >= 1.4 * veh_med:
             ep.label, ep.note = "Reasonable variation", f"vehicle count {int(max(veh))} >= 140% of median {int(veh_med)}"
-        elif ep.days >= 3 or same_dir_recent:
+            continue
+        same_dir_recent = [o for o in all_eps_by_meter.get(ep.meter, [])
+                           if o is not ep and o.direction == ep.direction and abs((o.start - ep.start).days) <= 30]
+        related = [a for a in METER_FEEDS.get(ep.meter, [])
+                   if any(abs((d - ep.start).days) <= 3 for d in records_by_asset.get(a, []))]
+        if ep.days >= 3 or same_dir_recent or related:
             ep.label = "Evidence-based risk"
-            ep.note = "lasted >= 3 days" if ep.days >= 3 else f"repeated within 30 days ({len(same_dir_recent)} other episode(s))"
+            reasons = []
+            if ep.days >= 3:
+                reasons.append("lasted >= 3 days")
+            if same_dir_recent:
+                reasons.append(f"repeated within 30 days ({len(same_dir_recent)} other episode(s))")
+            if related:
+                reasons.append(f"incident/repair record on measured equipment {', '.join(related)} within 3 days")
+            ep.note = "; ".join(reasons)
         elif not veh:
-            ep.label, ep.note = "Anomaly to monitor", "no vehicle count available for these days"
+            ep.label, ep.note = "Insufficient data", "no vehicle count for these days, activity cross-check not possible"
         else:
             ep.label, ep.note = "Anomaly to monitor", "no activity explanation found"
     return eps
+
+
+def mark_ongoing(eps: list[Episode], cal: list[DayValue]) -> None:
+    """Skill §5A.8: an episode still running on the latest reading day takes priority."""
+    last = max((d.day for d in cal if d.value is not None), default=None)
+    for ep in eps:
+        ep.ongoing = bool(last and ep.end == last)
+        ep.near_zero = ep.direction == "down" and ep.median > 0 and ep.peak <= 0.1 * ep.median

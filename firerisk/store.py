@@ -11,7 +11,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-VERIFICATION_STATES = ["new", "acknowledged", "investigating", "resolved", "false_alarm"]
+VERIFICATION_STATES = ["new", "acknowledged", "investigating", "confirmed", "resolved", "false_alarm"]
+# "confirmed" = a person verified the hazard on site. Rules and AI never set it.
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS analysis_runs (
@@ -23,6 +24,8 @@ CREATE TABLE IF NOT EXISTS alert_history (
 CREATE TABLE IF NOT EXISTS alert_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT, alert_id TEXT NOT NULL, status TEXT NOT NULL, note TEXT,
   changed_at TEXT NOT NULL, changed_by TEXT);
+CREATE TABLE IF NOT EXISTS evidence_seen (
+  evidence_id TEXT PRIMARY KEY, first_seen_at TEXT NOT NULL, record_time TEXT);
 CREATE TABLE IF NOT EXISTS ai_investigations (
   id INTEGER PRIMARY KEY AUTOINCREMENT, alert_id TEXT NOT NULL, created_at TEXT NOT NULL, status TEXT NOT NULL,
   model TEXT, record TEXT NOT NULL);
@@ -57,6 +60,28 @@ class Store:
                     c.execute("INSERT INTO alert_state (alert_id, status, note, changed_at, changed_by) VALUES (?,?,?,?,?)",
                               (a.alert_id, "new", "first detected", result.generated_at.isoformat(), "system"))
             return run_id
+
+    def mark_seen(self, result) -> list[dict]:
+        """Record evidence IDs seen in this run. Returns records that arrived late: new in this run although their
+        own timestamp is more than 1 day older than the previous run (data entered after the fact)."""
+        from datetime import datetime as _dt, timedelta as _td
+        late: list[dict] = []
+        with self._conn() as c:
+            prev = c.execute("SELECT generated_at FROM analysis_runs ORDER BY id DESC LIMIT 1 OFFSET 1").fetchone()
+            prev_at = _dt.fromisoformat(prev["generated_at"]) if prev else None
+            known = {r["evidence_id"] for r in c.execute("SELECT evidence_id FROM evidence_seen")}
+            now = result.generated_at.isoformat()
+            rows = []
+            for e in result.evidence.values():
+                if e.kind in ("meter_episode",) or e.evidence_id in known:
+                    continue
+                ts = e.timestamp.isoformat() if e.timestamp else None
+                rows.append((e.evidence_id, now, ts))
+                if prev_at and known and e.timestamp and e.timestamp < prev_at - _td(days=1):
+                    late.append({"type": "late_arrival", "evidence_id": e.evidence_id, "record_time": ts,
+                                 "first_seen_at": now, "previous_run_at": prev_at.isoformat()})
+            c.executemany("INSERT OR IGNORE INTO evidence_seen VALUES (?,?,?)", rows)
+        return late
 
     def alert_history(self, alert_id: str, limit: int = 50) -> list[dict]:
         with self._conn() as c:

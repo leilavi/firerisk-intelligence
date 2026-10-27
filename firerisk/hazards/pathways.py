@@ -50,6 +50,11 @@ PATHWAYS: dict[str, dict] = {
         "title": "Public-address / evacuation announcement faults",
         "mechanism": "A non-working PA system can delay evacuation announcements.",
     },
+    "consumption_anomaly": {
+        "title": "Abnormal water consumption pattern",
+        "mechanism": "Unexplained water consumption changes can indicate leaks, valve/float faults or metering problems; "
+                     "relevant to fire safety only through water damage to electrical equipment or fire-water supply.",
+    },
     "electrical_anomaly": {
         "title": "Abnormal electrical consumption pattern",
         "mechanism": "Unexplained consumption changes on a meter can indicate equipment stopping, "
@@ -220,17 +225,29 @@ def _evaluate(evidence: list[Evidence], now: datetime) -> list[Signal]:
 
 
 def meter_signals(episode_evidence: list[Evidence], now: datetime) -> list[Signal]:
-    """R8: meter episodes (PORTED detection) become supporting electrical-anomaly signals (NEW use)."""
+    """R8: PORTED meter episodes -> signal, severity per skill §5A.8:
+      * one unexplained episode -> Watch; prolonged/recurring ("Evidence-based risk") -> Warning;
+      * main water meter rising and still ongoing on the latest reading, or main electricity / critical
+        equipment meter dropping to near zero (<=10% of baseline) on the latest reading -> High.
+    "Reasonable variation" and "Insufficient data" episodes are listed but never raise a signal."""
+    from ..config import METERS
     out: list[Signal] = []
     by_meter: dict[str, list[Evidence]] = defaultdict(list)
     for e in episode_evidence:
         if e.values.get("label") in ("Evidence-based risk", "Anomaly to monitor") and _within(e.timestamp, now, 30):
             by_meter[e.asset_id].append(e)
     for meter, items in by_meter.items():
+        role = METERS.get(meter, {}).get("role", "")
         risky = [e for e in items if e.values.get("label") == "Evidence-based risk"]
-        sev = "watch"
-        why = f"{len(items)} unexplained consumption episode(s) in the last 30 days" + (
-            f", {len(risky)} recurring/long" if risky else "")
-        out.append(_sig("R8_METER_ANOMALY", "electrical_anomaly", items[0].zone, meter, sev,
-                        f"Consumption anomalies on {meter}", why, items, False, origin="PORTED"))
+        ongoing = [e for e in items if e.values.get("ongoing")]
+        sev, why = "watch", f"{len(items)} unexplained consumption episode(s) in the last 30 days"
+        if risky:
+            sev, why = "warning", why + f", {len(risky)} prolonged/recurring or linked to an equipment record"
+        if any(role == "water_main" and e.values.get("direction") == "up" for e in ongoing):
+            sev, why = "high", why + "; main water consumption rise still ongoing on the latest reading"
+        if any(role in ("electric_main",) and e.values.get("near_zero") for e in ongoing):
+            sev, why = "high", why + "; main electricity near zero on the latest reading"
+        out.append(_sig("R8_METER_ANOMALY", "electrical_anomaly" if role.startswith("electric") else "consumption_anomaly",
+                        items[0].zone, meter, sev, f"Consumption anomalies on {meter}", why, items, bool(ongoing),
+                        origin="PORTED"))
     return out

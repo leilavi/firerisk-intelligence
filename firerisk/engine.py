@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .config import LOCAL_TZ, METERS, OPS_SOURCE_TITLE, SOURCE_CADENCE_DAYS, VEHICLE_SOURCE_TITLE
 from .correlation import aggregate_alerts
+from .alert_fields import enrich_alerts
 from .hazards.pathways import evaluate, meter_signals
 from .hazards.tagging import tag_evidence
 from .models import Alert, Evidence, Signal, SourceRef
@@ -44,7 +45,9 @@ def _episode_evidence(ep: M.Episode) -> Evidence:
         text=f"peak {ep.peak:g} vs baseline median {ep.median:g} {meta.get('unit', '')}; label: {ep.label} ({ep.note})",
         status=ep.label, is_open=None,
         values={"direction": ep.direction, "days": ep.days, "peak": ep.peak, "median": ep.median, "pct": ep.pct,
-                "label": ep.label, "note": ep.note, "derived_from": ep.evidence_ids},
+                "label": ep.label, "note": ep.note, "derived_from": ep.evidence_ids, "ongoing": ep.ongoing,
+                "near_zero": ep.near_zero, "end": ep.end.isoformat(), "unit": meta.get("unit"),
+                "unit_verified": bool(meta.get("multiplier")) and meta.get("multiplier_verified", True)},
         flags=["derived"],
         source=SourceRef("derived", "FireRisk meter analysis (PORTED rule)", "chỉ số điện nước", 0, None))
 
@@ -61,31 +64,40 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
     evidence: list[Evidence] = []
     status: list[dict] = []
 
-    ops_path = snapshot_dir / files.get("ops_data", {}).get("local_file", "ops_data.xlsx")
+    ops_meta = files.get("ops_data", {})
+    ops_path = snapshot_dir / ops_meta.get("local_file", "ops_data.xlsx")
     if ops_path.exists():
-        ev, st = load_ops_workbook(ops_path, files.get("ops_data", {}).get("title", OPS_SOURCE_TITLE))
+        ev, st = load_ops_workbook(ops_path, ops_meta.get("title", OPS_SOURCE_TITLE))
         evidence.extend(ev)
         for sheet, s in st.items():
-            status.append({"source": "ops_data", "sheet": sheet, **s, **_freshness(s.get("latest_record"), now, SOURCE_CADENCE_DAYS.get(sheet)),
-                           "drive_modified_time": files.get("ops_data", {}).get("drive_modified_time"),
-                           "snapshot_at": files.get("ops_data", {}).get("downloaded_at")})
+            row = {"source": "ops_data", "sheet": sheet, **s,
+                   "drive_modified_time": ops_meta.get("drive_modified_time"), "snapshot_at": ops_meta.get("downloaded_at")}
+            if "error" not in s:
+                row.update(_freshness(s.get("latest_record"), now, SOURCE_CADENCE_DAYS.get(sheet)))
+            status.append(row)
     else:
-        status.append({"source": "ops_data", "error": f"file not found: {ops_path.name}"})
+        status.append({"source": "ops_data", "sheet": None, "error": f"file not found: {ops_path.name}"})
 
-    veh_path = snapshot_dir / files.get("vehicles", {}).get("local_file", "theo_doi_luot_khach.xlsx")
+    veh_meta = files.get("vehicles", {})
+    veh_path = snapshot_dir / veh_meta.get("local_file", "vehicles.xlsx")
     vehicles: list[Evidence] = []
     if veh_path.exists():
-        vehicles, vst = load_vehicle_workbook(veh_path, files.get("vehicles", {}).get("title", VEHICLE_SOURCE_TITLE))
-        evidence.extend(vehicles)
-        status.append({"source": "vehicles", "sheet": f"{vst['sheets']} monthly sheets", "rows_read": vst["days"],
-                       "in_scope": vst["days"], "latest_record": vst["latest_record"],
-                       "sheet_month_mismatch": len(vst["sheet_month_mismatch"]),
-                       **_freshness(vst["latest_record"], now, SOURCE_CADENCE_DAYS["vehicles"]),
-                       "drive_modified_time": files.get("vehicles", {}).get("drive_modified_time"),
-                       "snapshot_at": files.get("vehicles", {}).get("downloaded_at")})
+        try:
+            vehicles, vst = load_vehicle_workbook(veh_path, veh_meta.get("title", VEHICLE_SOURCE_TITLE))
+            evidence.extend(vehicles)
+            status.append({"source": "vehicles", "sheet": f"{vst['sheets']} monthly sheets", "rows_read": vst["days"],
+                           "in_scope": vst["days"], "latest_record": vst["latest_record"],
+                           "sheet_month_mismatch": len(vst["sheet_month_mismatch"]),
+                           **_freshness(vst["latest_record"], now, SOURCE_CADENCE_DAYS["vehicles"]),
+                           "drive_modified_time": veh_meta.get("drive_modified_time"),
+                           "snapshot_at": veh_meta.get("downloaded_at")})
+        except Exception as exc:
+            status.append({"source": "vehicles", "sheet": None,
+                           "error": f"workbook unreadable: {type(exc).__name__}: {exc}"})
     else:
-        status.append({"source": "vehicles", "error": f"file not found: {veh_path.name}"})
+        status.append({"source": "vehicles", "sheet": None, "error": f"file not found: {veh_path.name}"})
 
+    apply_record_checks(evidence, now)
     tag_evidence(evidence)
 
     # PORTED meter rules
@@ -96,27 +108,35 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
         M.detect_spikes(cal, meter)
         cals[meter], issues[meter] = cal, iss
         eps[meter] = M.episodes(cal, meter)
+    records_by_asset: dict[str, list] = {}
+    for e in evidence:
+        if e.kind in ("incident", "asset_service") and e.asset_id and e.timestamp:
+            records_by_asset.setdefault(e.asset_id, []).append(e.timestamp.date())
     for meter in eps:
-        M.label_episodes(eps[meter], eps, veh_by_day)
+        M.label_episodes(eps[meter], eps, veh_by_day, records_by_asset)
+        M.mark_ongoing(eps[meter], cals[meter])
     episode_ev = [_episode_evidence(ep) for meter in eps for ep in eps[meter]]
     evidence.extend(episode_ev)
 
     index = {e.evidence_id: e for e in evidence}
     signals = evaluate(evidence, now) + meter_signals(episode_ev, now)
     alerts = aggregate_alerts(signals, index, now)
+    enrich_alerts(alerts, signals, index, status, now)
 
     dq = []
     for meter, iss in issues.items():
         for i in iss:
             dq.append({"meter": meter, **i})
-    for s in status:
-        if s.get("stale"):
-            dq.append({"type": "stale_source", "source": s["source"], "sheet": s.get("sheet"),
-                       "latest_record": s.get("latest_record"), "age_days": s.get("age_days")})
+    for s_ in status:
+        if s_.get("error"):
+            dq.append({"type": "source_unavailable", "source": s_["source"], "sheet": s_.get("sheet"), "detail": s_["error"]})
+        elif s_.get("stale"):
+            dq.append({"type": "stale_source", "source": s_["source"], "sheet": s_.get("sheet"),
+                       "latest_record": s_.get("latest_record"), "age_days": s_.get("age_days")})
     for e in evidence:
         for f in e.flags:
-            if f in ("test_record", "placeholder_text", "undated"):
-                dq.append({"type": f, "evidence_id": e.evidence_id})
+            if f in DQ_FLAGS:
+                dq.append({"type": f, "evidence_id": e.evidence_id, "title": e.title[:80]})
 
     return AnalysisResult(
         generated_at=now, evidence=index, signals=signals, alerts=alerts,
@@ -124,6 +144,42 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
                               "median": d.median} for d in cal] for m, cal in cals.items()},
         meter_episodes={m: [e.to_dict() for e in v] for m, v in eps.items()},
         meter_issues=issues, source_status=status, data_quality=dq)
+
+
+DQ_FLAGS = {"test_record", "placeholder_text", "undated", "missing_timestamp", "invalid_reading", "duplicate_record_id",
+            "unmapped_status", "missing_status", "duration_recomputed_from_start_end", "duration_mismatch",
+            "future_timestamp", "status_possibly_stale", "overdue"}
+
+
+def _parse_date(v) -> datetime | None:
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=LOCAL_TZ)
+    if isinstance(v, str) and v:
+        try:
+            d = datetime.fromisoformat(v.strip())
+            return d if d.tzinfo else d.replace(tzinfo=LOCAL_TZ)
+        except ValueError:
+            return None
+    return None
+
+
+def apply_record_checks(evidence: list[Evidence], now: datetime) -> None:
+    """Record-level checks that need the analysis time (NEW; 'Quá hạn' and stale 'Đang thi công' are PORTED ideas
+    from skill §2.4 / §10.4)."""
+    from datetime import timedelta
+    for e in evidence:
+        if e.timestamp and e.timestamp > now + timedelta(days=1):
+            e.flags.append("future_timestamp")
+        cls = e.values.get("status_class")
+        if e.kind == "construction" and cls == "in_progress":
+            done = _parse_date(e.values.get("done"))
+            if done and done < now:
+                e.flags.append("status_possibly_stale")
+        if e.kind == "asset_service" and e.is_open:
+            due = _parse_date(e.values.get("expected_completion"))
+            if due and due < now:
+                e.flags.append("overdue")
+                e.values["overdue_days"] = round((now - due).total_seconds() / 86400, 1)
 
 
 def _freshness(latest_iso: str | None, now: datetime, cadence: float | None) -> dict:
