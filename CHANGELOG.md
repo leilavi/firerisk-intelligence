@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — 2026-10-27
+- Automatic updates from Google Drive: Apps Script export web app (author's own account, listed files only, token),
+  `sources/drive_sync.py` (validated replacement, previous version kept, partial failures reported), background sync
+  every 30 min, `POST /api/sync`, sync history in SQLite, "Update from Drive" button, Data sources panel,
+  "new analysis available" notice. `setup_drive_sync.bat` for the one-time setup.
+- 66 tests (11 new, against a local mock of the web app).
+
 ## 0.2.0 — 2026-10-27
 - Pipeline: status classes, duplicate IDs, invalid values, generator duration recompute, overdue / stale / future flags,
   missing or corrupt sources reported without stopping, late-arrival detection.

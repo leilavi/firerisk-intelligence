@@ -40,7 +40,14 @@ async function loadStatus() {
   $("#building").textContent = S.building;
   const oldest = S.sources.filter((x) => x.latest_record).map((x) => x.latest_record).sort().pop();
   const issues = S.sources_down.length + S.sources_stale.length;
-  $("#freshness").innerHTML = `Analysed <b>${dt(S.generated_at)}</b> · newest record ${ago(oldest)}${issues ? ` · <span style="color:var(--high-ink)">${issues} source issue(s)</span>` : ""}`;
+  const sy = S.sync || {};
+  const syncTxt = !sy.configured ? "" : sy.last && !sy.last.ok
+    ? ` · <span style="color:var(--high-ink)">Drive update failed ${dt(sy.last.started_at)}</span>`
+    : sy.last_ok_at ? ` · Drive checked ${dt(sy.last_ok_at)}` : "";
+  $("#freshness").innerHTML = `Analysed <b>${dt(S.generated_at)}</b> · newest record ${ago(oldest)}${syncTxt}${issues ? ` · <span style="color:var(--high-ink)">${issues} source issue(s)</span>` : ""}`;
+  const rb = $("#refresh");
+  if (!rb.disabled) rb.textContent = sy.configured ? "Update from Drive" : "Re-run analysis";
+  rb.title = sy.configured ? "Download the latest files from Google Drive, then re-run the analysis" : "Re-run the analysis on the current data snapshot";
   const ai = $("#ai-status");
   ai.textContent = S.ai.configured ? (S.ai.mode === "live" ? `AI ready · ${S.ai.model}` : "AI in TEST mode") : "AI not configured";
   ai.className = "aipill" + (S.ai.configured ? " on" : "");
@@ -354,9 +361,23 @@ async function viewQuality() {
     <div class="scroll"><table class="tbl"><thead><tr><th>Source</th><th>Tab</th><th>State</th><th>Rows read</th><th>In scope</th><th>Newest record</th><th>Snapshot taken</th></tr></thead><tbody>
     ${q.sources.map((s) => `<tr><td>${esc(s.source)}</td><td>${esc(s.sheet || "—")}</td><td>${s.error ? `${lvl("unknown")} <span class="small">${esc(s.error)}</span>` : s.stale ? `${lvl("warning")} <span class="small">older than expected (${s.age_days} d)</span>` : `${lvl("normal")} <span class="small">${s.expected_cadence_days ? `${s.age_days} d old` : "event log"}</span>`}</td>
       <td class="num">${esc(s.rows_read ?? "—")}</td><td class="num">${esc(s.in_scope ?? "—")}</td><td class="small">${dt(s.latest_record)}</td><td class="small">${dt(s.snapshot_at)}</td></tr>`).join("")}</tbody></table></div>
+    ${syncPanel(await api("/api/sync"), q.sources)}
     <h2 style="margin:24px 0 10px">Issues found (${q.issues.length})</h2>
     ${Object.entries(groups).map(([k, l]) => `<details ${l.length < 6 ? "open" : ""}><summary>${esc(k.replace(/_/g, " "))} (${l.length})</summary><ul class="small">${l.map((i) => `<li>${i.evidence_id ? chip(i.evidence_id) : ""} ${esc(i.title || i.detail || i.meter || i.sheet || "")} ${i.date ? esc(i.date) : ""}</li>`).join("")}</ul></details>`).join("") || '<div class="empty">No data issues found.</div>'}`;
   bindEvidence();
+}
+
+const SYNC_STATUS = { updated: ["normal", "Updated"], unchanged: ["normal", "No change"], failed: ["unknown", "Failed, previous file kept"], ignored: ["unknown", "Ignored"] };
+function syncPanel(sy, sources) {
+  const errs = sources.filter((s) => s.sync_error);
+  const head = `<h2 style="margin:24px 0 10px">Automatic updates from Google Drive</h2>`;
+  if (!sy.configured) return `${head}<div class="empty">Not set up. The analysis uses the snapshot taken on ${dt(sources.find((s) => s.snapshot_at)?.snapshot_at)}. To update automatically, run <b>setup_drive_sync.bat</b> once (see README).</div>`;
+  const rows = (sy.history || []).map((r) => `<tr><td class="small">${dt(r.started_at)}</td><td class="small">${esc(r.trigger === "auto" ? "automatic" : r.trigger)}</td>
+    <td><b style="color:${r.ok ? "#1E6B3D" : "var(--high-ink)"}">${r.ok ? "✓ OK" : "✕ Failed"}</b> <span class="small">${r.ok ? (r.changed ? "new data" : "no change") : esc(r.error || "some files failed")}</span></td>
+    <td class="small">${Object.entries(r.files || {}).map(([k, f]) => `${esc(k)}: ${esc((SYNC_STATUS[f.status] || ["", f.status])[1])}${f.error ? ` (${esc(f.error)})` : ""}`).join("<br>") || "—"}</td><td class="num">${esc(r.seconds ?? "—")}</td></tr>`).join("");
+  return `${head}<p class="muted small">${sy.auto_minutes ? `Runs every ${sy.auto_minutes} min while the dashboard is open${sy.next_at ? `; next ${dt(sy.next_at)}` : ""}.` : "Automatic runs are off; use the Update from Drive button."} A file is replaced only after it opens as a valid workbook; otherwise the previous file is kept and its older date stays visible.</p>
+    ${errs.length ? `<div class="warnbox"><b>Using an older file.</b> ${errs.map((s) => `${esc(s.sheet || s.source)}: ${esc(s.sync_error)}`).join("; ")}</div>` : ""}
+    <div class="scroll"><table class="tbl"><thead><tr><th>Started</th><th>Trigger</th><th>Result</th><th>Files</th><th>Seconds</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No update has run yet.</td></tr>'}</tbody></table></div>`;
 }
 
 async function viewMedia() {
@@ -424,8 +445,32 @@ async function route() {
   }
 }
 $("#refresh").addEventListener("click", async () => {
-  const b = $("#refresh"); b.disabled = true; b.textContent = "Analysing…";
-  try { await api("/api/refresh", { method: "POST" }); S = null; await route(); } finally { b.disabled = false; b.textContent = "Re-run analysis"; }
+  const b = $("#refresh"); const drive = !!(S && S.sync && S.sync.configured);
+  b.disabled = true; b.textContent = drive ? "Updating from Drive…" : "Analysing…";
+  try {
+    if (drive) {
+      const r = await api("/api/sync", { method: "POST" });
+      if (!r.ok) alertBar(r.busy ? r.error : `Drive update: ${r.error || "some files failed — the previous files were kept"}`);
+    } else await api("/api/refresh", { method: "POST" });
+    S = null; await route();
+  } catch (e) { alertBar(`Update failed: ${e.message}`); }
+  finally { b.disabled = false; if (S) loadStatus(); }
 });
+function alertBar(msg) {
+  let el = $("#notice"); if (!el) { el = document.createElement("div"); el.id = "notice"; el.className = "notice"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  el.innerHTML = `${esc(msg)} <button class="btn quiet" onclick="this.parentNode.remove()">Close</button>`;
+}
+// A background Drive update may produce a new analysis while the page is open: offer to reload, never re-render under the user.
+setInterval(async () => {
+  if (!S || document.hidden) return;
+  try {
+    const n = await api("/api/status");
+    if (n.run_id !== S.run_id && !$("#notice")) {
+      alertBar(`New analysis available (${dt(n.generated_at)}).`);
+      const go = document.createElement("button"); go.className = "btn primary"; go.textContent = "Show";
+      go.onclick = () => { $("#notice").remove(); S = null; route(); }; $("#notice").prepend(go);
+    }
+  } catch (e) { /* backend stopped; the next navigation shows the error */ }
+}, 60000);
 window.addEventListener("hashchange", () => { $("#drawer").hidden = true; window.scrollTo(0, 0); route(); });
 route();

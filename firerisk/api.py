@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ from .config import ASSETS, BUILDING_NAME, LOCAL_TZ, METERS, METER_FEEDS, SEVERI
 from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
+from .sources.drive_sync import SyncConfig, SyncError, sync_from_drive
 from .store import VERIFICATION_STATES, Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +48,9 @@ class State:
         self.result: AnalysisResult | None = None
         self.run_id: int | None = None
         self.store = Store(DB_PATH)
+        self.sync_lock = threading.Lock()
+        self.auto_sync_minutes: int = 0
+        self.next_sync_at: str | None = None
 
     def analyse(self) -> AnalysisResult:
         with self.lock:
@@ -63,9 +68,60 @@ class State:
     def get(self) -> AnalysisResult:
         return self.result or self.analyse()
 
+    def sync(self, trigger: str) -> dict:
+        """Update the snapshot from Google Drive, then re-run the analysis if anything changed or failed."""
+        if not self.sync_lock.acquire(blocking=False):
+            return {"ok": False, "busy": True, "error": "An update is already running."}
+        try:
+            started = datetime.now(LOCAL_TZ).isoformat(timespec="seconds")
+            try:
+                with self.lock:
+                    report = sync_from_drive(SNAPSHOT_DIR, SyncConfig.load())
+            except SyncError as exc:
+                report = {"ok": False, "changed": False, "started_at": started, "error": str(exc), "files": {}}
+            except Exception as exc:   # never let a sync problem stop the dashboard
+                report = {"ok": False, "changed": False, "started_at": started,
+                          "error": f"Unexpected error: {type(exc).__name__}", "files": {}}
+            self.store.save_sync(report, trigger)
+            if report.get("files") and (report.get("changed") or not report.get("ok")) or self.result is None:
+                res = self.analyse()
+                report["analysis"] = {"generated_at": res.generated_at.isoformat(), "alerts": len(res.alerts),
+                                      "run_id": self.run_id}
+            return report
+        finally:
+            self.sync_lock.release()
+
 
 state = State()
 app = FastAPI(title="FireRisk Intelligence", version=__version__)
+
+
+def start_auto_sync() -> threading.Thread | None:
+    """Background updates from Google Drive while the dashboard runs (started by firerisk.serve only)."""
+    cfg = SyncConfig.load()
+    if not cfg.configured or cfg.interval_minutes <= 0:
+        return None
+    state.auto_sync_minutes = cfg.interval_minutes
+
+    def loop() -> None:
+        while True:
+            state.sync("auto")
+            state.next_sync_at = (datetime.now(LOCAL_TZ) + timedelta(minutes=cfg.interval_minutes)).isoformat(
+                timespec="seconds")
+            time.sleep(cfg.interval_minutes * 60)
+
+    t = threading.Thread(target=loop, name="drive-sync", daemon=True)
+    t.start()
+    return t
+
+
+def _sync_view() -> dict:
+    cfg = SyncConfig.load()
+    runs = state.store.sync_runs(limit=1)
+    ok_runs = [r for r in state.store.sync_runs(limit=50) if r.get("ok")]
+    return {"configured": cfg.configured, "auto_minutes": state.auto_sync_minutes or 0,
+            "next_at": state.next_sync_at, "running": state.sync_lock.locked(),
+            "last": runs[0] if runs else None, "last_ok_at": ok_runs[0]["started_at"] if ok_runs else None}
 
 
 def _rank(sev: str) -> int:
@@ -129,7 +185,7 @@ def status():
                                                        "generator_run", "meter_episode"))),
             "zones": ZONE_LABELS,
             "ai": {"configured": cfg.configured, "model": cfg.model, "mode": _ai_mode(cfg.base_url)},
-            "media": media_inventory(res)["summary"]}
+            "media": media_inventory(res)["summary"], "sync": _sync_view()}
 
 
 @app.post("/api/refresh")
@@ -153,6 +209,18 @@ def _alert_summary(a) -> dict:
             "verification": state.store.current_status(a.alert_id),
             "ai": ({"created_at": inv["created_at"], "ai_priority": inv["result"]["risk_assessment"]["ai_priority"],
                     "mode": _investigation_view(inv)["api_mode"]} if inv else None)}
+
+
+@app.post("/api/sync")
+def sync_now():
+    if not SyncConfig.load().configured:
+        raise HTTPException(400, "Google Drive sync is not set up. Run setup_drive_sync.bat.")
+    return state.sync("button")
+
+
+@app.get("/api/sync")
+def sync_history():
+    return {**_sync_view(), "history": state.store.sync_runs(limit=20)}
 
 
 @app.get("/api/alerts")

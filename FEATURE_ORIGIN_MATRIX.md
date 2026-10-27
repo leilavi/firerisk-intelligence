@@ -1,6 +1,6 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-27 16:20 (UTC+7)**. A row is "Implemented" only with verification evidence.
+Status as of **2026-10-27 17:00 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
 Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
 **Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
@@ -46,7 +46,7 @@ add real photos/video when provided.
 | Video frame sampling (ffmpeg) | Implemented, not run | New | Test when a survey video is provided | — |
 | Muse Spark image description (`media.describe_image`) | Implemented, **not run** | New | Run on first real photos | Request format from official docs |
 | SAM 3.1 segmentation | **Not implemented** | New (planned) | Read official output-format docs, then implement | Model listed for the key |
-| Live Google Drive sync (without Claude) | **Not implemented**; snapshot taken via Claude's Drive connector | New (planned) | OAuth desktop client or export folder | — |
+| Automatic Google Drive sync without Claude (Apps Script web app + `sources/drive_sync.py`, every 30 min + button, validated file replacement, previous version kept) | Implemented; **mock-tested only**, first real run pending on author's PC | New | Author runs `setup_drive_sync.bat` | `test_drive_sync.py` (11 tests, local mock of the web app incl. 302 redirect); real-snapshot copy synced through the mock, dashboard screenshots |
 
 ## Verified Meta Model API facts
 | Fact | Value | Source |

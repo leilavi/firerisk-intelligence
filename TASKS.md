@@ -5,7 +5,8 @@
 - [x] Claude: read investigation from PC DB, saved evidence (public summary / private full), added opaque evidence-ID aliases (prompt v2).
 - [ ] Author: provide daily guard photos (Drive folder) and building survey video.
 - [ ] Claude: SAM 3.1 — read official output-format docs, implement and test on one real image.
-- [ ] Claude: live Google Drive sync (OAuth desktop client) so the app refreshes data without Claude.
+- [x] Claude: automatic Google Drive sync (Apps Script web app; chosen over an OAuth desktop client because it needs no Google Cloud project and its access does not expire after 7 days in testing mode).
+- [ ] Author: run `setup_drive_sync.bat` once (deploy the script in own Google account), then confirm the first real sync.
 - [ ] Author: confirm U-05 (authority to process data / send redacted excerpts to Meta API).
 
 ## Later

@@ -90,3 +90,23 @@ Author clarified the project is an upgrade of their own earlier skill. The guide
 **Effect on real data:** B1 stays High risk (water ingress not fixed; jammed blower with past burn-out). Water main and floor-2 AC meter now Warning (recurring episodes, skill §5A.8). Roof and F3 no longer raise a signal: their October episodes are "Insufficient data" because no vehicle counts exist after 30 Sep.
 
 **Not done:** live Drive sync; photos/video; SAM 3.1; live check of dashboard v2 on the author's PC.
+
+## 2026-10-27 16:42–17:00 — Automatic updates from Google Drive
+**Author instruction (16:42):** build the proposed automatic update from Google Drive.
+
+**Design decision:** a Google Apps Script web app in the author's own account instead of an OAuth desktop client.
+Reasons: no Google Cloud project, consent screen or client secret for a non-programmer; refresh tokens of OAuth
+apps in "Testing" status expire after 7 days. Limits: the web app is reachable by anyone who has both its URL and
+the token, so both live only in `.env`; the script reads only the listed file IDs, read-only scope.
+
+**Files:** `apps_script/FireRiskExport.gs`, `apps_script/appsscript.json`, `firerisk/env.py`,
+`firerisk/sources/drive_sync.py`, `scripts/setup_drive_sync.py`, `setup_drive_sync.bat`, `firerisk/store.py`
+(sync_runs), `firerisk/engine.py` (sync_error in source status), `firerisk/api.py` (`/api/sync`, background sync),
+`firerisk/serve.py`, `web/*`, `tests/test_drive_sync.py`, docs.
+
+**Tests:** 66 passed. Drive sync tested only against a **local mock** of the web app (302 redirect then GET, as
+Google does): download and replace, unchanged detection, wrong token, web page instead of data, invalid file,
+missing file, Google error per file, unreachable host, secrets absent from API output. A copy of the real snapshot
+was synced through the mock and shown in the dashboard (desktop + tablet screenshots).
+
+**Not verified:** a real call to Google (Claude's workspace cannot reach Google; first real run on the author's PC).

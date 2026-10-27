@@ -161,3 +161,5 @@ textarea{min-height:64px;resize:vertical}
 
 @media (max-width:1100px){.hero{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.arow{grid-template-columns:130px 1fr}.arow .c3,.arow .c4{grid-column:2}}
 @media (max-width:640px){main{padding:14px}.topbar{padding:10px 14px}.run{margin-left:0}.evi{grid-template-columns:1fr}.evi .val{text-align:left}.kv{grid-template-columns:1fr}.arow{grid-template-columns:1fr}.arow .c3,.arow .c4{grid-column:1}}
+
+.notice{position:fixed;right:16px;bottom:16px;z-index:50;max-width:min(460px,calc(100vw - 32px));display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:var(--r-sm);padding:10px 12px;box-shadow:0 6px 24px rgba(28,39,51,.14);font-size:14px}

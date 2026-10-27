@@ -54,7 +54,8 @@ The dashboard still works when the AI service is unavailable: the rule-based ale
 1. Install **Python 3.13** (Microsoft Store, publisher *Python Software Foundation*).
 2. Double-click `setup_api_key.bat` and paste your Meta Model API key (stored only in `.env`).
 3. Double-click `install.bat` (creates `.venv`, installs dependencies, runs the tests).
-4. Put the data snapshot in `data/private/snapshot/` (see `manifest.json` format in `firerisk/engine.py`).
+4. Double-click `setup_drive_sync.bat` once and follow the steps (see below). Without it, put a data snapshot in
+   `data/private/snapshot/` (see `manifest.json` format in `firerisk/engine.py`).
 5. Double-click `run_dashboard.bat` → http://127.0.0.1:8765
 
 Other platforms:
@@ -66,6 +67,18 @@ python -m pytest -q
 python -m firerisk.serve
 ```
 `scripts/check_meta_api.py` (or `run_api_check.bat`) checks the Meta API connection on its own.
+
+## Automatic updates from Google Drive
+The data stays in the author's Google Drive. A small Apps Script web app (`apps_script/FireRiskExport.gs`), deployed
+in the author's **own** Google account, exports the listed spreadsheets as `.xlsx`:
+* it can read only the file IDs written into it (scope `drive.readonly`), and answers only POST requests that
+  carry a random token stored in the local `.env` (`FIRERISK_DRIVE_TOKEN`, `FIRERISK_DRIVE_EXPORT_URL`);
+* no Google Cloud project or OAuth client is needed; the filled-in script is written to `data/private/drive_sync/`
+  (git-ignored) by `setup_drive_sync.bat`;
+* while the dashboard runs it updates every `FIRERISK_SYNC_MINUTES` (default 30; `0` = button only), and the
+  **Update from Drive** button runs it on demand;
+* a downloaded file replaces the old one only after it opens as a workbook; otherwise the previous file is kept and
+  the Data sources page says which file is older and why. Replaced files are kept in `snapshot/previous/`.
 
 ## Dashboard
 * **Overview** — building zone panel (Roof → B1) coloured by the highest rule level, counts of active / serious alerts,
@@ -79,9 +92,10 @@ Every piece of content is labelled: source record, derived from data, rule resul
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and source status.
 
 ## Tests
-`python -m pytest -q` — 54 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
+`python -m pytest -q` — 66 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
 on **test fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals), API, offline AI tests
-(fake HTTP transport, clearly not the real API), and integration tests on the real snapshot (skipped when absent).
+(fake HTTP transport, clearly not the real API), Google Drive sync against a local mock of the Apps Script web app
+(redirect, wrong token, web page instead of data, invalid or missing file), and integration tests on the real snapshot (skipped when absent).
 
 ## What is new in the Hackathon
 The earlier work was a Claude skill: a Markdown instruction file with **no code**. It is kept, redacted, in
@@ -94,7 +108,8 @@ lists each component as Existing, Modified (ported rule) or New.
 firerisk/            Python package (sources, rules, hazards, correlation, ai, store, api, media)
 web/                 dashboard (index.html, app.js, styles.css)
 tests/               pytest suite + offline mock of the Meta API
-scripts/             Meta API connection check
+scripts/             Meta API connection check, Google Drive sync setup
+apps_script/         Google Apps Script export web app (template, no IDs or token)
 evidence/            sanitized evidence of real API calls (no keys)
 baseline/            redacted copy of the pre-existing skill
 *.bat                Windows launchers

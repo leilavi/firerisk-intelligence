@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS evidence_seen (
 CREATE TABLE IF NOT EXISTS ai_investigations (
   id INTEGER PRIMARY KEY AUTOINCREMENT, alert_id TEXT NOT NULL, created_at TEXT NOT NULL, status TEXT NOT NULL,
   model TEXT, record TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sync_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL, ok INTEGER NOT NULL, changed INTEGER NOT NULL,
+  trigger TEXT NOT NULL, report TEXT NOT NULL);
 """
 
 
@@ -136,3 +139,20 @@ class Store:
             return [{"id": r["id"], "created_at": r["created_at"], "status": r["status"], "model": r["model"]}
                     for r in c.execute("SELECT id, created_at, status, model FROM ai_investigations WHERE alert_id=? "
                                        "ORDER BY id DESC", (alert_id,))]
+
+    # --- Google Drive sync runs (reports never contain the token or the URL) -------------------
+    def save_sync(self, report: dict, trigger: str) -> int:
+        with self._conn() as c:
+            cur = c.execute("INSERT INTO sync_runs (started_at, ok, changed, trigger, report) VALUES (?,?,?,?,?)",
+                            (report["started_at"], int(bool(report.get("ok"))), int(bool(report.get("changed"))),
+                             trigger, json.dumps(report, ensure_ascii=False)))
+            return cur.lastrowid
+
+    def sync_runs(self, limit: int = 20) -> list[dict]:
+        with self._conn() as c:
+            out = []
+            for r in c.execute("SELECT * FROM sync_runs ORDER BY id DESC LIMIT ?", (limit,)):
+                rec = json.loads(r["report"])
+                rec.update({"id": r["id"], "trigger": r["trigger"]})
+                out.append(rec)
+            return out

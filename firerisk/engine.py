@@ -71,7 +71,8 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
         evidence.extend(ev)
         for sheet, s in st.items():
             row = {"source": "ops_data", "sheet": sheet, **s,
-                   "drive_modified_time": ops_meta.get("drive_modified_time"), "snapshot_at": ops_meta.get("downloaded_at")}
+                   "drive_modified_time": ops_meta.get("drive_modified_time"), "snapshot_at": ops_meta.get("downloaded_at"),
+                   "sync_error": ops_meta.get("sync_error")}
             if "error" not in s:
                 row.update(_freshness(s.get("latest_record"), now, SOURCE_CADENCE_DAYS.get(sheet)))
             status.append(row)
@@ -90,7 +91,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
                            "sheet_month_mismatch": len(vst["sheet_month_mismatch"]),
                            **_freshness(vst["latest_record"], now, SOURCE_CADENCE_DAYS["vehicles"]),
                            "drive_modified_time": veh_meta.get("drive_modified_time"),
-                           "snapshot_at": veh_meta.get("downloaded_at")})
+                           "snapshot_at": veh_meta.get("downloaded_at"), "sync_error": veh_meta.get("sync_error")})
         except Exception as exc:
             status.append({"source": "vehicles", "sheet": None,
                            "error": f"workbook unreadable: {type(exc).__name__}: {exc}"})

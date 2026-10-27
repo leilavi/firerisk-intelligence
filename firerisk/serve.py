@@ -8,6 +8,9 @@ import uvicorn
 
 def main() -> None:
     port = int(os.environ.get("FIRERISK_PORT", "8765"))
+    from .api import start_auto_sync
+    if start_auto_sync():
+        print("Automatic updates from Google Drive: on")
     if os.environ.get("FIRERISK_NO_BROWSER") != "1":
         webbrowser.open(f"http://127.0.0.1:{port}")
     uvicorn.run("firerisk.api:app", host="127.0.0.1", port=port, log_level="info")
