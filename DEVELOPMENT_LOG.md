@@ -66,3 +66,8 @@ Author clarified the project is an upgrade of their own earlier skill. The guide
 - Privacy finding: source record IDs embed staff user names (e.g. `Repair-<user>-059`) and were sent as evidence IDs in prompt v1. Fixed in prompt v2: opaque aliases E01…; mapped back after the response. Tests updated (32 passed).
 - Evidence: full result kept private (`data/private/evidence/`), public summary `evidence/investigation_ZONE-B1_20261027_1419_summary.json`.
 - Compliance R-02 → VERIFIED.
+
+## 2026-10-27 14:34–14:40 — Pre-publication privacy scrub (before the first push to GitHub)
+- Scan before publishing: no API keys/secrets in any commit. Found personal data in 3 files (a staff e-mail and real names used as test strings; staff user names embedded in source record IDs quoted in this log and in the redacted baseline).
+- Because nothing had been published yet, the history was rewritten once with `git filter-repo --replace-text` to replace these strings with fictional placeholders (e.g. `Repair-user1-064`). **Commit author/committer dates and messages were preserved**; only file contents changed, so commit hashes changed. Hashes quoted earlier in this log refer to the pre-scrub history: 3219f8c→1acf30c (tag `baseline-pre-hackathon`), 5343bdd→84fa067. A full backup bundle of the pre-scrub history is kept privately by the author/Claude workspace.
+- Tests after scrub: 32 passed.
