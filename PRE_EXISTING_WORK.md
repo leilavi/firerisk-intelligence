@@ -1,6 +1,6 @@
 # Pre-Existing Work (before the Meta Global AI Developer Hackathon)
 
-The Hackathon building period started on **Mon, Oct 26, 2026 (ET)**. Everything listed here existed **before** that date and must not be presented as Hackathon work.
+Per the Participant Guide §3, kickoff was **Mon, Oct 26, 2026** and the **building period is Oct 27 – Nov 4, 2026 (ET)**. Everything listed here existed **before** that date and must not be presented as Hackathon work.
 
 ## 1. What existed
 
