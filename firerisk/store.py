@@ -41,6 +41,10 @@ class Store:
         self.path = path
         with self._conn() as c:
             c.executescript(SCHEMA_SQL)
+            cols = {r["name"] for r in c.execute("PRAGMA table_info(ai_investigations)")}
+            for col in ("fingerprint", "trigger"):          # added in 0.4.0; older rows keep NULL
+                if col not in cols:
+                    c.execute(f"ALTER TABLE ai_investigations ADD COLUMN {col} TEXT")
 
     def _conn(self):
         conn = sqlite3.connect(self.path)
@@ -54,7 +58,7 @@ class Store:
                             (result.generated_at.isoformat(), json.dumps(result.source_status, ensure_ascii=False),
                              len(result.alerts)))
             run_id = cur.lastrowid
-            for a in result.alerts:
+            for a in list(result.alerts) + list(getattr(result, "equipment_alerts", [])):
                 c.execute("INSERT INTO alert_history (run_id, alert_id, severity, title, evidence_count, open_items, "
                           "recorded_at) VALUES (?,?,?,?,?,?,?)",
                           (run_id, a.alert_id, a.severity, a.title, len(a.evidence_ids), a.open_items,
@@ -118,9 +122,10 @@ class Store:
     # --- AI investigations ----------------------------------------------------------------
     def save_investigation(self, record: dict) -> int:
         with self._conn() as c:
-            cur = c.execute("INSERT INTO ai_investigations (alert_id, created_at, status, model, record) VALUES (?,?,?,?,?)",
+            cur = c.execute("INSERT INTO ai_investigations (alert_id, created_at, status, model, record, fingerprint, "
+                            "trigger) VALUES (?,?,?,?,?,?,?)",
                             (record["alert_id"], record["created_at"], record["status"], record.get("model"),
-                             json.dumps(record, ensure_ascii=False)))
+                             json.dumps(record, ensure_ascii=False), record.get("fingerprint"), record.get("trigger")))
             return cur.lastrowid
 
     def latest_investigation(self, alert_id: str, only_ok: bool = False) -> dict | None:
@@ -156,3 +161,14 @@ class Store:
                 rec.update({"id": r["id"], "trigger": r["trigger"]})
                 out.append(rec)
             return out
+
+    def ai_attempts(self, alert_id: str, fingerprint: str) -> list[dict]:
+        with self._conn() as c:
+            return [dict(r) for r in c.execute(
+                "SELECT id, created_at, status, trigger FROM ai_investigations WHERE alert_id=? AND fingerprint=? "
+                "ORDER BY id", (alert_id, fingerprint))]
+
+    def auto_runs_since(self, since_iso: str) -> int:
+        with self._conn() as c:
+            return c.execute("SELECT COUNT(*) FROM ai_investigations WHERE trigger='auto' AND created_at >= ?",
+                             (since_iso,)).fetchone()[0]

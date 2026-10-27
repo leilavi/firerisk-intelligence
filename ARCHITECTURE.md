@@ -14,8 +14,16 @@
  engine.apply_record_checks  future timestamps, overdue repairs, stale "in progress" works
  hazards/tagging.py       fire-safety tags from Vietnamese text (matched term stored)
  rules/meters.py (PORTED) daily consumption, gaps, median/MAD spikes, episodes, 4 conclusion labels
- hazards/pathways.py      R1–R9 hazard pathway rules + R8 meter signals (skill §5A.8 severities)
- correlation.py           evidence links with reasons; one alert per zone; compound-risk rule
+ hazards/pathways.py      R1–R7, R9 fire-hazard pathway rules + R8 meter signals (skill §5A.8 severities)
+        │
+        ├── TWO INDEPENDENT ALERT SYSTEMS (linked, never merged)
+        │   equipment.py (PORTED)  building equipment alerts, one per equipment item / meter:
+        │                          EQ1 open fault, EQ2 overdue, EQ3 repeated faults (skill §2C.A, §10.4),
+        │                          EQ4 meter findings = R8 (skill §5A.8). Levels never changed by the fire module.
+        │   correlation.py (NEW)   fire-risk alerts, one per zone, built ONLY from fire-hazard pathway signals;
+        │                          compound-risk rule. Meter findings are NOT fire-risk signals.
+        │   equipment.link_to_fire_alerts  equipment alert ↔ fire-risk alert only with a stated reason
+        │                          (same record, same equipment, meter that measures equipment in the alert)
  alert_fields.py          the 14 skill alert fields, short headline, assessment class, unknowns
         │
         ├── store.py (SQLite, data/private/firerisk.db): runs, alert history, first detection,
@@ -23,6 +31,13 @@
         │
         ├── ai/ (Muse Spark, optional): redact names → opaque evidence IDs → JSON-schema request →
         │   validate citations → map IDs back → stored separately from rule results
+        │   ai/auto.py: after each analysis run, fire-risk alerts whose EVIDENCE FINGERPRINT has no successful
+        │   analysis are queued; one background worker; alert shown first, AI fills in later; page reloads never
+        │   queue anything; failed attempt retried once after 15 min; daily limit; rule level never changed
+        │
+        ├── video.py (NEW, prepared): survey-video upload (stored locally) + zone/floor/area/room/recording time;
+        │   Muse Spark video review via Files API + Responses API (`input_video`); validated observations
+        │   become dated CONTEXT of the zone's fire-risk alerts (never a finding, never a level change)
         │
         └── api.py (FastAPI) ──► web/ dashboard (vanilla JS, no build step)
 ```
@@ -53,4 +68,25 @@
 * Drive sync fails (no internet, wrong token, web page instead of data) → nothing changes, failure listed in Data
   sources. One file invalid or missing → that file keeps its previous version and `sync_error` is shown; the other
   file is still updated.
+* Automatic AI analysis fails or times out → status "Phân tích AI thất bại", the rule-based explanation is shown
+  ("Đang sử dụng giải thích theo quy tắc"); one automatic retry after 15 minutes, then only on request.
+* No survey video → every function works; the alert shows "No survey video for this zone yet".
 * Newest record older than the source's expected cadence → `stale_source`.
+
+## Evidence fingerprint (when Muse Spark runs again)
+`ai/investigation.fingerprint` hashes: prompt version, rule level, each finding record (ID, status, open/closed,
+time, meter label, ongoing), what the context records SAY (kind, equipment, status, pass/fault — not their IDs, so
+tomorrow's passing checklist is not a change), linked equipment alerts and their levels, and the survey-video
+analyses attached to the zone. Same fingerprint → no new automatic call.
+
+## Survey video integration (prepared 2026-10-27; no real video yet)
+| Step | How | Verified |
+|---|---|---|
+| Upload | Browser sends the file as the request body (`POST /api/videos?filename&zone&floor&area&room&recorded_at&duration_s`); stored in `data/private/media/videos/` (git-ignored); 1 GiB limit (Meta Files API) | TEST files |
+| Metadata | Zone must be a known zone; recording time is entered by a person or "unknown" (file dates are not trusted); duration read by the browser | TEST |
+| Analysis (on request only) | `POST /v1/files` (purpose `user_data`, expires after 3600 s) → `POST /v1/responses` with `input_video` + `text.format` json_schema, `store: false` → `DELETE /v1/files/{id}` | Request shape against the official docs and a fake transport; **never run against the real API** |
+| Validation | Observations need a time range inside the video and a known category; others are set aside with the reason | TEST |
+| Review | Player jumps to each observation (HTTP Range); still frame via ffmpeg when installed | TEST pattern |
+| Use in alerts | Zone match → "Survey videos of this zone" in the fire-risk alert (section 9) and `survey_video_observations` in the Muse package, with recording date and "recording-time only" | TEST |
+Open questions for the first real run: maximum duration, frame-sampling behaviour (`fps` field exists), accuracy of
+the model's timestamps, and whether `text.format` strict schema is accepted on `/v1/responses`.

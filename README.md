@@ -38,8 +38,9 @@ The dashboard still works when the AI service is unavailable: the rule-based ale
 ## Meta AI usage
 | Model | Use | Status |
 |---|---|---|
-| `muse-spark-1.3` (Chat Completions, `response_format: json_schema`, `strict: true`) | Root-cause investigation of a zone alert: observed facts, hypotheses with supporting and contradicting evidence, escalation pathway, missing information, recommended actions, AI priority | Connection and structured output **verified with a real call** (`evidence/api_check_20261027_133317.json`). Investigation module tested offline; first live run pending on the author's PC |
+| `muse-spark-1.3` (Chat Completions, `response_format: json_schema`, `strict: true`) | Root-cause investigation of a zone alert: observed facts, hypotheses with supporting and contradicting evidence, escalation pathway, missing information, recommended actions, AI priority | Connection and structured output **verified with a real call** (`evidence/api_check_20261027_133317.json`). First live investigation run 2026-10-27 14:19 on the author's PC; automatic background analysis (0.4.0) tested with a fake transport |
 | `muse-spark-1.3` image input (`image_url` data URL) | Describe fire-safety-relevant observations in inspection photos | Implemented (`firerisk/media.py`), **not yet run** — no photos available yet |
+| `muse-spark-1.3` video input (Responses API `input_video`, Files API) | Review survey videos for visible fire-safety conditions with approximate times | Implemented from the official docs, tested with a fake transport, **not yet run** — no video yet |
 | `sam-3.1` | Segment objects in photos/video frames | Available to the key; **not implemented** until its output format is verified |
 
 ## Data
@@ -80,22 +81,49 @@ in the author's **own** Google account, exports the listed spreadsheets as `.xls
 * a downloaded file replaces the old one only after it opens as a workbook; otherwise the previous file is kept and
   the Data sources page says which file is older and why. Replaced files are kept in `snapshot/previous/`.
 
+## Two alert systems
+| | Building equipment alerts | Fire-risk alerts |
+|---|---|---|
+| What | Equipment faults, overdue or repeated repairs, meter consumption findings | Combinations of records that may point to a fire or fire-safety risk |
+| Origin | PORTED from the earlier skill (§2C.A, §5A.8, §7, §8) | NEW pathway rules R1–R7, R9 + compound-risk rule |
+| Unit | One per equipment item / meter | One per zone |
+| AI | — | Muse Spark analyses automatically in the background |
+An equipment alert becomes part of a fire-risk alert only with a stated reason (same record, same equipment, a meter
+that measures equipment in the alert). Levels of one system are never changed by the other.
+
+## Automatic Muse Spark analysis
+Alerts appear immediately; Muse Spark runs afterwards in a background worker. It runs when a fire-risk alert is new,
+when its evidence fingerprint changes (records added/removed, status or level changed, linked equipment alerts or
+survey-video observations changed), or when the user presses Re-analyse. Reloading the page never calls the AI.
+Statuses (Vietnamese, as requested by the author): *Chưa phân tích AI · Đang phân tích bằng Muse Spark · Đã hoàn tất
+phân tích AI · Phân tích AI thất bại · Đang sử dụng giải thích theo quy tắc*. Every cited evidence ID is checked;
+unknown IDs are removed and reported. If the AI fails, the alert, its level and the rule-based explanation stay.
+
+## Survey videos (prepared, no real video yet)
+Upload an .mp4 on **Photos & video**, assign zone/floor/area/room and the recording time. On request, Muse Spark
+reviews it through the Meta video API (Files API + Responses API `input_video`, per the official docs; uploaded copy
+expires in 1 hour and is deleted after the call). Observations show the time in the clip and are context for the
+zone's fire-risk alerts only: a video shows the situation when it was recorded, never the current state. Not yet run
+against the real API.
+
 ## Dashboard
-* **Overview** — building zone panel (Roof → B1) coloured by the highest rule level, counts of active / serious alerts,
-  equipment with signals, "needs attention now", weekly fault records by hazard type.
-* **Alerts** — one line per zone alert: level (colour + icon + word), zone, the key sign, detection time, one-line reason.
-* **Alert detail** — six questions in order: what is abnormal · what evidence supports it (source rows, values with
-  units, meter readings 7 days before/after) · why it is a risk · which area and equipment · what to do next ·
-  what is not verified. Muse Spark's explanation is a separate, labelled block.
-* **Equipment, Event history, Data sources, Photos & video.**
-Every piece of content is labelled: source record, derived from data, rule result, AI (Muse Spark) or test.
+* **Overview** — two separate sections: fire-risk alerts (counts by level, alerts that need checking, zone panel,
+  Muse Spark status) and building equipment alerts (counts by level, critical equipment with open faults, top items).
+* **Fire-risk alerts** — list with level / zone / AI-status filters; detail in 10 sections: risk and location · real
+  evidence · trend and timeline · Muse Spark analysis · possible scenarios · evidence for and against · missing data
+  and not verified · actions · related alerts and records (incl. survey videos) · handling history.
+* **Equipment alerts** — list with level / type / zone / critical filters and search; detail with the skill's fields.
+* **Event history, Data sources, Photos & video** (survey-video upload and review).
+Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **AI** (Muse Spark; *AI · video* for video observations) or **TEST**.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and source status.
 
 ## Tests
-`python -m pytest -q` — 66 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
+`python -m pytest -q` — 87 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
 on **test fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals), API, offline AI tests
 (fake HTTP transport, clearly not the real API), Google Drive sync against a local mock of the Apps Script web app
-(redirect, wrong token, web page instead of data, invalid or missing file), and integration tests on the real snapshot (skipped when absent).
+(redirect, wrong token, web page instead of data, invalid or missing file), the two alert systems and automatic AI
+analysis with a fake Muse transport (no duplicate calls, failures, fallback, level unchanged), survey videos with TEST
+files and a fake Meta API, and integration tests on the real snapshot (skipped when absent).
 
 ## What is new in the Hackathon
 The earlier work was a Claude skill: a Markdown instruction file with **no code**. It is kept, redacted, in
@@ -114,6 +142,12 @@ evidence/            sanitized evidence of real API calls (no keys)
 baseline/            redacted copy of the pre-existing skill
 *.bat                Windows launchers
 ```
+
+## Settings (`.env`, never committed)
+`MODEL_API_KEY` (Meta Model API key) · `META_API_BASE_URL`, `META_REASONING_MODEL` (optional) ·
+`FIRERISK_AUTO_AI` (`1` default, `0` = only on request) · `FIRERISK_AI_MIN_LEVEL` (default `watch`) ·
+`FIRERISK_AI_DAILY_LIMIT` (default `20`) · `FIRERISK_DRIVE_EXPORT_URL`, `FIRERISK_DRIVE_TOKEN`, `FIRERISK_SYNC_MINUTES` (Drive sync).
+Optional for video still frames: `ffmpeg` on the PATH.
 
 ## License
 To be decided by the author before publication (see HACKATHON_COMPLIANCE.md, U-04). Dependencies:

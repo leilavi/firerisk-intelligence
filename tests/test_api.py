@@ -51,10 +51,14 @@ def test_status_change_and_confirmed_state(client):
 
 def test_investigation_without_key_fails_cleanly(client):
     a = client.get("/api/alerts").json()[0]["alert_id"]
-    rec = client.post(f"/api/alerts/{a}/investigate").json()
+    queued = client.post(f"/api/alerts/{a}/investigate").json()       # background request: refused, with reason
+    assert queued["queued"] is False and "not configured" in queued["reason"]
+    rec = client.post(f"/api/alerts/{a}/investigate?wait=true").json()  # synchronous run (previous behaviour)
     assert rec["status"] == "failed" and rec["error_kind"] == "not_configured"
     d = client.get(f"/api/alerts/{a}").json()
     assert d["alert"]["severity"] == "high"      # rule result unaffected by the AI failure
+    assert d["ai_status"]["code"] == "failed" and d["ai_status"]["fallback"]
+    assert d["ai_status"]["label"] == "Phân tích AI thất bại"
 
 
 def test_evidence_endpoint_traces_to_source_row(client):

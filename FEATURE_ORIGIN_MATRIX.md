@@ -1,6 +1,6 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-27 17:00 (UTC+7)**. A row is "Implemented" only with verification evidence.
+Status as of **2026-10-27 18:40 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
 Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
 **Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
@@ -42,8 +42,14 @@ add real photos/video when provided.
 | 14 alert fields per signal (skill §8) + short headline, assessment class, unknowns | Implemented | Modified (skill §8 structure) + New content | Review texts with site staff | `test_every_alert_has_the_14_fields` |
 | Human-only "Confirmed on site" verification state; first-detection time | Implemented | New | — | `test_status_change_and_confirmed_state` |
 | Dashboard v2: light theme, risk colours + icons + words, building zone panel, priority list, weekly fault chart, equipment page, 6-question alert detail, meter windows ±7 days, maintenance history, origin labels (source / derived / rule / AI / test) | Implemented | New | Live check on author's PC | Playwright desktop + tablet, no app errors (Google Fonts blocked in Claude's sandbox only) |
+| Building equipment alerts: open / overdue / repeated faults, meter findings, one per equipment item (`equipment.py`) | Implemented | Modified (skill §2C.A, §5A.8, §7, §8, §10.4) — preliminary cut-offs are New | Review cut-offs with site staff | `test_two_systems.py`; real data: 8 equipment alerts (7 Warning, 1 Watch) |
+| Separation of the two alert systems; reasoned links equipment ↔ fire-risk; fire-risk alerts built only from fire-hazard rules | Implemented | New | — | `test_ordinary_equipment_fault_does_not_create_fire_alert`, `test_meter_findings_never_set_fire_level`; real: B1 linked to 4 equipment alerts with reasons |
+| Automatic background Muse Spark analysis with evidence fingerprint, retry and daily limit, Vietnamese status labels, rule-based fallback | Implemented; **tested with a fake transport and a local mock only** | New | First live automatic run on author's PC | `test_two_systems.py` (no duplicate calls on reload, changed evidence re-analysed, timeout/500 fallback, level unchanged, citations validated) |
+| Investigation prompt v3: situation, scenarios with supporting and weakening evidence, limitations, linked equipment alerts and survey-video context | Implemented, **not yet run live** | New | Run once live and review | offline tests |
+| Dashboard 0.4: Overview with two sections, fire-risk list + 10-section detail, equipment-alert list + detail, origin labels SOURCE / DERIVED / RULE / AI / TEST | Implemented | New | Live check on PC | Playwright desktop 1440 + tablet 820 on a copy of the real snapshot, no app errors |
+| Survey videos: upload, zone/floor/area/room/recording time, player with jump-to-time, still frames (ffmpeg), Muse Spark video review via Files API + Responses API, validated observations as dated context of fire-risk alerts | Implemented, **no real video, never sent to Meta** | New | Run on the first real survey video | `test_video.py` (8 tests, TEST files, fake Meta API); browser upload of a generated TEST pattern in a scratch database |
 | Media inventory (photo references found in logs; local files matched by name) | Implemented | New | Connect the real photo/video folder | 1,006 photo references found; 0 files available yet |
-| Video frame sampling (ffmpeg) | Implemented, not run | New | Test when a survey video is provided | — |
+| Video frame sampling (ffmpeg) | Implemented; tested on a generated TEST pattern | New | Test on the first survey video | `test_frame_extraction_from_test_pattern` |
 | Muse Spark image description (`media.describe_image`) | Implemented, **not run** | New | Run on first real photos | Request format from official docs |
 | SAM 3.1 segmentation | **Not implemented** | New (planned) | Read official output-format docs, then implement | Model listed for the key |
 | Automatic Google Drive sync without Claude (Apps Script web app + `sources/drive_sync.py`, every 30 min + button, validated file replacement, previous version kept) | Implemented; **mock-tested only**, first real run pending on author's PC | New | Author runs `setup_drive_sync.bat` | `test_drive_sync.py` (11 tests, local mock of the web app incl. 302 redirect); real-snapshot copy synced through the mock, dashboard screenshots |
@@ -56,4 +62,5 @@ add real photos/video when provided.
 | Structured output `json_schema` + `strict: true` on `muse-spark-1.3` | Works (HTTP 200, schema-valid, 2.7 s) | real call |
 | Image input (Chat Completions) | `{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,…"}}`, ≤50 images, ≤50 MB each | docs/image-understanding |
 | SAM 3.1 | `sam-3.1` on `/v1/responses`, noun-phrase or point/box prompts, image or video; special-token output parsed by `@meta-sam/parser` | docs/sam/overview (output parsing not yet verified) |
+| Video input | Muse Spark accepts `video/mp4` on the Responses API as `input_video` (`file_id`, `video_url`, `fps`); Files API upload ≤ 1 GiB, `purpose=user_data`, optional expiry 3600–2592000 s; max duration and timestamp accuracy not documented | docs/video-understanding, docs/file-handling, Responses schemas (read 2026-10-27) — not yet run |
 | Not used on purpose | `*-contributor` models (Meta may use prompts for training) | promptfoo docs; privacy decision |

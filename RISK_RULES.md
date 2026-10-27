@@ -22,7 +22,7 @@ left to act, not by percentage change.
 | R5 Fire water supply | Fault tag on fire water tank / fire pump | High if unresolved; Watch if fault within 60 days |
 | R6 Smoke exhaust | Fault tag on smoke exhaust fans | Warning if unresolved; Watch if within 60 days |
 | R7 PA / evacuation announcement | Fault tag on PA system | Warning if unresolved; Watch if within 60 days |
-| R8 Consumption anomaly (supporting) | PORTED meter episodes labelled "Evidence-based risk" or "Anomaly to monitor" in the last 30 days | Watch (supporting signal only) |
+| R8 Consumption anomaly | PORTED meter episodes (see "R8 meter signal levels") | Since 0.4.0 an **equipment alert** (EQ4), not a fire-risk signal; linked to a fire-risk alert only with a stated reason |
 | R9 Reported fire/smoke | Text describes fire/smoke (cháy nổ, bốc cháy, có khói…) | Emergency only if unresolved and within 48 h; otherwise Warning/Watch |
 
 Routine maintenance without a fault word does not fire any rule (it is context evidence).
@@ -67,3 +67,20 @@ Confirmed — only when a person sets the verification status "Confirmed on site
 Consumption day attribution, averaged gaps, excluded decreasing readings, 28-day median/MAD baseline
 (3 × MAD × 1.4826, or <50% / >150% of median, with per-meter minimum deltas), episodes, EVN-vs-MSB
 cross-check, conclusion labels with vehicle-count check (≥140% of median = reasonable variation).
+
+## Building equipment alerts (PORTED, skill §2C.A, §5A.8, §7, §8, §10.4) — `firerisk/equipment.py`
+One alert per equipment item or meter. Independent of fire-risk alerts; the fire module never changes these levels.
+| Rule | Fires when | Level (preliminary cut-offs; the skill gives guidance, not numbers) |
+|---|---|---|
+| EQ1 Open fault | ≥ 1 open fault record on the equipment (or an open fault incident without Equipment_ID) | Warning on critical equipment (electrical rooms/panels, backup power, fire water, smoke control, fire detection, lightning, motors; lifts, MSB/MBA, XLNT by name); otherwise Watch |
+| EQ2 Overdue | Open repair past its expected completion date (skill §10.4 "Quá hạn") | One level up, but not above Warning: an overdue date alone does not show a serious consequence (skill §7) |
+| EQ3 Repeated faults | ≥ 2 dated fault records with two within 90 days, or a fault that returned after an earlier repair, and recent (90 days) or still open | Warning on critical equipment, otherwise Watch |
+| EQ4 Meter finding | R8 meter signal | Skill §5A.8 level unchanged |
+Equipment alert ↔ fire-risk alert link reasons: shared record, same equipment, or the meter measures equipment that
+is part of the fire-risk alert. A fault with no fire-hazard meaning (e.g. an air-conditioner sensor fault) stays an
+equipment alert only.
+
+## Muse Spark (NEW) — never sets a level
+The rule level is authoritative. Muse Spark gives its own priority with a rationale, shown next to the rule level.
+Automatic analysis: every fire-risk alert at or above `FIRERISK_AI_MIN_LEVEL` (default Watch) whose evidence
+fingerprint has no successful analysis; at most `FIRERISK_AI_DAILY_LIMIT` (default 20) automatic calls per day.

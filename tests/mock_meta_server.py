@@ -21,9 +21,15 @@ class H(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         assert body["response_format"]["type"] == "json_schema"
         if MODE == "investigation":
+            import time; time.sleep(3)          # lets the dashboard show the "analysing" state
             ids = re.findall(r'"evidence_id": "([^"]+)"', body["messages"][1]["content"])[:4] or ["none"]
             content = json.dumps({
                 "summary": "MOCK RESPONSE (offline test server) - not produced by Muse Spark.",
+                "situation": "MOCK situation text from the offline test server.",
+                "scenarios": [{"scenario": "MOCK scenario", "how_it_could_develop": "mock", "plausibility": "possible",
+                               "supporting_evidence_ids": ids[:1], "weakening_evidence_ids": ids[2:3],
+                               "what_would_confirm": "mock"}],
+                "limitations": ["MOCK limitation"],
                 "observed_facts": [{"statement": "MOCK fact", "evidence_ids": ids[:2]}],
                 "hypotheses": [{"cause": "MOCK hypothesis", "category": "other", "plausibility": "low",
                                 "reasoning": "mock", "supporting_evidence_ids": ids[:1],

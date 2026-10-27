@@ -17,7 +17,8 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v2"  # v2: opaque evidence-ID aliases
+PROMPT_VERSION = "investigation-v3"  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
+                                     #     related equipment alerts in the package
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building
 fire and explosion risk. You receive an evidence package assembled by deterministic rules from real
@@ -30,12 +31,20 @@ Rules you must follow:
    correlation or a time coincidence as proof of causation.
 3. Do not invent numeric probabilities, accuracy figures or time-to-fire estimates.
 4. State what is unknown and what information would confirm or reject each hypothesis.
-5. Consider contradicting evidence, e.g. daily checklists that report "Đạt" (passed) or scheduled
+5. Consider contradicting (weakening) evidence, e.g. daily checklists that report "Đạt" (passed) or scheduled
    generator runs that succeeded, and alternative benign explanations (e.g. metering/data-entry issues).
 6. Recommendations must be proportionate, specific and verifiable. Never recommend disabling alarms or
    operating fire-suppression systems automatically; for confirmed emergencies refer to the building's
    approved emergency procedure.
 7. This is decision support. It does not replace certified fire systems or qualified professionals.
+8. Never state that a fire has happened unless a record says so; never change the official level - the
+   rule-based level is authoritative, you only give your own priority with a rationale.
+9. Related equipment alerts are separate maintenance findings; use them as context only where the package
+   states a reason for the link.
+10. Survey video observations (if any) were produced by an AI model from a video recorded on the stated date.
+   They show what was visible THEN, not the current state; they do not prove equipment works and do not confirm
+   a hazard. Mention them by their video alias (V01...) in text only; never put them in evidence_ids.
+Be concise: short sentences, no repetition between fields.
 Write in clear English. Keep Vietnamese equipment names in parentheses where useful."""
 
 _ID_LIST = {"type": "array", "items": {"type": "string"}}
@@ -45,10 +54,23 @@ SCHEMA = {
     "schema": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["summary", "observed_facts", "hypotheses", "escalation_pathway", "risk_assessment",
-                     "missing_information", "recommended_actions", "uncertainty"],
+        "required": ["summary", "situation", "observed_facts", "hypotheses", "scenarios", "escalation_pathway",
+                     "risk_assessment", "missing_information", "recommended_actions", "limitations", "uncertainty"],
         "properties": {
             "summary": {"type": "string"},
+            "situation": {"type": "string"},
+            "scenarios": {"type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["scenario", "how_it_could_develop", "plausibility", "supporting_evidence_ids",
+                             "weakening_evidence_ids", "what_would_confirm"],
+                "properties": {
+                    "scenario": {"type": "string"},
+                    "how_it_could_develop": {"type": "string"},
+                    "plausibility": {"type": "string", "enum": ["plausible", "possible", "unlikely"]},
+                    "supporting_evidence_ids": _ID_LIST,
+                    "weakening_evidence_ids": _ID_LIST,
+                    "what_would_confirm": {"type": "string"}}}},
+            "limitations": {"type": "array", "items": {"type": "string"}},
             "observed_facts": {"type": "array", "items": {
                 "type": "object", "additionalProperties": False, "required": ["statement", "evidence_ids"],
                 "properties": {"statement": {"type": "string"}, "evidence_ids": _ID_LIST}}},
@@ -96,11 +118,23 @@ def _clip(s: str, n: int = 600) -> str:
     return s if len(s) <= n else s[:n] + " …"
 
 
-def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, Redactor, dict]:
+def related_evidence_ids(alert, equipment_alerts) -> list[str]:
+    by_id = {e.alert_id: e for e in equipment_alerts or []}
+    out: list[str] = []
+    for r in getattr(alert, "related_equipment", []) or []:
+        ea = by_id.get(r["equipment_alert_id"])
+        if ea:
+            out.extend(i for i in ea.evidence_ids if i not in out)
+    return out
+
+
+def build_package(alert, signals, evidence_index, now: datetime, equipment_alerts=None) -> tuple[dict, Redactor, dict]:
     """Returns (package, redactor, alias_to_real_id). Source record IDs can embed staff user names
     (e.g. 'Repair-<user>-059'), so evidence IDs are replaced by opaque aliases E01, E02 ... before sending."""
     red = Redactor()
-    ids = list(alert.evidence_ids) + [c for c in alert.context_ids if c not in alert.evidence_ids]
+    rel_ids = [i for i in related_evidence_ids(alert, equipment_alerts)
+               if i not in alert.evidence_ids and i not in alert.context_ids]
+    ids = list(alert.evidence_ids) + [c for c in alert.context_ids if c not in alert.evidence_ids] + rel_ids
     items = [evidence_index[i] for i in ids if i in evidence_index]
     items.sort(key=lambda e: e.timestamp.isoformat() if e.timestamp else "")
     real_to_alias = {e.evidence_id: f"E{n:02d}" for n, e in enumerate(items, start=1)}
@@ -139,8 +173,22 @@ def build_package(alert, signals, evidence_index, now: datetime) -> tuple[dict, 
                      "evidence_ids": [alias(i) for i in s.evidence_ids],
                      "context_evidence_ids": [alias(i) for i in s.context_ids]}
                     for s in (sig_by_id[i] for i in alert.signal_ids if i in sig_by_id)],
-        "evidence": [item(e, "context" if e.evidence_id in alert.context_ids and e.evidence_id not in alert.evidence_ids
+        "evidence": [item(e, "related_equipment" if e.evidence_id in rel_ids else
+                          "context" if e.evidence_id in alert.context_ids and e.evidence_id not in alert.evidence_ids
                           else "finding") for e in items],
+        "related_equipment_alerts": [
+            {"equipment_alert_id": f"EQ{n + 1:02d}",   # opaque: real IDs can contain site codes
+             "level": r["severity"], "link_reasons": r["reasons"],
+             "title": red.text(next((ea.title for ea in equipment_alerts or [] if ea.alert_id == r["equipment_alert_id"]), "")),
+             "evidence_ids": [alias(i) for i in next((ea.evidence_ids for ea in equipment_alerts or []
+                                                      if ea.alert_id == r["equipment_alert_id"]), [])]}
+            for n, r in enumerate(getattr(alert, "related_equipment", []) or [])],
+        "survey_video_observations": [
+            {"video": f"V{n + 1:02d}", "recorded_at": (v.get("recorded_at") or "unknown")[:10],
+             "age_days": v.get("age_days"), "place": red.text(v.get("place") or ""),
+             "origin": "AI vision model, recording-time only",
+             "observations": [{**o, "observation": red.text(o["observation"])} for o in v["observations"]]}
+            for n, v in enumerate(getattr(alert, "video_context", []) or [])],
         "links": [{"a": alias(l["a"]), "b": alias(l["b"]), "types": l["types"], "reasons": l["reasons"]}
                   for l in alert.links if not (l["types"] == ["same_zone_time_window"])][:80],
         "known_data_limits": [
@@ -169,6 +217,9 @@ def map_back(result: dict, alias_to_real: dict) -> dict:
         x["evidence_ids"] = m(x.get("evidence_ids"))
     for a in result.get("recommended_actions", []):
         a["evidence_ids"] = m(a.get("evidence_ids"))
+    for sc in result.get("scenarios", []):
+        sc["supporting_evidence_ids"] = m(sc.get("supporting_evidence_ids"))
+        sc["weakening_evidence_ids"] = m(sc.get("weakening_evidence_ids"))
     return result
 
 
@@ -193,17 +244,49 @@ def validate(result: dict, valid_ids) -> dict:
         s["evidence_ids"] = clean(s.get("evidence_ids"))
     for a in result.get("recommended_actions", []):
         a["evidence_ids"] = clean(a.get("evidence_ids"))
+    for sc in result.get("scenarios", []):
+        sc["supporting_evidence_ids"] = clean(sc.get("supporting_evidence_ids"))
+        sc["weakening_evidence_ids"] = clean(sc.get("weakening_evidence_ids"))
     unsupported = [f["statement"] for f in result.get("observed_facts", []) if not f.get("supported")]
     return {"invalid_evidence_ids": sorted(set(invalid)), "unsupported_facts": unsupported,
             "ok": not invalid and not unsupported}
 
 
-def investigate(alert, signals, evidence_index, now: datetime, client: MuseClient | None = None) -> dict:
+def fingerprint(alert, evidence_index, equipment_alerts=None) -> str:
+    """Identifies the evidence an analysis was based on. Changes when records are added/removed, a status or
+    resolution changes, the rule level changes, related equipment alerts change, or the prompt version changes.
+    Re-running the analysis on unchanged data gives the same fingerprint, so no duplicate AI call is made."""
+    def ev(i):
+        e = evidence_index.get(i)
+        if not e:
+            return [i, None]
+        return [i, e.status, e.is_open, e.timestamp.isoformat() if e.timestamp else None,
+                e.values.get("label"), bool(e.values.get("ongoing"))]
+    def ctx(i):
+        # Context records (e.g. the latest daily checklist) get a new record every day. Only what they SAY counts,
+        # so a new "passed" checklist on the same equipment does not trigger a new AI call.
+        e = evidence_index.get(i)
+        if not e:
+            return [i]
+        tags = sorted({t["tag"] for t in e.tags} & {"checklist_pass", "fault", "grid_outage"})
+        return [e.kind, e.asset_id, e.status, e.is_open, tags]
+    rel = sorted((r["equipment_alert_id"], r["severity"]) for r in getattr(alert, "related_equipment", []) or [])
+    payload = {"v": PROMPT_VERSION, "level": alert.severity,
+               "evidence": [ev(i) for i in sorted(set(alert.evidence_ids))],
+               "context": sorted({json.dumps(ctx(i), default=str) for i in set(alert.context_ids)}),
+               "related": rel, "related_evidence": [ev(i) for i in sorted(set(related_evidence_ids(alert, equipment_alerts)))],
+               "video": sorted((v["video_id"], v.get("analysis_created_at")) for v in getattr(alert, "video_context", []) or [])}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:20]
+
+
+def investigate(alert, signals, evidence_index, now: datetime, client: MuseClient | None = None,
+                equipment_alerts=None) -> dict:
     client = client or MuseClient()
-    package, _, alias_to_real = build_package(alert, signals, evidence_index, now)
+    package, _, alias_to_real = build_package(alert, signals, evidence_index, now, equipment_alerts)
     user = ("Investigate this zone alert. Evidence package (JSON):\n" + json.dumps(package, ensure_ascii=False))
     request_hash = hashlib.sha256(user.encode("utf-8")).hexdigest()[:16]
     record = {"alert_id": alert.alert_id, "created_at": now.isoformat(), "prompt_version": PROMPT_VERSION,
+              "fingerprint": fingerprint(alert, evidence_index, equipment_alerts), "rule_level": alert.severity,
               "model_requested": client.config.model, "request_hash": request_hash,
               "package_evidence_count": len(package["evidence"]), "redacted": True}
     try:

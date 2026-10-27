@@ -20,18 +20,20 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__
+from .ai.auto import STATE_LABELS, AutoAnalyst
 from .ai.investigation import investigate
 from .ai.muse import MuseClient, MuseConfig
 from .config import ASSETS, BUILDING_NAME, LOCAL_TZ, METERS, METER_FEEDS, SEVERITY_LABEL, SEVERITY_ORDER, ZONE_LABELS
 from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
+from .video import OLD_VIDEO_DAYS, VideoStore, extract_frame
 from .sources.drive_sync import SyncConfig, SyncError, sync_from_drive
 from .store import VERIFICATION_STATES, Store
 
@@ -51,6 +53,8 @@ class State:
         self.sync_lock = threading.Lock()
         self.auto_sync_minutes: int = 0
         self.next_sync_at: str | None = None
+        self.ai = AutoAnalyst(self.store, self.get)
+        self.videos = VideoStore(DB_PATH)
 
     def analyse(self) -> AnalysisResult:
         with self.lock:
@@ -62,11 +66,19 @@ class State:
                 if e and "late_arrival" not in e.flags:
                     e.flags.append("late_arrival")
             res.data_quality.extend(late)
+            self.attach_video_context(res)
             self.result = res
-            return res
+        # Alerts are available now; Muse Spark runs afterwards in the background (never blocks the alert).
+        self.ai.schedule(res)
+        return res
 
     def get(self) -> AnalysisResult:
         return self.result or self.analyse()
+
+    def attach_video_context(self, res: AnalysisResult) -> None:
+        """Survey-video observations of the same zone become CONTEXT of a fire-risk alert (never a finding)."""
+        for a in res.alerts:
+            a.video_context = self.videos.context_for(a.zone)
 
     def sync(self, trigger: str) -> dict:
         """Update the snapshot from Google Drive, then re-run the analysis if anything changed or failed."""
@@ -185,7 +197,9 @@ def status():
                                                        "generator_run", "meter_episode"))),
             "zones": ZONE_LABELS,
             "ai": {"configured": cfg.configured, "model": cfg.model, "mode": _ai_mode(cfg.base_url)},
-            "media": media_inventory(res)["summary"], "sync": _sync_view()}
+            "media": media_inventory(res)["summary"], "sync": _sync_view(),
+            "equipment_alerts": len([a for a in res.equipment_alerts if _is_active(a.alert_id)]),
+            "equipment_alert_counts": dict(Counter(a.severity for a in res.equipment_alerts))}
 
 
 @app.post("/api/refresh")
@@ -194,10 +208,12 @@ def refresh():
     return {"generated_at": res.generated_at.isoformat(), "alerts": len(res.alerts), "run_id": state.run_id}
 
 
-def _alert_summary(a) -> dict:
+def _alert_summary(a, res=None) -> dict:
+    res = res or state.get()
     inv = state.store.latest_investigation(a.alert_id, only_ok=True)
     f = a.fields
-    return {"alert_id": a.alert_id, "zone": a.zone, "zone_label": a.zone_label, "severity": a.severity,
+    return {"alert_id": a.alert_id, "kind": "fire", "ai_status": state.ai.status(a, res),
+            "related_equipment": len(a.related_equipment), "zone": a.zone, "zone_label": a.zone_label, "severity": a.severity,
             "severity_label": SEVERITY_LABEL[a.severity], "headline": f.get("headline"),
             "why": (f.get("why_short") or [""])[0], "why_all": f.get("why_short", []),
             "detected_at": state.store.first_detected(a.alert_id), "assessment_class": f.get("assessment_class"),
@@ -209,6 +225,33 @@ def _alert_summary(a) -> dict:
             "verification": state.store.current_status(a.alert_id),
             "ai": ({"created_at": inv["created_at"], "ai_priority": inv["result"]["risk_assessment"]["ai_priority"],
                     "mode": _investigation_view(inv)["api_mode"]} if inv else None)}
+
+
+def _eq_summary(ea) -> dict:
+    f = ea.fields
+    return {"alert_id": ea.alert_id, "kind": "equipment", "asset_id": ea.asset_id, "asset_name": ea.asset_name,
+            "zone": ea.zone, "zone_label": ea.zone_label, "critical": ea.critical, "severity": ea.severity,
+            "severity_label": SEVERITY_LABEL[ea.severity], "headline": ea.title,
+            "why": (f.get("why_short") or [""])[0], "why_all": f.get("why_short", []), "type": f.get("kind"),
+            "rules": [r["rule"] for r in ea.rules], "open_items": ea.open_items, "evidence_count": len(ea.evidence_ids),
+            "first_seen": ea.first_seen.isoformat() if ea.first_seen else None,
+            "last_seen": ea.last_seen.isoformat() if ea.last_seen else None,
+            "detected_at": state.store.first_detected(ea.alert_id), "deadline": f.get("deadline"),
+            "urgency": f.get("urgency"), "confidence": f.get("confidence"),
+            "verification": state.store.current_status(ea.alert_id),
+            "fire_links": ea.fire_links}
+
+
+def _eq_alert(alert_id: str):
+    res = state.get()
+    for a in res.equipment_alerts:
+        if a.alert_id == alert_id:
+            return res, a
+    raise HTTPException(404, f"equipment alert {alert_id} not found")
+
+
+def _is_active(alert_id: str) -> bool:
+    return ((state.store.current_status(alert_id) or {}).get("status", "new")) not in ("resolved", "false_alarm")
 
 
 @app.post("/api/sync")
@@ -225,7 +268,78 @@ def sync_history():
 
 @app.get("/api/alerts")
 def alerts():
-    return [_alert_summary(a) for a in state.get().alerts]
+    """Fire-risk alerts (kept at this path for compatibility; also served at /api/fire-alerts)."""
+    res = state.get()
+    return [_alert_summary(a, res) for a in res.alerts]
+
+
+@app.get("/api/fire-alerts")
+def fire_alerts():
+    return alerts()
+
+
+@app.get("/api/equipment-alerts")
+def equipment_alerts():
+    return [_eq_summary(a) for a in state.get().equipment_alerts]
+
+
+@app.get("/api/equipment-alerts/{alert_id:path}")
+def equipment_alert_detail(alert_id: str):
+    res, ea = _eq_alert(alert_id)
+    evidence = [_ev(res.evidence[i]) for i in ea.evidence_ids if i in res.evidence]
+    trends = []
+    meter = ea.asset_id if ea.asset_id in res.meter_calendars else None
+    for e in evidence:
+        if e["kind"] == "meter_episode":
+            v = e["values"]
+            start = (e["timestamp"] or "")[:10]
+            trends.append({"evidence_id": e["evidence_id"], "meter": e["asset_id"], "meter_name": _asset_name(e["asset_id"]),
+                           "unit": v.get("unit"), "unit_verified": v.get("unit_verified"), "label": v.get("label"),
+                           "start": start, "end": v.get("end"), "median": v.get("median"),
+                           "points": _window(res.meter_calendars.get(e["asset_id"], []), start, v.get("end") or start)})
+    trends.sort(key=lambda t: t["start"], reverse=True)
+    history = sorted((_ev(e) for e in res.evidence.values()
+                      if ea.asset_id and e.asset_id == ea.asset_id and e.kind in ("asset_service", "incident", "inspection_check")),
+                     key=lambda d: d["timestamp"] or "", reverse=True)
+    fire = {a.alert_id: a for a in res.alerts}
+    return {"alert": ea.to_dict(), "summary": _eq_summary(ea), "fields": ea.fields, "evidence": evidence,
+            "trends": trends, "meter": {"meta": METERS.get(meter), "calendar": res.meter_calendars.get(meter, [])[-90:]} if meter else None,
+            "maintenance_history": history,
+            "fire_alerts": [{"alert_id": l["fire_alert_id"], "reasons": l["reasons"],
+                             "severity": fire[l["fire_alert_id"]].severity,
+                             "headline": fire[l["fire_alert_id"]].fields.get("headline"),
+                             "zone_label": fire[l["fire_alert_id"]].zone_label}
+                            for l in ea.fire_links if l["fire_alert_id"] in fire],
+            "verification": state.store.current_status(alert_id), "status_log": state.store.status_log(alert_id),
+            "history": state.store.alert_history(alert_id),
+            "data_quality": [q for q in res.data_quality if q.get("evidence_id") in set(ea.evidence_ids)]}
+
+
+@app.get("/api/overview")
+def overview():
+    """Two separate sections: building equipment alerts and fire-risk alerts."""
+    res = state.get()
+    eq = [a for a in res.equipment_alerts if _is_active(a.alert_id)]
+    fire = [a for a in res.alerts if _is_active(a.alert_id)]
+    ai = [state.ai.status(a, res) for a in fire]
+    rank_key = lambda a: (-_rank(a.severity), -(a.last_seen.timestamp() if a.last_seen else 0))
+    return {
+        "generated_at": res.generated_at.isoformat(),
+        "equipment": {
+            "active": len(eq), "by_level": dict(Counter(a.severity for a in eq)),
+            "critical_open": len({a.asset_id or a.alert_id for a in eq if a.critical and a.open_items}),
+            "meters_with_findings": sum(1 for a in eq if a.fields.get("kind") == "meter"),
+            "top": [_eq_summary(a) for a in sorted(eq, key=rank_key)[:5]]},
+        "fire": {
+            "active": len(fire), "by_level": dict(Counter(a.severity for a in fire)),
+            "needs_check": [_alert_summary(a, res) for a in sorted(fire, key=rank_key)
+                            if _rank(a.severity) >= _rank("warning") or a.open_items][:5],
+            "others": [_alert_summary(a, res) for a in sorted(fire, key=rank_key)
+                       if not (_rank(a.severity) >= _rank("warning") or a.open_items)][:5],
+            "zones": sorted({a.zone_label for a in fire}),
+            "ai": dict(Counter(x["code"] for x in ai)), "ai_labels": {k: v[0] for k, v in STATE_LABELS.items()},
+            "ai_configured": MuseConfig.load().configured},
+    }
 
 
 def _window(cal: list[dict], start: str, end: str, pad: int = 7) -> list[dict]:
@@ -273,27 +387,48 @@ def alert_detail(alert_id: str):
     history = sorted((_ev(e) for e in res.evidence.values()
                       if e.kind in ("asset_service", "incident", "construction", "inspection_check")
                       and e.asset_id in assets), key=lambda d: d["timestamp"] or "", reverse=True)
-    return {"alert": a.to_dict(), "summary": _alert_summary(a), "fields": a.fields, "signals": sigs,
+    eq_by_id = {e.alert_id: e for e in res.equipment_alerts}
+    related = [_eq_summary(eq_by_id[r["equipment_alert_id"]]) | {"reasons": r["reasons"]}
+               for r in a.related_equipment if r["equipment_alert_id"] in eq_by_id]
+    rule_explanation = [{"signal_id": s["signal_id"], "pathway": s["pathway"], "title": s["title"],
+                         "severity": s["severity"], "mechanism": s["mechanism"],
+                         "consequence": s["fields"]["consequence"], "risk_chain": s["fields"]["risk_chain"],
+                         "trigger_condition": s["fields"]["trigger_condition"],
+                         "possible_causes": s["fields"]["possible_causes"],
+                         "context_evidence": s["fields"].get("context_evidence", []),
+                         "origin": "rule"} for s in sigs]
+    latest_ok = state.store.latest_investigation(alert_id, only_ok=True)
+    return {"alert": a.to_dict(), "summary": _alert_summary(a, res), "fields": a.fields, "signals": sigs,
+            "ai_status": state.ai.status(a, res), "related_equipment": related, "rule_explanation": rule_explanation,
             "evidence": evidence, "timeline": timeline, "trends": trends,
             "meters": {m: {"meta": METERS.get(m), "calendar": res.meter_calendars.get(m, [])[-90:]} for m in meters},
             "maintenance_history": history,
             "verification": state.store.current_status(alert_id), "status_log": state.store.status_log(alert_id),
             "history": state.store.alert_history(alert_id),
-            "investigation": _investigation_view(state.store.latest_investigation(alert_id)),
+            "investigation": _investigation_view(latest_ok),
+            "last_attempt": _investigation_view(state.store.latest_investigation(alert_id)),
             "investigations": state.store.investigations(alert_id),
             "media": [m for m in media_inventory(res)["items"] if m["evidence_id"] in ev_ids],
+            "survey_videos": state.videos.for_zone(a.zone),
             "data_quality": [q for q in res.data_quality if q.get("evidence_id") in ev_ids]}
 
 
 @app.post("/api/alerts/{alert_id}/investigate")
-def run_investigation(alert_id: str):
+def run_investigation(alert_id: str, wait: bool = False):
+    """Re-analyse with Muse Spark on request. Default: queued in the background (the UI polls ai_status).
+    wait=true runs it in this request and returns the stored record (previous behaviour)."""
     res, a = _alert(alert_id)
-    client = MuseClient()
-    rec = investigate(a, res.signals, res.evidence, datetime.now(LOCAL_TZ), client)
-    rec["base_url"] = client.config.base_url
-    rec["api_mode"] = _ai_mode(client.config.base_url)
-    rec["id"] = state.store.save_investigation(rec)
-    return rec
+    if wait:
+        rec = state.ai.run_one(alert_id, "button")
+        return rec
+    out = state.ai.request(alert_id, "button")
+    return out | {"ai_status": state.ai.status(a, res)}
+
+
+@app.get("/api/alerts/{alert_id}/ai-status")
+def ai_status(alert_id: str):
+    res, a = _alert(alert_id)
+    return state.ai.status(a, res)
 
 
 class StatusIn(BaseModel):
@@ -304,7 +439,10 @@ class StatusIn(BaseModel):
 
 @app.post("/api/alerts/{alert_id}/status")
 def set_status(alert_id: str, body: StatusIn):
-    _alert(alert_id)
+    if alert_id.startswith("EQ-"):
+        _eq_alert(alert_id)
+    else:
+        _alert(alert_id)
     if body.status not in VERIFICATION_STATES:
         raise HTTPException(400, f"status must be one of {VERIFICATION_STATES}")
     return state.store.set_status(alert_id, body.status, body.note, body.by)
@@ -322,6 +460,7 @@ def evidence(evidence_id: str):
         d["window"] = _window(res.meter_calendars.get(e.asset_id, []), e.timestamp.date().isoformat(),
                               e.values.get("end") or e.timestamp.date().isoformat())
     d["in_alerts"] = [a.alert_id for a in res.alerts if evidence_id in a.evidence_ids or evidence_id in a.context_ids]
+    d["in_equipment_alerts"] = [a.alert_id for a in res.equipment_alerts if evidence_id in a.evidence_ids]
     d["data_quality"] = [q for q in res.data_quality if q.get("evidence_id") == evidence_id]
     return d
 
@@ -436,6 +575,129 @@ def quality():
 @app.get("/api/media")
 def media():
     return media_inventory(state.get())
+
+
+# --- Building survey videos (prepared; no real video yet) ---------------------------------------------------------
+@app.post("/api/videos")
+async def upload_video(request: Request, filename: str, zone: str | None = None, floor: str | None = None,
+                       area: str | None = None, room: str | None = None, recorded_at: str | None = None,
+                       duration_s: float | None = None, note: str | None = None):
+    """Raw-body upload (the browser sends the file itself as the request body; metadata in the query)."""
+    meta = {"zone": zone or None, "floor": floor, "area": area, "room": room, "recorded_at": recorded_at,
+            "duration_s": duration_s, "note": note}
+    try:
+        from .video import clean_meta
+        clean_meta(meta)
+        tmp = state.videos.incoming_path(filename)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    size = 0
+    try:
+        with open(tmp, "wb") as f:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > 1_073_741_824:
+                    raise HTTPException(413, "file larger than 1 GiB (Meta Files API limit)")
+                f.write(chunk)
+        v = state.videos.add_file(tmp, filename, meta)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return v
+
+
+@app.get("/api/videos")
+def list_videos():
+    return {"videos": state.videos.list(), "old_after_days": OLD_VIDEO_DAYS, "zones": ZONE_LABELS,
+            "ai_configured": MuseConfig.load().configured}
+
+
+def _video(video_id: str) -> dict:
+    v = state.videos.get(video_id)
+    if not v:
+        raise HTTPException(404, f"video {video_id} not found")
+    return v
+
+
+@app.get("/api/videos/{video_id}")
+def video_detail(video_id: str):
+    v = _video(video_id)
+    res = state.get()
+    fire = [{"alert_id": a.alert_id, "severity": a.severity, "headline": a.fields.get("headline")}
+            for a in res.alerts if v.get("zone") and a.zone == v["zone"]]
+    return {"video": v, "analysis": state.videos.latest_analysis(video_id), "fire_alerts_in_zone": fire}
+
+
+class VideoMetaIn(BaseModel):
+    zone: str | None = None
+    floor: str | None = None
+    area: str | None = None
+    room: str | None = None
+    recorded_at: str | None = None
+    note: str | None = None
+
+
+@app.post("/api/videos/{video_id}/meta")
+def video_meta(video_id: str, body: VideoMetaIn):
+    _video(video_id)
+    try:
+        v = state.videos.update_meta(video_id, body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    res = state.get()
+    state.attach_video_context(res)
+    return v
+
+
+@app.get("/api/videos/{video_id}/file")
+def video_file(video_id: str):
+    v = _video(video_id)
+    p = state.videos.path(video_id)
+    if not p:
+        raise HTTPException(404, "video file missing")
+    return FileResponse(p, media_type=v["mime"])     # supports HTTP Range, so the player can jump to a time
+
+
+@app.get("/api/videos/{video_id}/frame")
+def video_frame(video_id: str, t: float = 0):
+    p = state.videos.path(video_id)
+    if not p:
+        raise HTTPException(404, "video file missing")
+    out = state.videos.video_dir / "frames" / f"{video_id}_{int(t * 10):07d}.jpg"
+    if not out.exists():
+        try:
+            if not extract_frame(p, t, out):
+                raise HTTPException(501, "ffmpeg is not installed; open the clip instead")
+        except Exception as exc:
+            if isinstance(exc, HTTPException):
+                raise
+            raise HTTPException(500, f"frame extraction failed: {type(exc).__name__}")
+    return FileResponse(out, media_type="image/jpeg")
+
+
+@app.post("/api/videos/{video_id}/analyse")
+def analyse_video_endpoint(video_id: str):
+    """User-requested only (videos can show people; sending them to Meta is a deliberate step)."""
+    v = _video(video_id)
+    if not v["analysable"]:
+        raise HTTPException(400, v["analysable_reason"])
+    if not MuseConfig.load().configured:
+        raise HTTPException(400, "Muse Spark is not configured (no MODEL_API_KEY)")
+    from .ai.redact import Redactor
+    res = state.get()
+    red = Redactor()
+    ctx = "; ".join(red.text(a.fields.get("headline") or a.title) for a in res.alerts if a.zone == v.get("zone"))
+    def refresh_context(_rec):   # stored observations become context of the zone's fire-risk alerts
+        r = state.get()
+        state.attach_video_context(r)
+        state.ai.schedule(r)        # their fingerprint changed: eligible alerts are re-analysed automatically
+
+    started = state.videos.analyse_in_background(video_id, state.ai.client_factory,
+                                                 f"Zone {v['zone_label']}. Open fire-risk findings: {ctx or 'none'}",
+                                                 on_done=refresh_context)
+    return {"started": started, "video": state.videos.get(video_id)}
 
 
 @app.get("/api/zones")

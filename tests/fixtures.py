@@ -34,7 +34,7 @@ def _row(cols, **kv):
     return [kv.get(c) for c in cols]
 
 
-def build_ops_workbook(path: Path, *, drop_tab: str | None = None) -> Path:
+def build_ops_workbook(path: Path, *, drop_tab: str | None = None, hvac_fault: bool = False) -> Path:
     from firerisk.config import BRANCH_PREFIX as B
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -58,6 +58,10 @@ def build_ops_workbook(path: Path, *, drop_tab: str | None = None) -> Path:
                    Latest_Activity_Date=NOW - timedelta(days=5)))
     ws.append(_row(ASSET_COLS, Log_ID="Q1", Equipment_ID="E-ML1", Location_ID="SITE-2-B-F3",
                    Service_Details="other branch", Current_Status="4. Operational"))
+    if hvac_fault:   # TEST: an ordinary equipment fault with no fire-hazard meaning
+        ws.append(_row(ASSET_COLS, Log_ID="H1", Equipment_ID="P-ML900", Location_ID=f"{B}-A-F3-Chung-",
+                       Service_Details="Máy lạnh báo lỗi cảm biến", Current_Status="2. Pending Repair",
+                       Latest_Activity_Date=NOW - timedelta(days=2)))
     ws = wb.create_sheet("NK thi công - sự cố"); ws.append(INC_COLS)
     ws.append(_row(INC_COLS, **{"Mã sự cố/ nâng cấp": f"{B}----T10_1", "Loại báo cáo": "Báo cáo sự cố",
                                 "Thời gian báo cáo": NOW - timedelta(days=19), "Báo cáo nhanh": "Phòng MBA,MSB thấm nước",

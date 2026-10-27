@@ -110,3 +110,32 @@ missing file, Google error per file, unreachable host, secrets absent from API o
 was synced through the mock and shown in the dashboard (desktop + tablet screenshots).
 
 **Not verified:** a real call to Google (Claude's workspace cannot reach Google; first real run on the author's PC).
+
+## 2026-10-27 17:09–18:45 — Two alert systems, automatic Muse Spark analysis, survey-video architecture
+**Author instructions:** attachment "Yêu cầu nâng cấp hệ thống cảnh báo tòa nhà và tích hợp AI phân tích nguy cơ PCCC"
+(two independent alert systems, Overview with two sections, automatic background Muse analysis, fallback, origin
+labels, 13 test scenarios) and section 9 (prepare survey-video integration without media; check official docs first).
+
+**Note on timing:** backend work for this request started 17:09–17:14 in a session run that was interrupted; it
+was reviewed and completed after the author re-sent the request at 18:12. No other process was writing in between.
+
+**Docs checked (18:15):** dev.meta.ai video-understanding, file-handling, responses create + schemas,
+structured-output. Muse Spark accepts mp4 video directly (`input_video`), so no frame-to-image workaround is needed;
+max duration, sampling and timestamp accuracy are not documented.
+
+**Files:** `firerisk/equipment.py`, `firerisk/ai/auto.py`, `firerisk/video.py` (new); `engine.py`, `models.py`,
+`store.py`, `api.py`, `ai/investigation.py` (prompt v3, fingerprint, video context), `ai/muse.py` (`_send`),
+`web/*`; tests `test_two_systems.py`, `test_video.py`, `fixtures.py`, `test_api.py`, `mock_meta_server.py`; docs.
+
+**Fix during review:** the evidence fingerprint first included context record IDs, so every new daily checklist
+would have caused a new AI call; it now uses what context records say (status, pass/fault).
+
+**Tests:** 87 passed. Fake Muse transport and local mock only (no real API from Claude's workspace). Live check on a
+copy of the real snapshot with the local mock (labelled TEST): 2 automatic analyses at start-up, 0 extra calls after
+10 page loads; video upload of a generated TEST pattern, player, failure path, zone context (scratch database, not
+kept). Playwright desktop + tablet: no application errors.
+
+**Effect on real data:** fire-risk alerts: B1 High (linked to 4 equipment alerts: MSB meter, XLNT meter, XLNT blower,
+water-ingress incident), whole-building PA Watch. Equipment alerts: 8 (7 Warning, 1 Watch).
+
+**Not verified:** a real automatic Muse run with prompt v3; any real video analysis (no video yet).

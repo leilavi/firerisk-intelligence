@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .config import LOCAL_TZ, METERS, OPS_SOURCE_TITLE, SOURCE_CADENCE_DAYS, VEHICLE_SOURCE_TITLE
 from .correlation import aggregate_alerts
+from .equipment import EquipmentAlert, build_equipment_alerts, link_to_fire_alerts
 from .alert_fields import enrich_alerts
 from .hazards.pathways import evaluate, meter_signals
 from .hazards.tagging import tag_evidence
@@ -31,6 +32,7 @@ class AnalysisResult:
     meter_issues: dict[str, list[dict]]
     source_status: list[dict]
     data_quality: list[dict] = field(default_factory=list)
+    equipment_alerts: list[EquipmentAlert] = field(default_factory=list)
 
 
 def _episode_evidence(ep: M.Episode) -> Evidence:
@@ -120,9 +122,15 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
     evidence.extend(episode_ev)
 
     index = {e.evidence_id: e for e in evidence}
-    signals = evaluate(evidence, now) + meter_signals(episode_ev, now)
-    alerts = aggregate_alerts(signals, index, now)
+    fire_signals = evaluate(evidence, now)              # NEW fire-hazard pathway rules R1-R7, R9
+    meter_sigs = meter_signals(episode_ev, now)         # PORTED meter rules (skill §5A.8) = equipment findings
+    signals = fire_signals + meter_sigs
+    # Fire-risk alerts are built ONLY from fire-hazard pathway signals. Meter findings are equipment alerts and are
+    # linked to a fire-risk alert only with a stated reason; they never set or raise the fire-risk level.
+    alerts = aggregate_alerts(fire_signals, index, now)
     enrich_alerts(alerts, signals, index, status, now)
+    equipment_alerts = build_equipment_alerts(evidence, meter_sigs, now)
+    link_to_fire_alerts(equipment_alerts, alerts, index)
 
     dq = []
     for meter, iss in issues.items():
@@ -140,7 +148,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
                 dq.append({"type": f, "evidence_id": e.evidence_id, "title": e.title[:80]})
 
     return AnalysisResult(
-        generated_at=now, evidence=index, signals=signals, alerts=alerts,
+        generated_at=now, evidence=index, signals=signals, alerts=alerts, equipment_alerts=equipment_alerts,
         meter_calendars={m: [{"day": d.day.isoformat(), "value": d.value, "flag": d.flag, "spike": d.spike,
                               "median": d.median} for d in cal] for m, cal in cals.items()},
         meter_episodes={m: [e.to_dict() for e in v] for m, v in eps.items()},

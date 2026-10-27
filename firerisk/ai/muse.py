@@ -86,9 +86,14 @@ class MuseClient:
         req = urllib.request.Request(
             f"{self.config.base_url}{path}", data=json.dumps(payload).encode("utf-8"), method="POST",
             headers={"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"})
+        return self._send(req)
+
+    def _send(self, req) -> dict:
+        """Send any prepared request (JSON POST, multipart upload, DELETE) with the same error handling."""
         try:
             with self._open(req, timeout=self.config.timeout_s) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                raw = resp.read().decode("utf-8")
+                return json.loads(raw) if raw.strip() else {}
         except urllib.error.HTTPError as err:
             body = err.read().decode("utf-8", errors="replace")[:500]
             if err.code in (401, 403):

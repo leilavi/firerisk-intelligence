@@ -87,6 +87,8 @@ class Alert:
     open_items: int
     context_ids: list[str] = field(default_factory=list)
     fields: dict = field(default_factory=dict)
+    related_equipment: list[dict] = field(default_factory=list)   # equipment alerts linked with reasons
+    video_context: list[dict] = field(default_factory=list)       # survey-video observations (AI vision, context only)
 
     def to_dict(self) -> dict:
         d = asdict(self)

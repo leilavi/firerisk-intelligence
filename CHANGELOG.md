@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-10-27
+- Two independent alert systems: building equipment alerts (PORTED skill rules EQ1–EQ4) and fire-risk alerts (NEW),
+  linked only with stated reasons; meter findings are equipment alerts, no longer fire-risk signals.
+- Automatic background Muse Spark analysis of fire-risk alerts: evidence fingerprint, no calls on page reload,
+  one retry after 15 min, daily limit, Vietnamese status labels, rule-based fallback; prompt v3 (situation,
+  scenarios with supporting/weakening evidence, limitations).
+- Survey-video architecture: upload with zone/floor/area/room/recording time, player, still frames, Muse Spark video
+  review via the documented Files + Responses APIs (not yet run), observations as dated context of fire-risk alerts.
+- Dashboard: Overview with two sections; fire-risk list + 10-section detail; equipment list + detail; origin labels
+  SOURCE / DERIVED / RULE / AI / TEST. Old `#/alert/...` links and `/api/alerts` still work.
+- 87 tests.
+
 ## 0.3.0 — 2026-10-27
 - Automatic updates from Google Drive: Apps Script export web app (author's own account, listed files only, token),
   `sources/drive_sync.py` (validated replacement, previous version kept, partial failures reported), background sync
