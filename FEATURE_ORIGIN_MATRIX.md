@@ -22,7 +22,7 @@ Origin: **Existing** = specified in the pre-existing skill (logic exists only as
 | Root-cause investigation with evidence chain, alternatives, missing information | Partly specified as prose ("possible causes + basis") | New (code + Muse) | Muse Spark reasoning over the correlated evidence package; output validated against schema; every claim cites evidence IDs | — |
 | Fire/explosion escalation-pathway assessment | Not present | New | Rule-based escalation states + Muse explanation; no numeric probabilities | — |
 | Response recommendations with urgency | Specified generally | Modified | Generate per pathway; deterministic urgency floor from rules | — |
-| Meta Model API client (Muse Spark, `muse-spark-1.3`) | Not present | New | OpenAI-compatible client, timeouts, retries, schema validation, offline mode clearly labelled | Docs verified 2026-10-27 (see below) |
+| Meta Model API client (Muse Spark, `muse-spark-1.3`) | Connection check implemented and passed against the real API (not yet the product client) | New | OpenAI-compatible client, timeouts, retries, schema validation, offline mode clearly labelled | Docs verified 2026-10-27 (see below) |
 | SAM 3.1 visual evidence (`sam-3.1`) | Not present | New (optional, Priority 6) | Segment e.g. cable tray / panel / blocked vent in a prepared image; attach as evidence item | — |
 | Muse Spark image understanding | Not present | New (optional) | Describe segmented region as supporting evidence | — |
 | Evidence traceability (claim → evidence → source row) | Partly specified (source field) | Modified | Evidence IDs end to end; UI drill-down | — |
@@ -44,3 +44,5 @@ Origin: **Existing** = specified in the pre-existing skill (logic exists only as
 | SAM model ID | `sam-3.1` via `/v1/responses`; text noun-phrase or point/box prompt; image or video; output is special-token text parsed by `@meta-sam/parser` | sam/overview |
 | Multimodal input for 1.3 | text, image, video, PDF (reported by a third-party integration page; to be confirmed on official model page) | promptfoo docs — **unverified on official page** |
 | Pricing / rate limits | Not yet read | — |
+| Models available to the author's key (real call 2026-10-27) | `muse-image-1.0`, `muse-spark-1.1`, `muse-spark-1.2`, `muse-spark-1.2-contributor`, `muse-spark-1.3`, `muse-spark-1.3-contributor`, `muse-voice-transcribe-1.0`, `muse-wonder-1.0`, `sam-3.1` | `evidence/api_check_20261027_133317.json` |
+| Structured output with `strict: true` on `muse-spark-1.3` | Works (HTTP 200, schema-valid JSON, 2.7 s, 368 completion tokens of which 330 reasoning) | same evidence file |

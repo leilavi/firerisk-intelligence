@@ -35,4 +35,13 @@ All times UTC+7 (Asia/Bangkok). Entries record only work that actually happened.
 
 **Not yet done**: real API call (must run on author's Windows PC; Claude's workspace cannot reach api.meta.ai).
 
-**Compliance**: R-04, R-15, R-18 → IN PROGRESS; R-07 → BLOCKED pending organizer answer U-02 (Indie track + pre-existing skill).
+**Compliance**: R-04, R-15, R-18 → IN PROGRESS; R-07 → BLOCKED pending organizer answer U-02 (later reclassified IN PROGRESS at 12:30, see next entries).
+
+## 2026-10-27 12:24–12:30 — R-07 reclassified
+Author clarified the project is an upgrade of their own earlier skill. The guide is silent on Indie reuse; R-07 set to IN PROGRESS with documented interpretation; U-02 kept as an optional confirmation. Building-period dates corrected to Oct 27 – Nov 4 (guide §3). Commit `5343bdd`.
+
+## 2026-10-27 13:15–13:33 — First REAL Meta Model API call: PASS
+- Python 3.13 (Microsoft Store, Python Software Foundation) installed on the author's PC; `run_api_check.bat` launcher fixed to detect the Windows Store stub (commit after `5343bdd`).
+- Author ran `run_api_check.bat` on their PC at 13:33 UTC+7.
+- Result: `GET /v1/models` HTTP 200 (2.2 s), 9 models; `POST /v1/chat/completions` to `muse-spark-1.3` with strict JSON schema HTTP 200 (2.7 s), schema-valid output, 507 tokens (330 reasoning).
+- Evidence: `evidence/api_check_20261027_133317.json` (checked: contains no key).
