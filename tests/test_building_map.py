@@ -83,15 +83,18 @@ def test_user_facing_labels_are_english(client):
 
 
 class FakeClient:
-    """Returns a TEST translation per id; checks that names were pseudonymised before sending."""
-    def __init__(self):
+    """Returns a TEST translation per id (keeps placeholders); checks that names were pseudonymised before sending.
+    keep_vi=True simulates a model that leaves Vietnamese words in its output."""
+    def __init__(self, keep_vi=False):
         self.sent = []
+        self.keep_vi = keep_vi
 
     def chat_json(self, system, user, schema, **kw):
         payload = json.loads(user)
         self.sent.append(payload)
         from firerisk.ai.muse import MuseResult
-        items = [{"id": x["id"], "en": "TEST EN: " + x["vi"].replace("thấm nước", "water seepage")} for x in payload["items"]]
+        items = [{"id": x["id"], "en": ("TEST EN: phòng " if self.keep_vi else "TEST EN: water seepage in the MBA room, ")
+                  + " ".join(re.findall(r"<person-\d+>", x["vi"])) + " checks"} for x in payload["items"]]
         return MuseResult(data={"items": items}, model="TEST-FAKE", usage=None, seconds=0, raw_content="")
 
 
@@ -114,6 +117,14 @@ def test_translation_is_cached_pseudonymised_and_marked(tmp_path):
     fake2 = FakeClient()
     t2.translate(fake2, src)
     assert fake2.sent == []                                                 # cached: no second call
+
+
+def test_translation_that_is_still_vietnamese_is_rejected(tmp_path):
+    from firerisk.ai.translate import Translator, romanize
+    t = Translator(tmp_path / "tr.db")
+    out = t.translate(FakeClient(keep_vi=True), ["Phòng MBA thấm nước"])
+    assert out["translated"] == 0 and out["failed"] == 1 and t.en("Phòng MBA thấm nước") == (None, None)
+    assert romanize("Hùng Đạt") == "Hung Dat"
 
 
 def test_api_shows_translation_next_to_original(client):

@@ -35,6 +35,11 @@ class H(BaseHTTPRequestHandler):
                                 "reasoning": "mock", "supporting_evidence_ids": ids[:1],
                                 "contradicting_evidence_ids": ids[2:3], "how_to_verify": "mock"}],
                 "escalation_pathway": [{"step": "MOCK step", "condition": "mock", "evidence_ids": ids[:1]}],
+                "risk_briefings": [{"signal": sig, "observed": "MOCK observed", "why_it_matters": "MOCK why",
+                                    "potential_consequence": "MOCK consequence", "certainty": "partly_supported",
+                                    "uncertainty": "MOCK uncertainty", "first_action": "MOCK first action",
+                                    "evidence_ids": ids[:1]}
+                                   for sig in re.findall(r'"signal": "(S\\d+)"', body["messages"][1]["content"])],
                 "risk_assessment": {"ai_priority": "warning", "agrees_with_rule_severity": False, "rationale": "mock"},
                 "missing_information": [{"item": "mock", "why_it_matters": "mock"}],
                 "recommended_actions": [{"action": "MOCK action", "urgency": "within_24h", "reason": "mock",

@@ -59,6 +59,13 @@ state); common abbreviations: PCCC = fire protection, MBA = transformer, MSB = m
 treatment, TS = asset, KT = technician, VH = operation, PA = solution plan. Return one item per input id."""
 
 
+def romanize(s: str) -> str:
+    """Vietnamese letters without diacritics (for proper names shown inside English text, e.g. 'Hùng' -> 'Hung')."""
+    import unicodedata
+    s = s.replace("Đ", "D").replace("đ", "d")
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+
 def needs(s: str | None) -> bool:
     return bool(s) and bool(VI.search(s))
 
@@ -133,7 +140,7 @@ class Translator:
             back = {}
             for low, token in red.mapping.items():           # restore the original spelling (mapping keys are lower-case)
                 m = re.search(re.escape(low), joined, re.IGNORECASE)
-                back[token] = m.group(0) if m else low
+                back[token] = romanize(m.group(0) if m else low)   # names inside English text: no diacritics
             try:
                 r = client.chat_json(SYSTEM, json.dumps({"items": items}, ensure_ascii=False), SCHEMA,
                                      reasoning_effort="low", max_completion_tokens=8000)
@@ -151,6 +158,9 @@ class Translator:
                     continue
                 for token, original in back.items():     # put pseudonymised names back
                     en = en.replace(token, original)
+                if needs(en):                            # still contains Vietnamese: not usable as English text
+                    failed += 1
+                    continue
                 rows.append((_h(s), s, en.strip(), r.model, now, TRANSLATION_VERSION))
             with self._conn() as c:
                 c.executemany("INSERT OR REPLACE INTO translations VALUES (?,?,?,?,?,?)", rows)

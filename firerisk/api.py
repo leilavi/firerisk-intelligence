@@ -30,6 +30,7 @@ from .ai.auto import STATE_LABELS, AutoAnalyst
 from .ai.investigation import investigate
 from .ai.muse import MuseClient, MuseConfig
 from .ai.translate import SHEET_EN, Translator, display_strings
+from .ai.translate import needs as translate_needs
 from .config import ASSETS, BUILDING_NAME, LOCAL_TZ, METERS, METER_FEEDS, SEVERITY_LABEL, SEVERITY_ORDER, ZONE_LABELS
 from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
@@ -82,7 +83,10 @@ class State:
         from .env import load_env
         if load_env().get("FIRERISK_AUTO_TRANSLATE", "1") == "0" or not MuseConfig.load().configured:
             return False
-        return self.translator.start(self.ai.client_factory, display_strings(res))
+        vids = [v.get(k) for v in self.videos.list() for k in ("room", "area", "floor", "note")]
+        vids += [e.get("name") for v in self.videos.list() for e in v.get("equipment") or []]
+        strings = display_strings(res) + [x for x in vids if isinstance(x, str) and translate_needs(x)]
+        return self.translator.start(self.ai.client_factory, strings)
 
     def get(self) -> AnalysisResult:
         return self.result or self.analyse()
@@ -267,7 +271,7 @@ def status():
     serious = [a for a in active if _rank(a.severity) >= _rank("high")]
     abnormal_assets = _abnormal_assets(res)
     return {"building": BUILDING_NAME, "version": __version__, "generated_at": res.generated_at.isoformat(),
-            "run_id": state.run_id, "sources": res.source_status, "alert_counts": dict(counts),
+            "run_id": state.run_id, "sources": _sources_en(res.source_status), "alert_counts": dict(counts),
             "active_alerts": len(active), "serious_alerts": len(serious),
             "abnormal_equipment": len(abnormal_assets),
             "zones_attention": sorted({a.zone_label for a in active if _rank(a.severity) >= _rank("warning")}),
@@ -452,13 +456,26 @@ def building():
             "equipment_alerts": [_eq_summary(e) for e in eq_active if e.zone == z],
             "videos": len(zv), "videos_analysed": sum(1 for v in zv if v["analysis_status"] == "ok"),
         })
+    issues = _issues(res)
+    for f in floors:
+        f.update(_map_floor(f, [i for i in issues if (i["zone"] or "") == f["zone"]]))
+    known = set(FLOORS + ["Building"])
+    unassigned = [i for i in issues if (i["zone"] or "") not in known]
     all_risks = [r for f in floors for r in f["risks"]]
     overall = max((r["severity"] for r in all_risks), key=_rank) if all_risks else (
         "no_active_alert" if sum(records.values()) else "not_assessed")
     urgent = [r for r in all_risks if _rank(r["severity"]) >= _rank("high") and r["open"]]
     syncs = [r for r in state.store.sync_runs(limit=50) if r.get("ok")]
+    not_assessed = [f["zone"] for f in floors if f["zone"] in FLOORS and f["state"] == "not_assessed"]
+    if issues:
+        overall_all = max((i["severity"] for i in issues), key=_rank)
+        overall_all_label = MAP_STATE_LABEL[overall_all]
+    else:
+        overall_all = "incomplete" if not_assessed else "no_active_alert"
+        overall_all_label = "Assessment Incomplete" if not_assessed else "No Active Alert"
     return {
         "generated_at": res.generated_at.isoformat(), "floors": floors,
+        "unassigned": {"label": "Location not recorded", "issues": unassigned},
         "summary": {
             "overall": overall, "overall_label": FLOOR_STATE_LABEL.get(overall, SEVERITY_LABEL.get(overall, overall)),
             "overall_rule": "Highest severity among the active fire-risk alerts' risks (rule results).",
@@ -472,11 +489,181 @@ def building():
             "last_analysis": res.generated_at.isoformat(),
             "last_drive_sync_ok": syncs[0]["started_at"] if syncs else None,
             "coverage_note": COVERAGE_NOTE,
+            "building_state": overall_all, "building_state_label": overall_all_label,
+            "building_state_rule": "Highest rule level among all active issues (fire-safety risks and equipment alerts). "
+                                   "With no active issue it is never shown as safe.",
+            "issues_active": len(issues), "issues_by_level": dict(Counter(i["severity"] for i in issues)),
+            "issues_unresolved": sum(1 for i in issues if i["open"]),
+            "high_priority": sum(1 for i in issues if _rank(i["severity"]) >= _rank("high") and i["open"]),
+            "floors_with_issues": sum(1 for f in floors if f["issue_count"] and f["zone"] != "Building"),
+            "floors_not_assessed": not_assessed,
             "sources_down": [x for x in res.source_status if x.get("error")],
         },
         "urgent": urgent,
         "recent": _recent(res),
     }
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Unified building view (0.8). Fire-safety risks and equipment alerts are shown together on the floor they belong to,
+# each keeping its own classification and its own rule level. Nothing here changes how either is generated.
+# ---------------------------------------------------------------------------------------------------------------
+MAP_STATE_LABEL = {"emergency": "Emergency", "high": "High Risk", "warning": "Warning", "watch": "Watch",
+                   "no_active_alert": "No Active Alert", "not_assessed": "Not Assessed"}
+KIND_LABEL = {"fire_risk": "Fire-safety risk", "equipment": "Equipment fault", "meter": "Consumption anomaly"}
+
+
+def _place(location: str | None) -> str:
+    """'Basement B1 (technical rooms) · MSB room, Transformer room' -> 'MSB room, Transformer room'."""
+    loc = location or ""
+    return loc.split(" · ", 1)[1] if " · " in loc else loc
+
+
+def _fire_issue(c: dict, a) -> dict:
+    return {"issue_id": f"fire:{c['signal_id']}", "kind": "fire_risk", "kind_label": KIND_LABEL["fire_risk"],
+            "severity": c["severity"], "severity_label": SEVERITY_LABEL[c["severity"]], "open": c["open"],
+            "title": c["risk"], "place": _place(c.get("location")), "location": c.get("location"),
+            "zone": a.zone, "zone_label": a.zone_label,
+            "status_text": f"{c['unresolved']} unresolved" if c["open"] else "all records marked fixed",
+            "count_text": c.get("evidence"), "alert_id": a.alert_id, "signal_id": c["signal_id"],
+            "link": f"#/fire/{a.alert_id}?risk={c['signal_id']}", "last_seen": c.get("last_seen"),
+            "origin": "rule"}
+
+
+def _eq_issue(ea) -> dict:
+    kind = "meter" if ea.fields.get("kind") == "meter" else "equipment"
+    name_en = _en(ea.asset_name)[0] if ea.asset_name else ea.asset_id
+    finding = ea.title.split(": ", 1)[1] if ": " in (ea.title or "") else None
+    if finding and translate_needs(finding):
+        finding = None
+    n_ev = len(ea.evidence_ids)
+    return {"issue_id": f"eq:{ea.alert_id}", "kind": "equipment", "subkind": kind, "kind_label": KIND_LABEL[kind],
+            "severity": ea.severity, "severity_label": SEVERITY_LABEL[ea.severity], "open": bool(ea.open_items),
+            "title": name_en, "title_pending": name_en is None, "place": name_en, "summary": finding,
+            "zone": ea.zone, "zone_label": ZONE_LABELS.get(ea.zone or "", "Location not recorded"),
+            "status_text": f"{ea.open_items} open" if ea.open_items else None,
+            "count_text": f"{n_ev} event{'s' if n_ev != 1 else ''}" if kind == "meter" else
+                          (f"{ea.open_items} open" if ea.open_items else f"{n_ev} record{'s' if n_ev != 1 else ''}"),
+            "alert_id": ea.alert_id, "critical": ea.critical, "link": f"#/equipment/{ea.alert_id}",
+            "fire_links": [l["fire_alert_id"] for l in ea.fire_links],
+            "last_seen": ea.last_seen.isoformat() if ea.last_seen else None, "origin": "rule"}
+
+
+def _issue_key(i: dict):
+    return (-_rank(i["severity"]), not i["open"], i["kind"] != "fire_risk")
+
+
+def _issues(res) -> list[dict]:
+    """Every active issue of the building (fire-safety risks and equipment alerts), highest priority first."""
+    out = [_fire_issue(c, a) for a in res.alerts if _is_active(a.alert_id) for c in a.fields.get("risks", [])]
+    out += [_eq_issue(ea) for ea in res.equipment_alerts if _is_active(ea.alert_id)]
+    out.sort(key=lambda i: i.get("last_seen") or "", reverse=True)    # most recent first within equal priority
+    out.sort(key=_issue_key)
+    return out
+
+
+def _map_floor(f: dict, issues: list[dict]) -> dict:
+    """Map state of one floor: highest level among ALL its active issues; without issues the fire-floor state
+    (assessed without alert / not assessed). Never "normal": no rule confirms that a floor is safe."""
+    st = max((i["severity"] for i in issues), key=_rank) if issues else f["state"]
+    top = issues[0] if issues else None
+    return {"map_state": st, "map_state_label": MAP_STATE_LABEL.get(st, st), "issues": issues,
+            "issue_count": len(issues), "open_issues": sum(1 for i in issues if i["open"]),
+            "marker": ({"severity": top["severity"], "count": len(issues),
+                        "high_count": sum(1 for i in issues if _rank(i["severity"]) >= _rank("high"))} if top else None)}
+
+
+def _ai_text(t):
+    """AI text is shown only when it is English (older analyses can quote Vietnamese record wording)."""
+    return t if isinstance(t, str) and t.strip() and not translate_needs(t) else None
+
+
+AI_BRIEF_LABEL = {
+    "complete": "AI Analysis Complete", "complete_older": "AI Analysis Complete (older evidence)",
+    "pending": "AI Analysis Pending", "failed": "AI Analysis Failed", "insufficient_evidence": "Insufficient Evidence",
+    "unavailable": "AI Analysis Unavailable", "not_applicable": "Rule-Based Summary",
+}
+
+
+def _brief_fire(issue: dict, res, a, sig) -> dict:
+    st = state.ai.status(a, res)
+    inv = state.store.latest_investigation(a.alert_id, only_ok=True)
+    rb = next((b for b in ((inv or {}).get("result") or {}).get("risk_briefings", [])
+               if b.get("signal_id") == issue["signal_id"]), None)
+    f = sig.fields if sig else {}
+    card = next((c for c in a.fields.get("risks", []) if c["signal_id"] == issue["signal_id"]), {})
+    if rb and rb.get("certainty") == "insufficient_evidence":
+        code = "insufficient_evidence"
+    elif rb:
+        code = "complete" if st["result_is_current"] else "complete_older"
+    elif st["code"] == "running":
+        code = "pending"
+    elif st["code"] == "failed":
+        code = "failed"
+    elif not st["configured"]:
+        code = "unavailable"
+    else:
+        code = "pending" if st["code"] == "not_analysed" and not st.get("not_queued_reason") else "unavailable"
+
+    def field(ai_key, rule_text):
+        t = _ai_text(rb.get(ai_key)) if rb else None
+        if t:
+            return {"text": t, "origin": "ai"}
+        return {"text": rule_text, "origin": "rule"} if rule_text and not translate_needs(rule_text) else None
+    actions = f.get("preventive_actions") or []
+    return {**issue,
+            "observed": field("observed", None),
+            "why_it_matters": field("why_it_matters", card.get("why_it_matters")),
+            "potential_consequence": field("potential_consequence", f.get("consequence")),
+            "uncertainty": field("uncertainty", None),
+            "first_action": field("first_action", card.get("action") or (actions[0] if actions else None)),
+            "certainty": rb.get("certainty") if rb else None,
+            "evidence_text": card.get("evidence"), "evidence_ids": card.get("evidence_ids", []),
+            "ai": {"code": code, "label": AI_BRIEF_LABEL[code], "running": st["code"] == "running",
+                   "analysed_at": inv["created_at"] if inv and rb else None,
+                   "model": inv.get("model") if inv and rb else None,
+                   "api_mode": _investigation_view(inv)["api_mode"] if inv and rb else None,
+                   "is_current": bool(rb and st["result_is_current"]),
+                   "error": st.get("error"), "has_full_analysis": bool(inv)}}
+
+
+def _brief_eq(issue: dict, ea) -> dict:
+    f = ea.fields
+    ok = lambda t: t if isinstance(t, str) and t and not translate_needs(t) else None
+    acts = f.get("preventive_actions") or []
+    return {**issue,
+            "observed": {"text": ok((f.get("why_short") or [None])[0]), "origin": "rule"} if ok((f.get("why_short") or [None])[0]) else None,
+            "why_it_matters": None,
+            "potential_consequence": {"text": ok(f.get("consequence")), "origin": "rule"} if ok(f.get("consequence")) else None,
+            "uncertainty": {"text": ok(f.get("cause_status")), "origin": "rule"} if ok(f.get("cause_status")) else None,
+            "first_action": {"text": ok(acts[0]), "origin": "rule"} if acts and ok(acts[0]) else None,
+            "certainty": None, "evidence_text": issue["count_text"], "evidence_ids": list(ea.evidence_ids)[:20],
+            "ai": {"code": "not_applicable", "label": AI_BRIEF_LABEL["not_applicable"], "running": False,
+                   "analysed_at": None, "model": None, "api_mode": None, "is_current": False, "error": None,
+                   "has_full_analysis": False,
+                   "note": "Muse Spark analyses fire-safety risks; equipment alerts are explained by the rule set."}}
+
+
+@app.get("/api/briefing")
+def briefing(limit: int = 12):
+    """AI Risk Briefing: the highest-priority issue first, then the next ones (to switch to on demand).
+    Priority = rule level, then unresolved first, then fire-safety risks before equipment alerts, then most recent.
+    AI text comes only from a stored Muse Spark analysis; otherwise the rule explanation is shown and labelled."""
+    res = state.get()
+    issues = _issues(res)
+    alerts = {a.alert_id: a for a in res.alerts}
+    sigs = {s.signal_id: s for s in res.signals}
+    eqs = {e.alert_id: e for e in res.equipment_alerts}
+    items = []
+    for i in issues[:limit]:
+        if i["kind"] == "fire_risk":
+            items.append(_brief_fire(i, res, alerts[i["alert_id"]], sigs.get(i["signal_id"])))
+        else:
+            items.append(_brief_eq(i, eqs[i["alert_id"]]))
+    high = [i for i in issues if _rank(i["severity"]) >= _rank("high") and i["open"]]
+    return {"generated_at": res.generated_at.isoformat(), "items": items, "issue_count": len(issues),
+            "high_priority_count": len(high),
+            "priority_rule": "Rule level first, then unresolved records, then fire-safety risks before equipment alerts."}
 
 
 def _recent(res, n: int = 8) -> dict:
@@ -708,7 +895,8 @@ def asset_detail(asset_id: str):
                   key=lambda d: d["timestamp"] or "", reverse=True)
     sigs = [s.to_dict() for s in res.signals if any((res.evidence.get(i) and res.evidence[i].asset_id == asset_id)
                                                     for i in s.evidence_ids)]
-    return {"asset_id": asset_id, "name": _asset_name(asset_id), "meta": ASSETS.get(asset_id) or METERS.get(asset_id),
+    name = _asset_name(asset_id)
+    return {"asset_id": asset_id, "name": name, "name_en": _en(name)[0] if name else None, "meta": ASSETS.get(asset_id) or METERS.get(asset_id),
             "records": recs, "signals": sigs, "calendar": res.meter_calendars.get(asset_id, [])[-60:]}
 
 
@@ -756,7 +944,14 @@ def meter(meter_id: str):
 @app.get("/api/quality")
 def quality():
     res = state.get()
-    return {"sources": res.source_status, "issues": [_tx(dict(i), ("title",)) for i in res.data_quality]}
+    return {"sources": _sources_en(res.source_status),
+            "issues": [_tx(dict(i, sheet_en=SHEET_EN.get(i.get("sheet"), i.get("sheet"))), ("title", "detail"))
+                       for i in res.data_quality]}
+
+
+def _sources_en(sources: list[dict]) -> list[dict]:
+    """Source status with English tab names for display (the original tab name stays in `sheet`)."""
+    return [dict(x, sheet_en=SHEET_EN.get(x.get("sheet"), x.get("sheet"))) for x in sources]
 
 
 @app.get("/api/media")

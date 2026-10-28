@@ -110,12 +110,12 @@ the zone's fire-risk alerts: a video shows the situation when it was recorded, n
 Settings: `FIRERISK_DRIVE_VIDEOS` (`1`), `FIRERISK_AUTO_VIDEO_AI` (`1`), `FIRERISK_VIDEO_AI_DAILY_LIMIT` (`8`).
 
 ## Dashboard
-* **Overview** — building summary; **Building Risk Map** (front view, click or keyboard-select a floor); floor panel
-  with the most important risk in plain English and expandable risk cards; urgent actions; equipment-alert summary;
-  recent records and analysed survey videos.
+* **Overview** — **AI Risk Briefing** (highest-priority issue: location, consequence, first action, analysis status);
+  building summary; **Building Risk Map** with a marker per floor (fire-safety risks and equipment alerts together,
+  each keeping its own classification); context panel; system health, recent events, data sources.
 * **Fire Safety Risks** — one card per risk with filters; detail in six sections (What Was Detected, Why This Matters,
   Supporting Evidence, AI Analysis, Recommended Actions, History).
-* **Equipment Alerts**, **Event History**, **Data Sources**, **Photos & Videos** (gallery with filters).
+* **Equipment & Systems**, **Event History**, **Data & Evidence** (sources & sync, photos & videos).
 * All text is English. Vietnamese source records keep their original text; English display text comes from a glossary
   or a Muse Spark translation (marked), and untranslated text is marked "translation pending".
 Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **AI** (Muse Spark; *AI · video* for video

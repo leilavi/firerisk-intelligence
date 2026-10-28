@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0 — 2026-10-28
+- Dark building-intelligence design (navy panels, cyan interaction, purple = AI content; risk colours only for levels).
+- One unified building view: fire-safety risks **and** equipment alerts are placed on their own floor, each keeping its
+  original classification and rule level (`issues`, `map_state`, `marker` in `GET /api/building`; issues without a
+  recorded location in `unassigned`). Building condition = highest level among all active issues; "Assessment
+  Incomplete" when nothing is active but floors are not assessed; never "safe".
+- AI Risk Briefing at the top of Overview (`GET /api/briefing`): highest-priority issue (rule level, unresolved,
+  fire-safety before equipment, most recent), location, observed condition, why it matters, potential consequence,
+  what is not established, first action, evidence, analysis status (complete / older evidence / pending / failed /
+  insufficient evidence / unavailable). Each line is labelled AI or RULE; without a Muse Spark result the rule
+  explanation is shown and the AI state is stated. "View AI Analysis" expands the full analysis; other issues can be
+  opened from a compact list.
+- Investigation prompt v5: per-risk `risk_briefings` (signal aliases S01…, certainty enum; "insufficient_evidence"
+  forces the fixed "Insufficient evidence…" text; unknown signals and invalid citations dropped and reported).
+- Building Risk Map: front view with depth, ground line, underground B1, whole-building band; one marker per floor with
+  the number of active issues (red = High Risk / Emergency, pulsing; yellow = Warning; blue = Watch); the floor of the
+  briefing is highlighted; click a floor or marker for the context panel; compact geometry on phones.
+- Compact issue cards everywhere (location · name, one-line description, level · count, classification); "View
+  Details" opens a side drawer with the evidence, chain of events, actions and AI analysis.
+- Navigation: Overview, Fire Safety Risks, Equipment & Systems (system-health strip), Event History, Data & Evidence
+  (Sources & Sync, Photos & Videos). Old links (`#/quality`, `#/media`, `#/alert/…`) still work.
+- English-only enforcement: no untranslated text shown by default (pending translations say "English translation
+  pending"; originals only in a collapsed "original record" section of the source drawer); AI text that is not English
+  is not shown; translations that still contain Vietnamese are rejected; names restored without diacritics; record IDs
+  shown without diacritics; a page-level safety net replaces and logs any remaining untranslated text (0 on real data).
+- 116 tests (incl. a Playwright test that renders every page and fails on any visible Vietnamese text).
+
 ## 0.7.0 — 2026-10-28
 - Building-centred Overview: building summary (status = highest active risk, risks by severity, floors affected,
   urgent actions, last analysis / Drive sync), interactive Building Risk Map (front view, Roof–B1 + whole-building

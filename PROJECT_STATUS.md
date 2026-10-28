@@ -1,4 +1,4 @@
-# Project status — 2026-10-27 18:45 (UTC+7)
+# Project status — 2026-10-28 15:45 (UTC+7)
 
 | Area | Status | Evidence |
 |---|---|---|
@@ -14,6 +14,8 @@
 | Photos | Prepared; **no real photos yet** | `firerisk/media.py` |
 | SAM 3.1 | Not started (output format unverified) | — |
 | Automatic Drive sync | Built and mock-tested; author's one-time setup + first real run pending | `tests/test_drive_sync.py` |
+| Dashboard 0.8 (dark, unified building view, AI Risk Briefing, English-only) | Built; Playwright-checked on a copy of real data (0 Vietnamese strings visible); live check on PC pending | `test_unified_briefing.py` |
+| Muse Spark video review | **Live verified** on PC: 8 videos, 64 observations | PC database `video_analyses` 1–8 |
 | Public GitHub repo | **Published** | https://github.com/leilavi/firerisk-intelligence |
 | Demo video | Not started | — |
 

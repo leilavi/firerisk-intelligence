@@ -203,3 +203,23 @@ English labels everywhere, prompt v4. Alert-generation rules unchanged (all 102 
 **Tests:** 108 passed. Playwright on a copy of the author's real data and database (videos themselves not copied):
 desktop 1440, tablet 820, phone 390 — no application errors (only the absent video files return 404 in the sandbox).
 Translations could not be produced in Claude's workspace (no Meta API access); they are generated on the PC.
+
+## 2026-10-28 14:36–15:45 — Unified, dark, briefing-first dashboard (0.8)
+**Author:** two attachments: "Technology-Style Building-Centered Dashboard Redesign" (dark control-room look, one
+unified building view, red risk markers on floors, new navigation, English-only as acceptance criterion) and
+"Critical Design Update: AI Risk Briefing First, Minimal Cards". The reference image mentioned in the first was not
+attached; the palette given in the text was used.
+
+**Built:** `_issues` / `_map_floor` / `/api/briefing` in `api.py`; prompt v5 `risk_briefings`; translator rejects
+non-English output and romanises restored names; new `web/styles.css` (dark), `web/index.html` (navigation), Overview,
+briefing, SVG building, context panel, compact cards, issue drawer, Fire Safety Risks / Equipment & Systems lists,
+Data & Evidence sub-navigation and English-only safety net in `web/app.js`. Rules that generate alerts unchanged.
+
+**Checked on a copy of the author's real data and database:** Playwright visited every page and main interaction at
+1440 and 390 px: 0 visible Vietnamese strings, 0 safety-net replacements, no page errors (fonts blocked in the sandbox
+only). Found and fixed on the way: record IDs inside rule text and a tab-name tooltip showed Vietnamese characters.
+Real map: B1 High Risk (9 issues: 5 fire-safety, 4 equipment), F2 Warning (1), F3 Watch (1), whole building Warning (2),
+UPS without location. Muse Spark could not be called from Claude's workspace, so the briefing there shows the rule
+explanation with "AI Analysis Unavailable"; on the PC prompt v5 re-analyses the 2 fire-risk alerts once.
+
+**Tests:** 116 passed.

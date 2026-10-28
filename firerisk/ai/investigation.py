@@ -17,7 +17,7 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v4"  # v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
+PROMPT_VERSION = "investigation-v5"  # v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
                                      #     related equipment alerts in the package
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building
@@ -44,11 +44,28 @@ Rules you must follow:
 10. Survey video observations (if any) were produced by an AI model from a video recorded on the stated date.
    They show what was visible THEN, not the current state; they do not prove equipment works and do not confirm
    a hazard. Mention them by their video alias (V01...) in text only; never put them in evidence_ids.
+11. risk_briefings: one entry per signal (use the signal alias S01, S02 ... exactly as given), written for a building
+   operator who is not a fire engineer. observed = only what the records state. why_it_matters = why this kind of
+   condition is a fire-safety concern. potential_consequence = what COULD happen if it stays unresolved, in
+   conditional wording ("may", "could"); never say a fire, short circuit or failure has happened unless a record
+   says so. certainty: "supported" if the records clearly show the condition, "partly_supported" if they show it only
+   in part or it may already be fixed, "insufficient_evidence" if the records cannot support a consequence - then set
+   potential_consequence to "Insufficient evidence to determine the potential consequence. Further inspection is
+   required." uncertainty = what the records do not establish. first_action = the single first check or action.
+   Each text field: one or two short sentences.
 Be concise: short sentences, no repetition between fields.
 Write in clear, plain English only (the dashboard is English). Translate Vietnamese record wording; keep equipment
 codes as written."""
 
 _ID_LIST = {"type": "array", "items": {"type": "string"}}
+CERTAINTY = ["supported", "partly_supported", "insufficient_evidence"]
+INSUFFICIENT_TEXT = "Insufficient evidence to determine the potential consequence. Further inspection is required."
+
+
+def signal_aliases(alert, signals) -> dict:
+    """Opaque signal aliases sent to the model (S01 ...) -> real signal IDs, in the alert's signal order."""
+    known = {s.signal_id for s in signals}
+    return {f"S{n + 1:02d}": sid for n, sid in enumerate(i for i in alert.signal_ids if i in known)}
 SCHEMA = {
     "name": "FireRiskInvestigation",
     "strict": True,
@@ -56,8 +73,19 @@ SCHEMA = {
         "type": "object",
         "additionalProperties": False,
         "required": ["summary", "situation", "observed_facts", "hypotheses", "scenarios", "escalation_pathway",
-                     "risk_assessment", "missing_information", "recommended_actions", "limitations", "uncertainty"],
+                     "risk_assessment", "missing_information", "recommended_actions", "limitations", "uncertainty",
+                     "risk_briefings"],
         "properties": {
+            "risk_briefings": {"type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["signal", "observed", "why_it_matters", "potential_consequence", "certainty",
+                             "uncertainty", "first_action", "evidence_ids"],
+                "properties": {
+                    "signal": {"type": "string"}, "observed": {"type": "string"},
+                    "why_it_matters": {"type": "string"}, "potential_consequence": {"type": "string"},
+                    "certainty": {"type": "string", "enum": CERTAINTY},
+                    "uncertainty": {"type": "string"}, "first_action": {"type": "string"},
+                    "evidence_ids": _ID_LIST}}},
             "summary": {"type": "string"},
             "situation": {"type": "string"},
             "scenarios": {"type": "array", "items": {
@@ -169,11 +197,11 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
         "zone": {"code": alert.zone, "label": alert.zone_label},
         "rule_based_alert": {"severity": alert.severity, "severity_basis": alert.severity_basis,
                              "note": "Severity from documented preliminary rules; you may disagree in risk_assessment."},
-        "signals": [{"rule": s.rule_id, "pathway": s.pathway, "mechanism": PATHWAYS[s.pathway]["mechanism"],
+        "signals": [{"signal": f"S{n + 1:02d}", "rule": s.rule_id, "pathway": s.pathway, "mechanism": PATHWAYS[s.pathway]["mechanism"],
                      "severity": s.severity, "basis": s.basis, "unresolved": s.is_open,
                      "evidence_ids": [alias(i) for i in s.evidence_ids],
                      "context_evidence_ids": [alias(i) for i in s.context_ids]}
-                    for s in (sig_by_id[i] for i in alert.signal_ids if i in sig_by_id)],
+                    for n, s in enumerate(sig_by_id[i] for i in alert.signal_ids if i in sig_by_id)],
         "evidence": [item(e, "related_equipment" if e.evidence_id in rel_ids else
                           "context" if e.evidence_id in alert.context_ids and e.evidence_id not in alert.evidence_ids
                           else "finding") for e in items],
@@ -204,7 +232,7 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
     return package, red, {v: k for k, v in real_to_alias.items()}
 
 
-def map_back(result: dict, alias_to_real: dict) -> dict:
+def map_back(result: dict, alias_to_real: dict, signal_map: dict | None = None) -> dict:
     """Replace aliases (E01...) in every evidence-ID list with the real evidence IDs. Unknown aliases are kept
     as-is so validation reports them."""
     def m(lst):
@@ -221,6 +249,9 @@ def map_back(result: dict, alias_to_real: dict) -> dict:
     for sc in result.get("scenarios", []):
         sc["supporting_evidence_ids"] = m(sc.get("supporting_evidence_ids"))
         sc["weakening_evidence_ids"] = m(sc.get("weakening_evidence_ids"))
+    for b in result.get("risk_briefings", []):
+        b["evidence_ids"] = m(b.get("evidence_ids"))
+        b["signal_id"] = (signal_map or {}).get(b.get("signal"))      # None: the model named an unknown signal
     return result
 
 
@@ -248,9 +279,21 @@ def validate(result: dict, valid_ids) -> dict:
     for sc in result.get("scenarios", []):
         sc["supporting_evidence_ids"] = clean(sc.get("supporting_evidence_ids"))
         sc["weakening_evidence_ids"] = clean(sc.get("weakening_evidence_ids"))
+    briefs, unknown_signals = [], []
+    for b in result.get("risk_briefings", []):
+        b["evidence_ids"] = clean(b.get("evidence_ids"))
+        if not b.get("signal_id"):
+            unknown_signals.append(b.get("signal"))
+            continue
+        if b.get("certainty") == "insufficient_evidence":
+            b["potential_consequence"] = INSUFFICIENT_TEXT
+        briefs.append(b)
+    if "risk_briefings" in result:
+        result["risk_briefings"] = briefs
     unsupported = [f["statement"] for f in result.get("observed_facts", []) if not f.get("supported")]
     return {"invalid_evidence_ids": sorted(set(invalid)), "unsupported_facts": unsupported,
-            "ok": not invalid and not unsupported}
+            "unknown_signals": unknown_signals,
+            "ok": not invalid and not unsupported and not unknown_signals}
 
 
 def fingerprint(alert, evidence_index, equipment_alerts=None) -> str:
@@ -295,7 +338,7 @@ def investigate(alert, signals, evidence_index, now: datetime, client: MuseClien
     except MuseError as err:
         record.update({"status": "failed", "error_kind": err.kind, "error": str(err)})
         return record
-    result = map_back(res.data, alias_to_real)
+    result = map_back(res.data, alias_to_real, signal_aliases(alert, signals))
     record.update({"status": "ok", "model": res.model, "usage": res.usage, "seconds": res.seconds,
                    "result": result, "validation": validate(result, alias_to_real.values()),
                    "evidence_ids_pseudonymised": True})
