@@ -100,3 +100,55 @@ def test_frame_endpoint_rejects_paths(app_env):
     assert c.get("/api/frames/..%2F..%2Fsecret/t000001.jpg").status_code == 404
     assert c.get("/api/frames/0123456789abcdef/../../x.jpg").status_code == 404
     assert c.get("/api/frames/0123456789abcdef/t000001.jpg").status_code == 404     # well-formed but absent
+
+
+# --- rendered dashboard (Playwright) at 1440 and 390 px -------------------------------------------------------
+@needs_ffmpeg
+@pytest.mark.parametrize("width", [1440, 390])
+def test_evidence_overlay_renders_aligned_and_english_only(app_env, monkeypatch, width, tmp_path):
+    pw = pytest.importorskip("playwright.sync_api")
+    import socket
+    import threading as th
+    import uvicorn
+    api, c, src = app_env
+    monkeypatch.setattr(api, "SamClient", lambda: FakeSam())
+    _analyse_new_video(api, c, src)
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+    server = uvicorn.Server(uvicorn.Config(api.app, host="127.0.0.1", port=port, log_level="error"))
+    t = th.Thread(target=server.run, daemon=True); t.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    try:
+        with pw.sync_playwright() as p:
+            try:
+                b = p.chromium.launch()
+            except Exception as exc:
+                pytest.skip(f"chromium not available: {exc}")
+            page = b.new_page(viewport={"width": width, "height": 900})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"http://127.0.0.1:{port}/#/media"); page.wait_for_load_state("networkidle")
+            page.wait_for_selector("#samg .samcard")
+            assert "1 located" in page.inner_text("#samg")
+            page.click("#samg .samcard"); page.wait_for_selector("#drawer .evblock img")
+            page.wait_for_function("() => document.querySelector('#drawer .evblock img').complete")
+            txt = page.text_content("#drawer")
+            assert "AI observation (Muse Spark)" in txt and "Visual model detected (SAM 3.1)" in txt
+            assert "Located in frame at 00:05 (confidence 0.80)" in txt and "Video Timestamp" in txt
+            img = page.eval_on_selector("#drawer .ev-frame img", "e => { const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }")
+            rect = page.eval_on_selector("#drawer .ev-frame svg rect", "e => { const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }")
+            sx, sy = img[2] / 160, img[3] / 120                        # frame is 160x120; box x1=10 y1=10 w=40 h=30
+            assert abs(img[2] / img[3] - 160 / 120) < 0.02             # image not distorted
+            assert abs(rect[0] - (img[0] + 10 * sx)) < 3 and abs(rect[1] - (img[1] + 10 * sy)) < 3
+            assert abs(rect[2] - 40 * sx) < 3 and abs(rect[3] - 30 * sy) < 3
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+            vi = page.evaluate("() => /[\\u00C0-\\u1EF9\\u0110\\u0111]/.test(document.body.innerText)")
+            assert not vi
+            page.screenshot(path=str(tmp_path / f"evidence_{width}.png"), full_page=False)
+            assert errors == []
+            b.close()
+    finally:
+        server.should_exit = True
+        t.join(timeout=5)

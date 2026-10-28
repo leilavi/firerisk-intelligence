@@ -155,5 +155,8 @@ def test_display_name_is_muse_captain_but_model_id_unchanged():
     root = Path(__file__).resolve().parent.parent
     js = (root / "web/app.js").read_text(encoding="utf-8")
     assert "Muse Captain" in js and "GROUND LEVEL" not in js and "gEarth" not in js
-    assert all("powered by" in line for line in js.splitlines() if "Muse Spark" in line)  # only the technical line
+    # Muse Spark is named only on the technical "powered by" line and in the required evidence label
+    # "AI observation (Muse Spark)" (SAM 3.1 integration spec, section 14) that separates it from SAM 3.1.
+    assert all("powered by" in line or "AI observation (Muse Spark)" in line
+               for line in js.splitlines() if "Muse Spark" in line)
     assert MuseConfig.load().model == "muse-spark-1.3" or MuseConfig.load().model      # model id untouched

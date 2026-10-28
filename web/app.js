@@ -373,6 +373,7 @@ async function openFinding(f) {
   openDrawer("AI video finding", `<div class="rc-top"><span class="kindtag vfk">AI video finding</span><span class="kindtag">${esc(st.category_label)}</span><span class="aist none">${esc(st.status_label)}</span></div>
     <h3 style="margin:8px 0 2px;font-size:18px">${aiT(st.title)}</h3>
     <p class="small muted">${org("ai_vision")}Seen by Muse Captain in <a href="#/video/${esc(st.video_id)}?t=${st.time_start_s}">${esc(st.filename)} at ${fmtTime(st.time_start_s)}</a>, recorded ${st.recorded_at ? dt(st.recorded_at) : "on an unknown date"}. Not an official alert and no risk level: it shows what was visible when the video was recorded.</p>
+    ${evidenceFor(st)}
     <dl class="dsum"><dt>Location</dt><dd>${esc(st.zone_label)}${st.area_label ? ` · ${aiT(st.area_label)}` : ""}</dd>
       <dt>What is visible</dt><dd>${aiT(st.what_is_visible)}</dd><dt>Why it matters</dt><dd>${aiT(st.fire_safety_link)}</dd>
       <dt>If confirmed</dt><dd>${aiT(st.potential_consequence_if_confirmed)}</dd><dt>Certainty</dt><dd>${st.certainty === "clearly_visible" ? "Clearly visible in the video" : "Possibly visible; check on site"}</dd>
@@ -382,6 +383,7 @@ async function openFinding(f) {
       <input type="text" id="fby" placeholder="Your name or role"><textarea id="fnote" placeholder="What was checked on site and the result"></textarea>
       <button class="btn" id="fsave">Save status</button><span class="small muted" id="fmsg"></span></div>
     <p class="tiny muted">A finding never changes a rule level. Confirmed findings stay findings until a rule or a person raises an alert.</p>`);
+  bindEvidenceThumbs($("#drawer-body"));
   $("#fsave").onclick = async () => {
     $("#fmsg").textContent = "Saving…";
     try { await api(`/api/video-findings/${encodeURIComponent(st.finding_id)}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: $("#fstatus").value, note: $("#fnote").value || null, by: $("#fby").value || null }) }); $("#fmsg").textContent = "Saved."; }
@@ -560,12 +562,12 @@ async function openIssue(i) {
     const br = (BR?.items || []).find((x) => x.issue_id === i.issue_id);
     if (i.kind === "fire_risk") {
       const d = await alertDetail(i.alert_id);
-      $("#drawer-body").innerHTML = issueHead(i) + (br ? briefDl(br) : "") + riskDetailInline(d, i.signal_id);
+      $("#drawer-body").innerHTML = issueHead(i) + linkedEvidenceSection(i.alert_id, i.signal_id) + (br ? briefDl(br) : "") + riskDetailInline(d, i.signal_id);
     } else {
       const d = await api(`/api/equipment-alerts/${encodeURIComponent(i.alert_id)}`);
-      $("#drawer-body").innerHTML = issueHead(i) + eqDetailInline(d);
+      $("#drawer-body").innerHTML = issueHead(i) + linkedEvidenceSection(i.alert_id) + eqDetailInline(d);
     }
-    bindEvidence();
+    bindEvidence(); bindEvidenceThumbs($("#drawer-body")); bindFindings($("#drawer-body"));
   } catch (e) { $("#drawer-body").innerHTML = `<div class="errbox">Could not load the details: ${esc(e.message)}</div>`; }
 }
 function issueHead(i) {
@@ -798,6 +800,7 @@ async function viewMedia(query) {
       <input type="text" id="gq" placeholder="Search name, room or equipment" style="width:240px">
       <span class="small muted" id="gc"></span></div>
     <div id="gallery" class="gallery"></div>
+    ${vfc ? samGallery(vfc) : ""}
     <section class="panel" style="margin-top:18px"><h2>Google Drive</h2>${driveVideos(vids)}
       <details style="margin-top:14px"><summary>Other ways to add a video</summary>
         <p class="small muted">Put downloaded files in <b>${esc(vids.inbox)}</b> and press <button class="btn" id="vimport">Import from folder</button> <span class="small muted" id="vimsg"></span>, or upload one file below.</p>
@@ -825,6 +828,7 @@ async function viewMedia(query) {
         <div class="small">${v.analysis_status === "ok" ? `${org("ai_vision")}Analysed by Muse Captain` : esc(VSTAT[v.analysis_status] || v.analysis_status)}${alertZones.has(v.zone) ? ' · <span class="rst open">floor has a fire-safety risk</span>' : ""}</div>
         <div class="small muted">${v.drive_file_id ? `${org("source")}Google Drive${v.equipment?.length ? ` · Asset register: ${v.equipment.map((e) => esc(e.equipment_id)).join(", ")}` : ""}` : "Uploaded on this computer"}</div></div></a>`).join("") || '<div class="empty">No video matches these filters.</div>';
   };
+  if (vfc) { vfc.findings.forEach((f) => (FIND[f.finding_id] = f)); bindFindings($("#samg")); }
   ["#gf", "#ga", "#gd"].forEach((x) => $(x).addEventListener("change", render)); $("#gq").addEventListener("input", render);
   render();
   bindMediaForms(vids);
@@ -1224,3 +1228,106 @@ setInterval(async () => {
 window.addEventListener("hashchange", () => { closeDrawer(); window.scrollTo(0, 0); route(); });
 enObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 route();
+
+/* ============================== Visual evidence: video frames + SAM 3.1 localization ==============================
+   The AI observation and SAM 3.1 visual localization are shown as two separate, labelled parts.
+   SAM confidence is a localization score only - never a fire-risk probability, never proof that equipment works. */
+const mmss = (s) => `${String(Math.floor((s || 0) / 60)).padStart(2, "0")}:${String(Math.floor((s || 0) % 60)).padStart(2, "0")}`;
+const CONF_TIP = "Localization confidence from SAM 3.1: how closely the outlined object matches the phrase. It is not a fire-risk probability, not a severity, and does not show that the equipment works or complies.";
+const SAM_COLORS = ["#22D3EE", "#F97316", "#FACC15", "#D946EF", "#60A5FA", "#A855F7"];
+function locLabel(loc) {
+  if (!loc) return "Localization not checked";
+  const fr = loc.frames || [];
+  const hit = fr.filter((f) => f.status === "located").sort((a, b) => (b.max_confidence ?? -1) - (a.max_confidence ?? -1))[0];
+  switch (loc.status) {
+    case "located": return `Located in frame at ${mmss(hit.frame_time_s)}${hit.max_confidence != null ? ` (confidence ${hit.max_confidence.toFixed(2)})` : " (confidence not reported)"}`;
+    case "not_located": return "Not visually located in the sampled frames";
+    case "not_applicable": return "Not applicable";
+    case "error": return fr.some((f) => f.error_kind === "frame_extraction") && !fr.some((f) => f.frame_file) ? "Frame extraction failed · Localization unavailable" : "Localization unavailable";
+    default: return "Localization not checked";
+  }
+}
+function bestFrame(loc) {
+  const fr = (loc?.frames || []).filter((f) => f.frame_file);
+  return fr.filter((f) => f.status === "located").sort((a, b) => (b.max_confidence ?? -1) - (a.max_confidence ?? -1))[0] || fr[Math.floor(fr.length / 2)] || null;
+}
+function overlaySvg(fr) {
+  const [w, h] = fr.frame_size || [fr.frame_w, fr.frame_h];
+  if (!w || !h) return "";
+  const shapes = (fr.objects || []).map((o, i) => {
+    const c = SAM_COLORS[i % SAM_COLORS.length], b = o.box, m = o.mask_box;
+    const mask = o.mask_svg_path && m ? `<path d="${esc(o.mask_svg_path)}" transform="translate(${m.x} ${m.y}) scale(${m.w / m.raster_w} ${m.h / m.raster_h})" fill="${c}" fill-opacity=".28" fill-rule="evenodd"/>` : "";
+    return `<g>${mask}<rect x="${b.x1}" y="${b.y1}" width="${b.w}" height="${b.h}" fill="none" stroke="${c}" stroke-width="${Math.max(2, w / 320)}" vector-effect="non-scaling-stroke"><title>Object ${i + 1}${o.confidence != null ? ` · localization confidence ${o.confidence.toFixed(2)}` : ""}</title></rect></g>`;
+  }).join("");
+  return `<svg class="ev-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${shapes}</svg>`;
+}
+function frameFigure(fr, fallbackSrc, alt) {
+  if (fr) {
+    const [w, h] = fr.frame_size || [fr.frame_w, fr.frame_h];
+    return `<div class="ev-frame" style="aspect-ratio:${w || 16} / ${h || 9}"><img src="/api/frames/${esc(fr.frame_file)}" alt="${esc(alt)}" loading="lazy">${fr.status === "located" ? overlaySvg(fr) : ""}</div>`;
+  }
+  return fallbackSrc ? `<div class="ev-frame" data-nf="No Supporting Frame Available"><img src="${esc(fallbackSrc)}" alt="${esc(alt)}" loading="lazy" onerror="this.parentNode.classList.add('noframe')"></div>` : '<div class="empty small">No Supporting Frame Available</div>';
+}
+/* Evidence block for one AI video item (finding). opts: {videoId, filename, t, observation, place} */
+function evidenceBlock(loc, o) {
+  const fr = bestFrame(loc);
+  const t = fr ? fr.frame_time_s : o.t;
+  const fallback = !fr && o.videoId && o.t != null ? `/api/videos/${encodeURIComponent(o.videoId)}/frame?t=${o.t}` : null;
+  const others = (loc?.frames || []).filter((f) => f.frame_file);
+  const nObj = fr?.status === "located" ? (fr.objects || []).length : 0;
+  const id = "ev" + Math.random().toString(36).slice(2, 8);
+  return `<section class="evblock" id="${id}">
+    ${frameFigure(fr, fallback, `Frame from ${o.filename || "the survey video"} at ${mmss(t)}`)}
+    ${others.length > 1 ? `<div class="ev-thumbs" role="group" aria-label="Sampled frames">${others.map((f, n) => `<button class="ev-thumb${f === fr ? " on" : ""}" data-ev="${id}" data-n="${n}" aria-label="Show frame at ${mmss(f.frame_time_s)}"><img src="/api/frames/${esc(f.frame_file)}" alt=""><span>${mmss(f.frame_time_s)}${f.status === "located" ? " ●" : ""}</span></button>`).join("")}</div>` : ""}
+    <dl class="dsum ev-dl">
+      <dt>Source</dt><dd>${o.videoId ? `<a href="#/video/${esc(o.videoId)}?t=${t ?? 0}">${esc(o.filename || "Survey video")} · open at ${mmss(t)}</a>` : esc(o.filename || "—")} <span class="tiny muted">original building-survey video</span></dd>
+      <dt>Video Timestamp</dt><dd>${t != null ? mmss(t) : "—"}${fr ? "" : fallback ? ' <span class="tiny muted">(frame extracted on request)</span>' : ""}</dd>
+      ${o.place ? `<dt>Location</dt><dd>${esc(o.place)}</dd>` : ""}
+    </dl>
+    <div class="ev-two">
+      <div class="ev-muse"><div class="kicker">AI observation (Muse Spark)</div><p class="small">${aiT(o.observation) || "—"}</p></div>
+      <div class="ev-sam"><div class="kicker">Visual model detected (SAM 3.1)</div>
+        <p class="small"><b>${esc(locLabel(loc))}</b>${loc?.status === "located" && nObj ? ` · ${nObj} object${nObj > 1 ? "s" : ""} outlined` : ""}${loc?.segment_phrase ? ` · phrase “${esc(loc.segment_phrase)}”` : ""} <span class="info" tabindex="0" title="${esc(CONF_TIP)}">ⓘ</span></p>
+        <p class="tiny muted">${loc?.status === "not_located" ? "The object was not outlined in the sampled frames. This does not mean the observation is wrong: timestamps are approximate and only a few frames are checked." : loc?.status === "located" ? "Shows where the object appears in the frame. It does not verify the safety conclusion." : loc?.status === "not_applicable" ? "This observation has no single visible object to outline (for example, something reported as absent)." : loc?.status === "error" ? "The localization request or frame extraction failed; the AI observation is unaffected." : "Visual localization has not run for this item yet."}</p></div>
+    </div></section>`;
+}
+function bindEvidenceThumbs(root = document) {
+  $$(".ev-thumb", root).forEach((b) => (b.onclick = () => {
+    const sec = document.getElementById(b.dataset.ev); if (!sec) return;
+    const loc = EVLOC[b.dataset.ev]; const f = (loc?.frames || []).filter((x) => x.frame_file)[+b.dataset.n]; if (!f) return;
+    sec.querySelector(".ev-frame").outerHTML = frameFigure(f, null, `Frame at ${mmss(f.frame_time_s)}`);
+    $$(".ev-thumb", sec).forEach((x) => x.classList.toggle("on", x === b));
+  }));
+}
+const EVLOC = {};
+function evidenceFor(f) {
+  const html = evidenceBlock(f.localization, { videoId: f.video_id, filename: f.filename, t: f.time_start_s, observation: f.what_is_visible, place: [f.zone_label, f.area_label && !VI_RE.test(f.area_label) ? f.area_label : null].filter(Boolean).join(" · ") });
+  const id = html.match(/id="(ev[a-z0-9]+)"/)[1]; EVLOC[id] = f.localization;
+  return html;
+}
+/* Video findings linked (by the deterministic link rules) to one alert / risk */
+function linkedFindings(alertId, signalId) {
+  return (VF?.findings || []).filter((f) => f.links.some((l) => l.alert_id === alertId && (!signalId || !l.signal_id || l.signal_id === signalId)))
+    .sort((a, b) => (["located", "not_located", "error", "not_checked", "not_applicable"].indexOf(a.localization?.status || "not_checked")) - (["located", "not_located", "error", "not_checked", "not_applicable"].indexOf(b.localization?.status || "not_checked")));
+}
+function linkedEvidenceSection(alertId, signalId) {
+  const fs = linkedFindings(alertId, signalId);
+  if (!fs.length) return "";
+  const f = fs[0];
+  return `<h5>Video evidence · ${aiT(f.title)}</h5>${evidenceFor(f)}${fs.length > 1 ? `<p class="tiny muted">${fs.length - 1} more linked video finding(s): ${fs.slice(1, 4).map((x) => `<button class="linkbtn" data-finding="${esc(x.finding_id)}">${aiT(x.title)}</button>`).join(" · ")}</p>` : ""}`;
+}
+
+/* Photos & Videos: frames that support AI video findings, with SAM 3.1 outlines where located */
+function samGallery(vf) {
+  const fs = vf.findings.filter((f) => f.localization && (f.localization.frames || []).some((x) => x.frame_file));
+  const n = (k) => vf.findings.filter((f) => (f.localization?.status || "not_checked") === k).length;
+  return `<section class="panel" id="samg" style="margin-top:18px"><div class="ph"><h2>Visual evidence for video findings</h2><span class="kicker">Visual model detected (SAM 3.1)</span></div>
+    <p class="small muted" style="margin:0 0 8px">Real frames from the survey videos. Outlines show where SAM 3.1 located the object named in a Muse Captain finding; they are supporting evidence, not a safety verdict.
+      ${n("located")} located · ${n("not_located")} not located in the sampled frames · ${n("not_applicable")} not applicable · ${n("error")} unavailable · ${n("not_checked")} not checked</p>
+    ${fs.length ? `<div class="samgrid">${fs.map((f) => { const fr = bestFrame(f.localization); return `<button class="samcard" data-finding="${esc(f.finding_id)}" aria-label="${esc(`${f.title}. View finding`)}">
+      ${frameFigure(fr, null, `Frame at ${mmss(fr.frame_time_s)}`)}
+      <span class="small"><b>${aiT(f.title)}</b></span>
+      <span class="tiny muted">${esc(f.zone ? zshort(f.zone) : "Location not verified")} · ${esc(f.filename)} · ${mmss(fr.frame_time_s)}</span>
+      <span class="tiny">${esc(locLabel(f.localization))}</span></button>`; }).join("")}</div>` : '<div class="empty small">No Supporting Frame Available yet: visual localization has not produced frames for the current findings.</div>'}
+  </section>`;
+}

@@ -368,3 +368,25 @@ details.acc.sub{margin-top:6px} details.acc.sub > summary{padding:6px 10px;font-
 #vf-acc{margin-top:10px}
 .vf-video{padding:8px 0;border-top:1px solid var(--line-2)} .vf-video .icards{margin-top:6px}
 @media (max-width:1180px){.vf-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.act3{grid-template-columns:1fr}}
+
+/* ---------- visual evidence: frames + SAM 3.1 overlay (0.10) ---------- */
+.evblock{margin:10px 0 12px}
+.ev-frame{position:relative;width:100%;border-radius:var(--r-md);overflow:hidden;background:#000;border:1px solid var(--line-3)}
+.ev-frame img{display:block;width:100%;height:100%;object-fit:fill}
+.ev-frame .ev-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ev-frame.noframe{aspect-ratio:auto!important;padding:18px;background:var(--panel-2)}
+.ev-frame.noframe img{display:none} .ev-frame.noframe::after{content:attr(data-nf);color:var(--ink-2);font-size:12.5px}
+.ev-thumbs{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.ev-thumb{font:inherit;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;cursor:pointer;display:grid;gap:2px;width:92px}
+.ev-thumb img{width:100%;height:48px;object-fit:cover;border-radius:4px} .ev-thumb span{font-size:11px;font-family:var(--mono)}
+.ev-thumb.on{border-color:var(--cyan);color:var(--ink)}
+.ev-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ev-muse,.ev-sam{padding:8px 10px;border-radius:var(--r-md);background:var(--panel-2)}
+.ev-muse{border-left:3px solid var(--purple)} .ev-sam{border-left:3px solid var(--cyan)}
+.ev-dl{margin:8px 0}
+.info{cursor:help;color:var(--ink-3)}
+.linkbtn{font:inherit;background:none;border:0;color:var(--cyan);cursor:pointer;padding:0}
+.samgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.samcard{font:inherit;text-align:left;color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);padding:6px;display:grid;gap:4px;cursor:pointer}
+.samcard:hover{border-color:var(--cyan)}
+@media (max-width:640px){.ev-two{grid-template-columns:1fr}.samgrid{grid-template-columns:1fr}}

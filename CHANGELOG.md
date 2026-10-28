@@ -19,6 +19,14 @@
   FIRERISK_SAM_DAILY_LIMIT, default 300; FIRERISK_AUTO_SAM=0 turns it off). Analyses that existed when SAM was
   installed are the backlog for the script. New endpoints: /api/localization, /api/localization/{analysis}/{kind}/{i},
   /api/frames/{folder}/{file}; /api/video-findings carries each finding's localization. 19 new tests.
+- Phase 5: evidence near the top of the finding drawer and of the risk / equipment drawer (marker or View Details):
+  real frame, SAM box + mask overlay scaled from the original pixel size (no distortion), sampled-frame strip,
+  source video + "open at" timestamp, location, and two labelled parts "AI observation (Muse Spark)" and
+  "Visual model detected (SAM 3.1)" with the required status wording (Located in frame at mm:ss (confidence x.xx) /
+  Not visually located in the sampled frames / Localization not checked / Localization unavailable / Not
+  applicable / No Supporting Frame Available). Confidence tooltip states it is not a fire-risk probability.
+  Photos & Videos: "Visual evidence for video findings" gallery. Playwright tests at 1440 and 390 px check
+  alignment, no horizontal scroll, English only.
 
 ## 0.9.0 — 2026-10-28
 - Overview: GROUND LEVEL removed from the Building Risk Map (geometry, line, label and gap); floors, markers, colours
