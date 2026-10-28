@@ -1,0 +1,172 @@
+{
+  "check": "sam_3_1_localization_real_run",
+  "source": "author's PC database read 2026-10-28 22:58 (+07:00); runs between 2026-10-28T21:09:12+07:00 and 2026-10-28T21:22:15+07:00",
+  "model": "sam-3.1",
+  "scope": "latest successful Muse Spark analysis of each of the 8 videos on the PC (findings + observations); videos not re-analysed",
+  "items": {
+    "total": 76,
+    "located": 35,
+    "not_located": 29,
+    "not_applicable": 12,
+    "error": 0,
+    "not_checked": 0,
+    "by_kind": {
+      "finding": {
+        "located": 5,
+        "not_located": 4,
+        "not_applicable": 4
+      },
+      "observation": {
+        "located": 30,
+        "not_located": 25,
+        "not_applicable": 8
+      }
+    }
+  },
+  "phrases": {
+    "spark_derived": {
+      "applicable": 53,
+      "not_applicable": 11
+    },
+    "spark_v2_live": {
+      "applicable": 11,
+      "not_applicable": 1,
+      "note": "analysis 14 (21:04) was produced live with schema v2.1: Muse Spark returned segment_phrase itself"
+    },
+    "category_map": 0
+  },
+  "frames": {
+    "rows": 192,
+    "sam_requests": 171,
+    "images_billed": 171,
+    "answers_reused_without_call": 21,
+    "errors": 0,
+    "avg_request_seconds": 1.64
+  },
+  "cost_usd": {
+    "value": 0.4275,
+    "basis": "images_billed x $2.50 per 1,000 images (dev.meta.ai/docs/pricing-rate-limits, read 2026-10-28); actual invoice not checked"
+  },
+  "examples": [
+    {
+      "video": "Generator Room.mp4",
+      "analysis_id": 12,
+      "item": "finding #0",
+      "segment_phrase": "cardboard box",
+      "phrase_source": "spark_derived",
+      "frame_time_s": 6.9,
+      "frame_size": [
+        1280,
+        720
+      ],
+      "status": "located",
+      "max_confidence": 0.8709677457809448,
+      "boxes": [
+        {
+          "x1": 804,
+          "y1": 593,
+          "x2": 965,
+          "y2": 720,
+          "w": 161,
+          "h": 127
+        }
+      ],
+      "masks_decoded": [
+        true
+      ],
+      "review_note": "located; box on the partly visible box at the wall base (checked by eye)"
+    },
+    {
+      "video": "Wastewater Treatment Room.mp4",
+      "analysis_id": 13,
+      "item": "finding #1",
+      "segment_phrase": "motor",
+      "phrase_source": "spark_derived",
+      "frame_time_s": 50.5,
+      "frame_size": [
+        1280,
+        720
+      ],
+      "status": "located",
+      "max_confidence": 0.6908212304115295,
+      "boxes": [
+        {
+          "x1": 0,
+          "y1": 0,
+          "x2": 444,
+          "y2": 281,
+          "w": 444,
+          "h": 281
+        },
+        {
+          "x1": 389,
+          "y1": 371,
+          "x2": 811,
+          "y2": 691,
+          "w": 422,
+          "h": 320
+        }
+      ],
+      "masks_decoded": [
+        true,
+        true
+      ],
+      "review_note": "located; 2 motors outlined, the open-terminal motor on the floor among them (checked by eye)"
+    },
+    {
+      "video": "Basement Parking Area.mp4",
+      "analysis_id": 7,
+      "item": "observation #2",
+      "segment_phrase": "fire extinguisher",
+      "phrase_source": "spark_derived",
+      "frame_time_s": 33.0,
+      "frame_size": [
+        1280,
+        720
+      ],
+      "status": "located",
+      "max_confidence": 0.5631399154663086,
+      "boxes": [
+        {
+          "x1": 707,
+          "y1": 519,
+          "x2": 744,
+          "y2": 578,
+          "w": 37,
+          "h": 59
+        },
+        {
+          "x1": 727,
+          "y1": 489,
+          "x2": 755,
+          "y2": 545,
+          "w": 28,
+          "h": 56
+        }
+      ],
+      "masks_decoded": [
+        true,
+        true
+      ],
+      "review_note": "located; small extinguishers at a pillar base, low confidence (checked by eye)"
+    },
+    {
+      "video": "MSB Room.mp4",
+      "analysis_id": 14,
+      "item": "finding #0",
+      "segment_phrase": "network switch",
+      "phrase_source": "spark_v2",
+      "frame_time_s": 19.0,
+      "frame_size": [
+        1280,
+        720
+      ],
+      "status": "not_located",
+      "max_confidence": null,
+      "boxes": [],
+      "masks_decoded": [],
+      "review_note": "valid no-match although a small network switch IS visible in the frame: a SAM miss, not proof of absence"
+    }
+  ],
+  "not_included": "no API key, no image, no mask payload, no Muse free text"
+}

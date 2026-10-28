@@ -1,4 +1,4 @@
-# Project status — 2026-10-28 15:45 (UTC+7)
+# Project status — 2026-10-28 23:10 (UTC+7)
 
 | Area | Status | Evidence |
 |---|---|---|
@@ -12,7 +12,7 @@
 | Automatic Muse Spark analysis | Built; mock-tested; live automatic run pending on PC | `ai/auto.py` |
 | Survey videos | Architecture built per official docs; **no real video, never sent to Meta** | `firerisk/video.py`, `test_video.py` |
 | Photos | Prepared; **no real photos yet** | `firerisk/media.py` |
-| SAM 3.1 | Not started (output format unverified) | — |
+| SAM 3.1 visual localization | **Live verified**: API, client, real run over 76 items (35 located, 29 not located, 12 not applicable, 0 errors, 171 images ≈ $0.43); background localization of new analyses built and tested; dashboard overlay Playwright-tested 1440/390; live dashboard check on PC pending | `evidence/sam_*.json`, `tests/test_sam.py`, `tests/test_localize*.py` |
 | Automatic Drive sync | Built and mock-tested; author's one-time setup + first real run pending | `tests/test_drive_sync.py` |
 | Dashboard 0.8 (dark, unified building view, AI Risk Briefing, English-only) | Built; Playwright-checked on a copy of real data (0 Vietnamese strings visible); live check on PC pending | `test_unified_briefing.py` |
 | Muse Spark video review | **Live verified** on PC: 8 videos, 64 observations | PC database `video_analyses` 1–8 |

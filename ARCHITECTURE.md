@@ -119,3 +119,24 @@ translation for free text, pseudonymised, cached in SQLite `translations`, backg
 (`FIRERISK_AUTO_TRANSLATE`, default on). The API adds `<field>_en` and `<field>_en_origin`
 (`source` | `glossary` | `ai_translation`; null = pending) next to the original; the UI marks AI translations and
 shows pending ones in the original with a "translation pending" tag.
+
+## SAM 3.1 visual localization (2026-10-28)
+Data flow:
+
+`Muse Spark observation → segment_phrase → sampled video frames → SAM 3.1 visual localization → stored localization evidence → dashboard overlay`
+
+**Rule: SAM localization must never change alert severity or rule-based decisions.** It also never changes a Muse
+Spark record, never resolves an alert, and its confidence is never turned into a fire-risk score.
+
+| Step | Module | Notes |
+|---|---|---|
+| Phrase | `firerisk/localize.py` | Schema v2.1 (prompt `survey-video-v2`): Muse Spark returns `segment_phrase` per finding / observation (`spark_v2`). Older items: one Muse Spark text-only request per analysis (`spark_derived`); fallback fixed keyword map (`category_map`); otherwise no phrase. Absence / no single object → `not_applicable`. Phrases checked by `sam.phrase_problem` (short English noun phrase, no people, no negation, no location). Stored in `finding_phrases`. |
+| Frames | `localize.sample_times`, `extract_still` | Up to 3 times at 15 % / 50 % / 85 % of `[time_start_s, time_end_s]` (one midpoint for short or invalid ranges), clamped to the video length; ffmpeg auto-rotation; long side ≤ 1280 px; private `data/private/media/frames/<sha16>/t<0.1s>.jpg` (git-ignored); one file shared by every item needing the same frame. |
+| SAM call | `firerisk/sam.py` | `POST /v1/responses`, `sam-3.1`, base64 JPEG + phrase, `include_confidence`, `one_bit` masks, `store:false`. Retries 429 / 5xx / timeout with backoff; 400 never resent unchanged; 404 `model_not_found` stops the batch. |
+| Parse | `sam.parse_output` on Meta's `meta-sam-parser` | Empty output = valid no match. Malformed lines, out-of-frame boxes, undecodable masks are dropped and reported; confidence never invented. |
+| Store | `video_finding_locations` | One row per frame, unique fingerprint sha256(video sha256, analysis, kind, index, phrase, frame time). Same video bytes + phrase + time → previous answer reused, no call. Item status: located / not_located / error / not_applicable / not_checked (an error is never shown as "not located"). |
+| Run | `Localizer.run` | Shared by the backfill script (`scripts/locate_video_findings.py`, `--dry-run` on a database copy) and the dashboard's background pass after every new Muse Spark video analysis (`scope="new"`: analyses newer than the backlog boundary in `localizer_meta`). Daily limit `FIRERISK_SAM_DAILY_LIMIT` (default 300); over the limit work stays pending. Safe to stop and resume. |
+| Show | `web/app.js` `evidenceBlock` | Frame + SVG box/mask in the frame's own pixel space (`viewBox` = frame size), labels "AI observation (Muse Spark)" and "Visual model detected (SAM 3.1)". |
+
+Processing stages are tracked separately: video registered (`survey_videos`) → Muse Spark analysis (`video_analyses`
+status + running set) → phrase (`finding_phrases`) → localization (`video_finding_locations`, `/api/localization`).

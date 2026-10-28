@@ -260,3 +260,29 @@ rotation applied by ffmpeg), sent to `sam-3.1` on `POST /v1/responses` with the 
 * Finding: the response echoes `"store": true`. Production client should send `store: false` (as the Muse video client
   does) if the SAM endpoint accepts it — to verify in Phase 2.
 * Usage reports `images_processed`, tokens all 0. Private raw answers and the overlay stay in data/private/sam_check/.
+
+## 2026-10-28 20:29–23:10 — SAM 3.1 Phases 2–6
+**Author:** attachments "Integrate SAM 3.1 for Visual Evidence Localization…", "Continuously Uploaded Videos…",
+"Automatically Capture and Display Video Evidence…".
+
+**Checked first:** official pricing page read in the author's browser pane (dev.meta.ai/docs/pricing-rate-limits):
+SAM 3.1 image segmentation $2.50 / 1,000 images, video $0.20 / 1,000 frames (min. 50 frames per video request),
+3,000 RPM per team. The project note "64 findings" turned out to be the 64 **observations** of the first video review
+(prompt v1); 5 videos had since been re-reviewed with v2. Decision: localize the findings and observations of the
+latest successful analysis of each video (what the dashboard shows); superseded analyses are not localized.
+
+**Built:** see CHANGELOG (Unreleased, phases 2–5). Live check of the production client:
+`evidence/sam_client_check_20261028_203608.json`. Dry run on the PC database: 73 items, at most $0.55, database
+unchanged (file timestamp identical before and after).
+
+**Real run (author's PC, 21:09–21:22):** analysis 14 (MSB Room, 21:04) was produced live with schema v2.1 — Muse Spark
+returned `segment_phrase` itself for 12 items (11 usable, 1 absence). Over the 76 items of the latest analyses:
+35 located, 29 not located in the sampled frames, 12 not applicable, 0 errors, 0 not checked; 192 frame rows,
+171 SAM requests (= images billed), 21 answers reused without a call, average 1.64 s per request; ≈ $0.43.
+Four frames reviewed by eye (`evidence/sam_localization_run_20261028.json`): the cardboard box, the open-terminal motor
+and small extinguishers at a pillar base are outlined correctly; one "network switch" frame is a SAM miss (the switch
+is visible but not returned). "Not located" therefore keeps meaning "not outlined in these frames", never "absent".
+
+**Known limitations:** some phrases chosen by Muse Spark are generic ("floor", "sign plate", "pipe"); frames of
+technical rooms show name plates (keep private; check before the demo); SAM is never asked about people, but people
+can appear in frames that are sent.
