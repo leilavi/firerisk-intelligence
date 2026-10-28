@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — SAM 3.1 visual localization (in progress)
+- Phase 1: `scripts/check_sam.py` + `run_sam_check.bat` — one real frame to `sam-3.1`; verified live on the author's PC
+  (valid no-match for "electrical panel" on a close-up frame; 8 objects located for "push button").
+- Phase 2: `firerisk/sam.py` — SAM client (MuseConfig / MODEL_API_KEY, backoff on 429/5xx/timeout, no blind retry on
+  400, `model_not_found` reported, `store: false` with a single documented fallback) and parser on Meta's official
+  `meta-sam-parser` (empty = no match; malformed lines, boxes outside the frame and undecodable masks reported, never
+  guessed; confidence never invented). `scripts/check_sam_client.py` for a live check. 33 offline tests.
+
 ## 0.9.0 — 2026-10-28
 - Overview: GROUND LEVEL removed from the Building Risk Map (geometry, line, label and gap); floors, markers, colours
   and selection unchanged; issues without location stay under "Location not recorded".
