@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-10-28
+- Everything is read from Google Drive: the Apps Script web app also returns a listing of the data folder (incl.
+  sub-folders such as "Video Uploaded") and, on request, a short-lived read-only Drive token.
+- `drive_videos.py`: every video in the folder or linked in the Asset tab is downloaded to the computer (smallest first,
+  size-checked; tokens that can write to Drive are refused), registered with zone and equipment from the register, and
+  reviewed by Muse Spark automatically (one at a time, one attempt per video, daily limit). Observations become context
+  of the zone's fire-risk alerts, which are then re-analysed automatically.
+- Photos & video page: "Videos in Google Drive" with status per video and download progress.
+- 99 tests.
+
 ## 0.5.0 — 2026-10-28
 - Skill §2B.7 ported (was missing): near-zero day followed by a day ≥ double → "possible late reading", listed for
   verification and spread over the two days. Real effect: main water meter High → Warning (11 such pairs; the remaining

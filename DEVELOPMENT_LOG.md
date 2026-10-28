@@ -158,3 +158,20 @@ Equipment alerts: 7 Warning, 1 Watch; names now from the register (e.g. P-Th-Bi6
 
 **Not done:** no video analysed — the files are on Drive only; Claude's workspace cannot reach the Meta API and cannot
 download 2.7 GB through the connector. Tests: 92 passed.
+
+## 2026-10-28 10:54–11:20 — Read everything from Drive, videos included
+**Author (10:54):** the app must read everything on Drive by itself; videos uploaded and linked in the Asset tab must be
+taken from there (no manual download).
+
+**Drive check (connector, metadata only):** data folder = `Operations Data` sheet + sub-folder `Video Uploaded` with
+8 MP4 files (7 linked in the Asset tab, 1 not linked: `VID_20261027_153559_757.mp4`, 84 MB).
+
+**Design:** Apps Script web app extended with a folder listing and a short-lived read-only access token; the app
+downloads videos itself with the Drive API (videos are too large for Apps Script responses). Token scope is checked;
+write scopes are refused. Automatic Muse video review with a daily limit. Folder import kept as a fallback.
+
+**Files:** `apps_script/FireRiskExport.gs`, `firerisk/drive_videos.py` (new), `sources/drive_sync.py`, `video.py`,
+`engine.py`, `api.py`, `web/app.js`, `scripts/setup_drive_sync.py`, tests `test_drive_videos.py`, `test_drive_sync.py`.
+
+**Tests:** 99 passed (fake web app, tokeninfo, Drive and Muse transports; TEST bytes). **Not verified:** the real
+Apps Script deployment, a real Drive download and a real Muse video analysis — they need the author's one-time setup.

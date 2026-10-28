@@ -36,6 +36,7 @@ class AnalysisResult:
     equipment_alerts: list[EquipmentAlert] = field(default_factory=list)
     asset_register: dict[str, dict] = field(default_factory=dict)   # 'Asset' tab (context, display names)
     video_refs: list[dict] = field(default_factory=list)            # survey-video references from the register
+    video_catalog: dict[str, dict] = field(default_factory=dict)    # videos known from Drive (listing / metadata)
 
 
 def _episode_evidence(ep: M.Episode) -> Evidence:
@@ -160,7 +161,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
 
     return AnalysisResult(
         generated_at=now, evidence=index, signals=signals, alerts=alerts, equipment_alerts=equipment_alerts,
-        asset_register=register, video_refs=video_refs,
+        asset_register=register, video_refs=video_refs, video_catalog=manifest.get("video_catalog", {}),
         meter_calendars={m: [{"day": d.day.isoformat(), "value": d.value, "flag": d.flag, "spike": d.spike,
                               "median": d.median, "raw": d.raw} for d in cal] for m, cal in cals.items()},
         meter_episodes={m: [e.to_dict() for e in v] for m, v in eps.items()},

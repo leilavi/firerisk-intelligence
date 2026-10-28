@@ -79,6 +79,14 @@ display only), and Drive links in `Reference_File` as survey-video references. F
 metadata recorded in the private manifest (`video_catalog`). Videos are brought to the computer by putting the
 downloaded files in `data/private/media/survey_inbox/` and pressing Import; they are matched by name or size.
 
+## Reading everything from Google Drive (0.6)
+Apps Script web app (author's account, read-only scope): action `export` → spreadsheets as .xlsx + listing of every
+file in the sheet's folder (3 levels of sub-folders); action `token` → short-lived read-only access token.
+`drive_videos.DriveVideoSync`: token → scope check via Google tokeninfo (refuse write scopes) → Drive API
+`files.get?alt=media` per missing video (header auth, size check) → `VideoStore.add_file` with register metadata →
+automatic Muse Spark review (`FIRERISK_AUTO_VIDEO_AI`, daily limit) → observations attached to fire-risk alerts →
+fire-risk alerts re-analysed (fingerprint changed). Runs after every Drive update and on the "Get new videos" button.
+
 ## Evidence fingerprint (when Muse Spark runs again)
 `ai/investigation.fingerprint` hashes: prompt version, rule level, each finding record (ID, status, open/closed,
 time, meter label, ongoing), what the context records SAY (kind, equipment, status, pass/fault — not their IDs, so

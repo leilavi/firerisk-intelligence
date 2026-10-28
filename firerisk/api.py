@@ -33,6 +33,7 @@ from .config import ASSETS, BUILDING_NAME, LOCAL_TZ, METERS, METER_FEEDS, SEVERI
 from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
+from .drive_videos import DriveVideoSync, drive_video_items, video_settings
 from .video import INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
 from .sources.drive_sync import SyncConfig, SyncError, sync_from_drive
 from .store import VERIFICATION_STATES, Store
@@ -55,6 +56,7 @@ class State:
         self.next_sync_at: str | None = None
         self.ai = AutoAnalyst(self.store, self.get)
         self.videos = VideoStore(DB_PATH)
+        self.drive_videos = DriveVideoSync(self.videos, INBOX_DIR)
 
     def analyse(self) -> AnalysisResult:
         with self.lock:
@@ -74,6 +76,42 @@ class State:
 
     def get(self) -> AnalysisResult:
         return self.result or self.analyse()
+
+    def video_context_text(self, v: dict, res: AnalysisResult) -> str:
+        from .ai.redact import Redactor
+        red = Redactor()
+        ctx = "; ".join(red.text(a.fields.get("headline") or a.title) for a in res.alerts if v.get("zone") and a.zone == v["zone"])
+        eq = "; ".join(red.text(e.get("name") or e["equipment_id"]) for e in v.get("equipment") or [])
+        return (f"Zone {v['zone_label']}. Linked equipment: {eq or 'not linked'}. "
+                f"Open fire-risk findings in this zone: {ctx or 'none'}")
+
+    def on_video_analysed(self, _rec=None) -> None:
+        """New video observations become context of the zone's fire-risk alerts, which are then re-analysed
+        automatically when eligible (their evidence fingerprint changed)."""
+        r = self.get()
+        self.attach_video_context(r)
+        self.ai.schedule(r)
+
+    def auto_analyse_videos(self) -> list[dict]:
+        """Automatic Muse Spark review of new survey videos: one at a time, one attempt per video, daily limit."""
+        cfg = video_settings()
+        if not cfg["auto_analyse"] or not MuseConfig.load().configured:
+            return []
+        done = []
+        for v in self.videos.pending_auto():
+            if self.videos.auto_analyses_today() >= cfg["daily_limit"]:
+                break
+            rec = self.videos.analyse(v["video_id"], self.ai.client_factory(), self.video_context_text(v, self.get()),
+                                      on_done=self.on_video_analysed, trigger="auto")
+            done.append({"video_id": v["video_id"], "status": rec.get("status")})
+        return done
+
+    def start_drive_videos(self) -> bool:
+        """Download every Drive video not yet on this computer, then analyse new ones (background)."""
+        if not video_settings()["download"] or not SyncConfig.load().configured:
+            return False
+        res = self.get()
+        return self.drive_videos.start(drive_video_items(res.video_catalog, res.video_refs), self.auto_analyse_videos)
 
     def attach_video_context(self, res: AnalysisResult) -> None:
         """Survey-video observations of the same zone become CONTEXT of a fire-risk alert (never a finding)."""
@@ -99,6 +137,8 @@ class State:
                 res = self.analyse()
                 report["analysis"] = {"generated_at": res.generated_at.isoformat(), "alerts": len(res.alerts),
                                       "run_id": self.run_id}
+            if report.get("files"):
+                report["videos_started"] = self.start_drive_videos()
             return report
         finally:
             self.sync_lock.release()
@@ -618,9 +658,31 @@ async def upload_video(request: Request, filename: str, zone: str | None = None,
 @app.get("/api/videos")
 def list_videos():
     res = state.get()
+    local = {v.get("drive_file_id"): v for v in state.videos.list() if v.get("drive_file_id")}
+    drive = []
+    for it in drive_video_items(res.video_catalog, res.video_refs):
+        ref = it["ref"] or {}
+        v = local.get(it["drive_file_id"])
+        drive.append({"drive_file_id": it["drive_file_id"], "title": it["title"], "size": it["size"],
+                      "folder": it["folder"], "drive": it["drive"], "linked_in_register": bool(it["ref"]),
+                      "equipment": ref.get("equipment", []), "zone": (v or {}).get("zone") or ref.get("zone"),
+                      "zone_label": ZONE_LABELS.get((v or {}).get("zone") or ref.get("zone") or "", "Not assigned"),
+                      "zone_source": ref.get("zone_source") if ref else "not linked in the asset register",
+                      "video_id": (v or {}).get("video_id"), "on_this_computer": bool(v),
+                      "analysis_status": (v or {}).get("analysis_status")})
     return {"videos": state.videos.list(), "old_after_days": OLD_VIDEO_DAYS, "zones": ZONE_LABELS,
-            "ai_configured": MuseConfig.load().configured, "inbox": str(INBOX_DIR),
-            "referenced": state.videos.reference_status(res.video_refs)}
+            "ai_configured": MuseConfig.load().configured, "inbox": str(INBOX_DIR), "drive": drive,
+            "referenced": state.videos.reference_status(res.video_refs),
+            "drive_sync": {"configured": SyncConfig.load().configured, **video_settings(),
+                           "progress": state.drive_videos.progress,
+                           "listing_at": (res.video_catalog and max((c.get("checked_at") or "") for c in res.video_catalog.values())) or None}}
+
+
+@app.post("/api/videos/drive-sync")
+def drive_videos_now():
+    if not SyncConfig.load().configured:
+        raise HTTPException(400, "Google Drive sync is not set up. Run setup_drive_sync.bat.")
+    return {"started": state.start_drive_videos(), "progress": state.drive_videos.progress}
 
 
 @app.post("/api/videos/import")
@@ -703,18 +765,8 @@ def analyse_video_endpoint(video_id: str):
         raise HTTPException(400, v["analysable_reason"])
     if not MuseConfig.load().configured:
         raise HTTPException(400, "Muse Spark is not configured (no MODEL_API_KEY)")
-    from .ai.redact import Redactor
-    res = state.get()
-    red = Redactor()
-    ctx = "; ".join(red.text(a.fields.get("headline") or a.title) for a in res.alerts if a.zone == v.get("zone"))
-    def refresh_context(_rec):   # stored observations become context of the zone's fire-risk alerts
-        r = state.get()
-        state.attach_video_context(r)
-        state.ai.schedule(r)        # their fingerprint changed: eligible alerts are re-analysed automatically
-
     started = state.videos.analyse_in_background(video_id, state.ai.client_factory,
-                                                 f"Zone {v['zone_label']}. Open fire-risk findings: {ctx or 'none'}",
-                                                 on_done=refresh_context)
+                                                 state.video_context_text(v, state.get()), on_done=state.on_video_analysed)
     return {"started": started, "video": state.videos.get(video_id)}
 
 

@@ -88,7 +88,8 @@ def main() -> int:
     print(f"\n  The script is ready: {script_path}")
     print("  It contains your private token. Do not share it or put it on GitHub.\n")
     print("  Follow the steps Claude gave you in the chat:")
-    print("    script.google.com > New project > paste FireRiskExport.gs > (optional) appsscript.json")
+    print("    script.google.com > New project > paste FireRiskExport.gs > REQUIRED: replace appsscript.json")
+    print("    (read-only access; the app refuses to download videos with a token that could change your Drive)")
     print("    > Run testExport > allow access > Deploy > New deployment > Web app")
     print("    > Execute as: Me, Who has access: Anyone > Deploy > copy the Web app URL\n")
     if os.name == "nt":
@@ -119,7 +120,9 @@ def main() -> int:
         else:
             print(f"  {key}: FAILED - {r.get('error')} (previous file kept: {r.get('kept_previous')})")
     print(f"\n  RESULT: {'PASS' if report['ok'] else 'PARTIAL'} in {report['seconds']} s.")
-    print("  The dashboard now updates from Google Drive automatically while run_dashboard is open.")
+    print("  The dashboard now updates from Google Drive automatically while run_dashboard is open:")
+    print("  the sheet (incl. the Asset tab) and every video in its Drive folder are read; new videos are")
+    print("  downloaded to this computer and reviewed by Muse Spark one at a time.")
     print(f"  Settings are in {ENV_FILE.name}: FIRERISK_SYNC_MINUTES (default 30, 0 = only the button).")
     return 0 if report["ok"] else 3
 

@@ -267,7 +267,7 @@ class VideoStore:
         return out
 
     # --- analysis ----------------------------------------------------------------------------------------
-    def analyse(self, video_id: str, client, context: str = "", on_done=None) -> dict:
+    def analyse(self, video_id: str, client, context: str = "", on_done=None, trigger: str = "button") -> dict:
         """Run one analysis. `on_done(record)` runs after the record is stored and BEFORE the video stops being
         'running', so whoever waits for 'not running' sees the alert context already updated."""
         v = self.get(video_id)
@@ -275,7 +275,8 @@ class VideoStore:
             raise KeyError(video_id)
         now = datetime.now(LOCAL_TZ)
         rec = {"video_id": video_id, "created_at": now.isoformat(timespec="seconds"), "prompt_version": VIDEO_PROMPT_VERSION,
-               "model_requested": client.config.model, "recorded_at": v.get("recorded_at"), "zone": v.get("zone")}
+               "model_requested": client.config.model, "recorded_at": v.get("recorded_at"), "zone": v.get("zone"),
+               "trigger": trigger}
         with self.lock:
             if video_id in self.running:
                 return {"status": "running"}
@@ -329,12 +330,8 @@ class VideoStore:
                 out["skipped"].append({"file": f.name, "reason": "already imported"})
                 continue
             ref = by_title.get(f.name.lower()) or by_size.get(f.stat().st_size)
-            eq = (ref or {}).get("equipment") or []
-            names = [e.get("name") or e["equipment_id"] for e in eq]
-            meta = {"zone": (ref or {}).get("zone"), "floor": next((e.get("floor") for e in eq if e.get("floor")), None),
-                    "room": (names[0] if names else None), "note": ("Linked in the asset register to: " + "; ".join(
-                        f"{e['equipment_id']} {e.get('name') or ''}".strip() for e in eq)) if eq else None,
-                    "drive_file_id": (ref or {}).get("drive_file_id"), "equipment": eq, "imported_from": "folder"}
+            meta = meta_from_ref(ref)
+            meta.update({"drive_file_id": (ref or {}).get("drive_file_id"), "imported_from": "folder"})
             try:
                 v = self.add_file(f, f.name, meta)
             except ValueError as exc:
@@ -355,6 +352,30 @@ class VideoStore:
                         "video_id": v["video_id"] if v else None, "on_this_computer": bool(v),
                         "analysis_status": v["analysis_status"] if v else None})
         return out
+
+
+    def auto_analyses_today(self) -> int:
+        day = datetime.now(LOCAL_TZ).date().isoformat()
+        with self._conn() as c:
+            rows = c.execute("SELECT record FROM video_analyses WHERE created_at >= ?", (day,)).fetchall()
+        return sum(1 for r in rows if json.loads(r["record"]).get("trigger") == "auto")
+
+    def pending_auto(self) -> list[dict]:
+        """Analysable videos with no analysis attempt yet (one automatic attempt per video), smallest first."""
+        out = [v for v in self.list() if v["analysable"] and v["analysis_status"] == "not_analysed"]
+        return sorted(out, key=lambda v: v["size"])
+
+
+def meta_from_ref(ref: dict | None, folder: str | None = None) -> dict:
+    """Video metadata from an asset-register reference (zone from the register Floor; never guessed)."""
+    eq = (ref or {}).get("equipment") or []
+    names = [e.get("name") or e["equipment_id"] for e in eq]
+    if eq:
+        note = "Linked in the asset register to: " + "; ".join(f"{e['equipment_id']} {e.get('name') or ''}".strip() for e in eq)
+    else:
+        note = (f"In the Google Drive folder '{folder}'; " if folder else "") + "not linked to equipment in the asset register"
+    return {"zone": (ref or {}).get("zone"), "floor": next((e.get("floor") for e in eq if e.get("floor")), None),
+            "room": names[0] if names else None, "note": note, "equipment": eq}
 
 
 class VideoNotAnalysable(Exception):

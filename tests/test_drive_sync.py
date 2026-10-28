@@ -56,7 +56,12 @@ class MockAppsScript:
     def answer(self) -> dict:
         if self.mode == "bad_token" or self._last_token != TOKEN:
             return {"ok": False, "error": "unauthorized"}
-        out = {"ok": True, "generated_at": "2026-10-27T10:00:00Z", "files": {}}
+        out = {"ok": True, "generated_at": "2026-10-27T10:00:00Z", "files": {},
+               "listing": [{"id": "TESTVID00000000000000009", "title": "TEST clip.mp4", "mime_type": "video/mp4",
+                            "size": 123, "created_time": "2026-10-27T09:00:00Z", "modified_time": "2026-10-27T09:00:00Z",
+                            "folder": "TEST/Video Uploaded"},
+                           {"id": "TESTDOC0000000000000009", "title": "TEST notes", "mime_type": "text/plain", "size": 1,
+                            "created_time": "2026-10-27T09:00:00Z", "modified_time": "2026-10-27T09:00:00Z", "folder": "TEST"}]}
         for key, content in self.files.items():
             if self.mode == "missing_vehicles" and key == "vehicles":
                 continue
@@ -208,3 +213,12 @@ def test_api_sync_endpoint_reanalyses_and_hides_secrets(setup, tmp_path, monkeyp
     hist = c.get("/api/sync").json()
     blob = json.dumps([before, r, after, hist])
     assert TOKEN not in blob and mock.url not in blob
+
+
+def test_folder_listing_is_stored_and_videos_catalogued(setup):
+    snap, mock, cfg, _ = setup
+    r = sync_from_drive(snap, cfg)
+    assert r["listing"] == {"files": 2, "videos": 1, "error": None}
+    man = json.loads((snap / "manifest.json").read_text(encoding="utf-8"))
+    assert len(man["drive_listing"]["files"]) == 2
+    assert man["video_catalog"]["TESTVID00000000000000009"]["folder"] == "TEST/Video Uploaded"

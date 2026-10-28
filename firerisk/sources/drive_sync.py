@@ -188,6 +188,16 @@ def sync_from_drive(snapshot_dir: Path, cfg: SyncConfig | None = None, now: date
             report_files[key] = {"status": "failed", "error": "not returned by the web app",
                                  "kept_previous": (snapshot_dir / files_meta.get(key, {}).get("local_file", LOCAL_NAMES[key])).exists()}
 
+    if isinstance(data.get("listing"), list):        # every file in the data folder (incl. "Video Uploaded")
+        manifest["drive_listing"] = {"at": started, "files": data["listing"]}
+        catalog = manifest.setdefault("video_catalog", {})
+        for f in data["listing"]:
+            if str(f.get("mime_type", "")).startswith("video/"):
+                catalog[f["id"]] = {"title": f.get("title"), "size": f.get("size"), "mime_type": f.get("mime_type"),
+                                    "drive_created_time": f.get("created_time"),
+                                    "drive_modified_time": f.get("modified_time"), "folder": f.get("folder"),
+                                    "note": "Drive upload/modified time, not the recording time",
+                                    "checked_at": started, "checked_by": "FireRisk Drive sync"}
     manifest["created_by"] = "FireRisk Google Drive sync (Apps Script web app)"
     manifest["last_sync"] = {"at": started, "script_time": data.get("generated_at"),
                              "files": {k: v["status"] for k, v in report_files.items()}}
@@ -196,6 +206,9 @@ def sync_from_drive(snapshot_dir: Path, cfg: SyncConfig | None = None, now: date
     os.replace(tmp, manifest_path)
 
     statuses = [v["status"] for k, v in report_files.items() if k in LOCAL_NAMES]
+    listing = data.get("listing") if isinstance(data.get("listing"), list) else []
     return {"ok": all(s in ("updated", "unchanged") for s in statuses),
             "changed": any(s == "updated" for s in statuses),
+            "listing": {"files": len(listing), "videos": sum(1 for f in listing if str(f.get("mime_type", "")).startswith("video/")),
+                        "error": data.get("listing_error")},
             "started_at": started, "seconds": round(time.monotonic() - t0, 1), "files": report_files}

@@ -245,7 +245,7 @@ async function viewFire(id) {
   const s9 = `<h3 class="sub">Linked building equipment alerts (${d.related_equipment.length})</h3>
     ${d.related_equipment.length ? `<p class="muted small" style="margin:0 0 6px">Separate maintenance alerts with their own level. Linked only for the reason shown; their level is not changed by this alert.</p>${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span><b>${esc(x.asset_name || x.asset_id || x.alert_id)}</b> · ${esc(x.headline)}<br><span class="small muted">Why linked: ${x.reasons.map(esc).join("; ")}</span></span></a>`).join("")}` : '<p class="muted small">No equipment alert is linked to this fire-risk alert.</p>'}
     <h3 class="sub" style="margin-top:14px">Survey videos of this zone (${d.survey_videos.length})</h3>${videoContext(d.survey_videos)}
-    ${d.survey_video_refs?.length ? `<p class="small" style="margin:6px 0 0">${org("source")}${d.survey_video_refs.length} more video(s) of this zone are linked in the asset register but not on this computer yet: ${d.survey_video_refs.map((r) => esc(r.drive?.title || r.drive_file_id)).join(", ")}. <a href="#/media">Import them</a>.</p>` : ""}
+    ${d.survey_video_refs?.length ? `<p class="small" style="margin:6px 0 0">${org("source")}${d.survey_video_refs.length} more video(s) of this zone are linked in the asset register but not on this computer yet: ${d.survey_video_refs.map((r) => esc(r.drive?.title || r.drive_file_id)).join(", ")}. ${S.sync?.configured ? "They are downloaded from Drive automatically" : "They are downloaded from Drive automatically once the Drive connection is set up"} — <a href="#/media">see status</a>.</p>` : ""}
     ${d.maintenance_history.length ? `<details><summary>Repair and inspection history of the equipment (${d.maintenance_history.length})</summary><div class="scroll"><table class="tbl"><tbody>${d.maintenance_history.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${esc(e.title)}<div class="muted small">${esc(KIND[e.kind] || e.kind)} · ${esc(e.asset_id)}</div></td><td class="small">${esc(e.status || "")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}
     ${strong.length ? `<details><summary>${strong.length} links between records</summary><p class="muted small">Records worth checking together. A link is not proof of cause.</p><div class="scroll"><table class="tbl"><tbody>${strong.slice(0, 40).map((l) => `<tr><td>${chip(l.a)}</td><td>${chip(l.b)}</td><td class="small">${l.reasons.map(esc).join("<br>")}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
 
@@ -365,16 +365,10 @@ async function viewMedia() {
   const zoneOpts = Object.entries(vids.zones).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join("");
   $("#app").innerHTML = `<h1>Photos &amp; survey videos</h1>
     <section class="panel"><h2>Building survey videos</h2>
-      <p class="muted small">A survey video shows what was visible <b>when it was recorded</b>. It is context for fire-risk alerts of the same zone: it never changes a rule level, does not prove that equipment works today, and does not confirm a hazard. Muse Spark can review an .mp4 video through the Meta video API when you press Analyse; nothing is sent automatically.</p>
-      <h3 class="sub" style="margin-top:14px">Videos linked in the asset register (${vids.referenced.length})</h3>
-      ${vids.referenced.length ? `<p class="small muted" style="margin:0 0 8px">${org("source")}From the <b>Asset</b> tab, column Reference_File. To bring them in: download the files from Google Drive, put them in <b>${esc(vids.inbox)}</b>, then press Import. Files are matched by name; zone and equipment come from the register.</p>
-        <div class="scroll"><table class="tbl"><thead><tr><th>File (Drive)</th><th>Linked equipment</th><th>Zone</th><th>Size</th><th>On this computer</th></tr></thead><tbody>
-        ${vids.referenced.map((r) => `<tr><td><b>${esc(r.drive?.title || r.drive_file_id)}</b><div class="muted small">uploaded to Drive ${dt(r.drive?.drive_created_time)} (not the recording time)</div></td>
-          <td class="small">${r.equipment.map((e) => `${esc(e.name || "")} <span class="muted">${esc(e.equipment_id)}</span>`).join("<br>")}</td>
-          <td class="small">${esc(r.zone_label)}${r.zone ? "" : `<div class="muted">${esc(r.zone_source)}</div>`}</td><td class="num small">${r.drive?.size ? (r.drive.size / 1048576).toFixed(0) + " MB" : "—"}</td>
-          <td class="small">${r.on_this_computer ? `<a href="#/video/${esc(r.video_id)}">yes · ${esc(VSTAT[r.analysis_status] || r.analysis_status)}</a>` : '<span class="muted">not yet</span>'}</td></tr>`).join("")}</tbody></table></div>
-        <p style="margin:10px 0 0"><button class="btn primary" id="vimport">Import from folder</button> <span class="small muted" id="vimsg"></span></p>` : '<p class="muted small">No video link in the asset register.</p>'}
-      <h3 class="sub" style="margin-top:18px">Or upload a video file</h3>
+      <p class="muted small">A survey video shows what was visible <b>when it was recorded</b>. It is context for fire-risk alerts of the same zone: it never changes a rule level, does not prove that equipment works today, and does not confirm a hazard. Muse Spark reviews each .mp4 through the Meta video API (the uploaded copy expires after 1 hour and is deleted right after the analysis).</p>
+      ${driveVideos(vids)}
+      <details style="margin-top:14px"><summary>Other ways to add a video</summary>
+        <p class="small muted">Put downloaded files in <b>${esc(vids.inbox)}</b> and press <button class="btn" id="vimport">Import from folder</button> <span class="small muted" id="vimsg"></span>, or upload one file below.</p>
       <form id="vform" class="vform">
         <label>Video file (.mp4) <input type="file" id="vfile" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" required></label>
         <label>Zone <select id="vzone"><option value="">Not assigned</option>${zoneOpts}</select></label>
@@ -384,16 +378,26 @@ async function viewMedia() {
         <label>Recorded on <input type="datetime-local" id="vwhen"></label>
         <label class="wide">Note <input id="vnote2" placeholder="optional"></label>
         <button class="btn primary" type="submit">Upload</button><span class="small muted" id="vmsg2"></span>
-      </form>
+      </form></details>
       ${vids.videos.length ? `<div class="scroll" style="margin-top:14px"><table class="tbl"><thead><tr><th>Video</th><th>Zone / place</th><th>Recorded</th><th>Size</th><th>Muse Spark</th></tr></thead><tbody>
         ${vids.videos.map((v) => `<tr class="click" onclick="location.hash='#/video/${esc(v.video_id)}'"><td><b>${esc(v.filename)}</b><div class="muted small">${esc(v.video_id)}</div></td><td>${esc(v.zone_label)}<div class="muted small">${esc([v.floor, v.area, v.room].filter(Boolean).join(" / "))}</div></td>
           <td class="small">${v.recorded_at ? dt(v.recorded_at) : '<span class="muted">unknown</span>'}${v.age_days > vids.old_after_days ? `<div class="muted">${v.age_days} days ago</div>` : ""}</td><td class="num small">${(v.size / 1048576).toFixed(1)} MB</td>
           <td class="small">${v.analysable ? esc(VSTAT[v.analysis_status] || v.analysis_status) : `<span class="muted">${esc(v.analysable_reason)}</span>`}</td></tr>`).join("")}</tbody></table></div>`
-        : '<div class="empty" style="margin-top:14px">No survey video yet.</div>'}
+        : '<div class="empty" style="margin-top:14px">No survey video on this computer yet.</div>'}
     </section>
     <section class="panel" style="margin-top:16px"><h2>Photos referenced in the logs</h2>
       <div class="counts"><div class="count"><span class="n num">${m.summary.references}</span><span class="l">photo references</span></div><div class="count"><span class="n num">${m.summary.available}</span><span class="l">files available here</span></div></div>
       <p class="small muted">The logs point to photos, but the files are not connected yet, so nothing is analysed or shown. Files placed in <b>${esc(m.summary.media_dir)}</b> are matched to their records by name.</p></section>`;
+  const dsb = $("#vdrive");
+  if (dsb) dsb.onclick = async () => { dsb.disabled = true; try { await api("/api/videos/drive-sync", { method: "POST" }); } catch (e) { alertBar("Could not start: " + e.message); } viewMedia(); };
+  clearInterval(vidPoll);
+  if (vids.drive_sync.progress?.running) vidPoll = setInterval(async () => {
+    if (location.hash !== "#/media") return clearInterval(vidPoll);
+    const n = await api("/api/videos").catch(() => null);
+    if (!n) return;
+    if (!n.drive_sync.progress?.running) { clearInterval(vidPoll); viewMedia(); return; }
+    const el = $("#vprog"); if (el) el.innerHTML = progressText(n.drive_sync.progress);
+  }, 4000);
   const imp = $("#vimport");
   if (imp) imp.onclick = async () => {
     imp.disabled = true; $("#vimsg").textContent = "Checking the folder… large files take a while to fingerprint.";
@@ -416,6 +420,29 @@ async function viewMedia() {
     try { const v = await api(`/api/videos?${q}`, { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } }); location.hash = `#/video/${v.video_id}`; }
     catch (e) { msg.textContent = "Upload failed: " + e.message; }
   };
+}
+function progressText(p) {
+  if (!p || (!p.running && !p.finished_at)) return "";
+  const c = p.current;
+  const cur = c ? `Downloading <b>${esc(c.title)}</b>: ${(c.bytes_done / 1048576).toFixed(0)} of ${c.size ? (c.size / 1048576).toFixed(0) : "?"} MB` : p.running ? "Working… (downloads, then Muse Spark analysis one video at a time)" : "";
+  const done = `${p.downloaded.length} downloaded, ${p.skipped.length} already here or skipped${p.errors.length ? `, <b style="color:var(--high-ink)">${p.errors.length} problem(s)</b>: ${p.errors.map((e) => esc((e.title ? e.title + ": " : "") + e.error)).join("; ")}` : ""}${p.analysed?.length ? `, ${p.analysed.length} analysed` : ""}`;
+  return `${p.running ? '<span class="spinner"></span>' : ""}${cur}${cur ? "<br>" : ""}<span class="small muted">${p.running ? "So far" : `Last run ${dt(p.finished_at)}`}: ${done}</span>`;
+}
+function driveVideos(vids) {
+  const ds = vids.drive_sync, list = vids.drive;
+  const head = `<h3 class="sub" style="margin-top:14px">Videos in Google Drive (${list.length})</h3>`;
+  const how = ds.configured
+    ? `<p class="small muted" style="margin:0 0 8px">${org("source")}Read from the Drive folder of the operations sheet (incl. <i>Video Uploaded</i>) and the <b>Asset</b> tab (Reference_File). New videos are downloaded to this computer automatically after each Drive update${ds.auto_analyse ? ` and reviewed by Muse Spark one at a time (up to ${ds.daily_limit} per day)` : "; automatic Muse analysis is off"}. Zone and equipment come from the asset register; a video the register does not link stays "Not assigned".</p>`
+    : `<div class="warnbox"><b>Google Drive is not connected yet.</b> Run <b>setup_drive_sync.bat</b> once; the app then reads the sheet, the Asset tab and every video in the Drive folder by itself.</div>`;
+  const rows = list.map((r) => {
+    const st = r.on_this_computer ? `<a href="#/video/${esc(r.video_id)}">on this computer · ${esc(VSTAT[r.analysis_status] || r.analysis_status)}</a>` : '<span class="muted">on Drive only</span>';
+    return `<tr><td><b>${esc(r.title)}</b><div class="muted small">${r.drive?.folder ? esc(r.drive.folder) + " · " : ""}${r.drive?.drive_created_time ? "added to Drive " + dt(r.drive.drive_created_time) : ""}</div></td>
+      <td class="small">${r.equipment.length ? r.equipment.map((e) => `${esc(e.name || "")} <span class="muted">${esc(e.equipment_id)}</span>`).join("<br>") : '<span class="muted">not linked in the asset register</span>'}</td>
+      <td class="small">${esc(r.zone_label)}${r.zone ? "" : `<div class="muted">${esc(r.zone_source || "")}</div>`}</td>
+      <td class="num small">${r.size ? (r.size / 1048576).toFixed(0) + " MB" : "—"}</td><td class="small">${st}</td></tr>`;
+  }).join("");
+  return `${head}${how}${list.length ? `<div class="scroll"><table class="tbl"><thead><tr><th>Video</th><th>Linked equipment (Asset tab)</th><th>Zone</th><th>Size</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted small">No video found in Drive yet.</p>'}
+    ${ds.configured ? `<p style="margin:10px 0 0"><button class="btn primary" id="vdrive" ${ds.progress?.running ? "disabled" : ""}>Get new videos from Drive now</button></p><p class="small" id="vprog" style="margin:8px 0 0">${progressText(ds.progress)}</p>` : ""}`;
 }
 const VSTAT = { not_analysed: "Not analysed", running: "Analysing…", ok: "Analysed", failed: "Analysis failed" };
 
