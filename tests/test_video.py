@@ -194,3 +194,76 @@ def test_frame_extraction_from_test_pattern(env, tmp_path):
     v = upload(c, name="TEST_pattern.mp4", data=src.read_bytes(), zone="B1").json()
     r = c.get(f"/api/videos/{v['video_id']}/frame?t=1.5")
     assert r.status_code == 200 and r.content[:2] == b"\xff\xd8"
+
+
+# --- asset register references and folder import (TEST files only) --------------------------------------------
+def _ffmpeg_test_mp4(path, creation="2026-10-20T02:30:00Z"):
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=160x120:rate=5",
+                    "-t", "4", "-pix_fmt", "yuv420p", "-metadata", f"creation_time={creation}", str(path)], check=True)
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_mp4_header_gives_creation_time_and_duration(tmp_path):
+    from firerisk.video import mp4_info
+    f = tmp_path / "TEST.mp4"
+    _ffmpeg_test_mp4(f)
+    info = mp4_info(f)
+    assert info["duration_s"] == 4.0 and info["creation_time"].startswith("2026-10-20T09:30")   # UTC+7
+    assert mp4_info(tmp_path / "missing.mp4") == {}
+    (tmp_path / "junk.mp4").write_bytes(b"not an mp4")
+    assert mp4_info(tmp_path / "junk.mp4") == {}
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_folder_import_matches_register_reference(env, tmp_path, monkeypatch):
+    api, c, _ = env
+    inbox = tmp_path / "inbox"; inbox.mkdir()
+    monkeypatch.setattr(api, "INBOX_DIR", inbox)
+    _ffmpeg_test_mp4(inbox / "TEST Pump Room.mp4")
+    (inbox / "notes.txt").write_text("ignored")
+    size = (inbox / "TEST Pump Room.mp4").stat().st_size
+    res = api.state.get()
+    res.video_refs = [{"drive_file_id": "TESTFILEID000000000001", "zone": "B1", "zone_source": "asset register Floor",
+                       "equipment": [{"equipment_id": "P-TEST1", "name": "TEST fire pump panel", "floor": "B1"}],
+                       "drive": {"title": "TEST Pump Room.mp4", "size": size}},
+                      {"drive_file_id": "TESTFILEID000000000002", "zone": None, "zone_source": "not in the register",
+                       "equipment": [], "drive": {"title": "TEST other.mp4", "size": 1}}]
+    before = c.get("/api/videos").json()["referenced"]
+    assert [r["on_this_computer"] for r in before] == [False, False]
+    assert c.get("/api/alerts/ZONE-B1").json()["survey_video_refs"][0]["drive_file_id"] == "TESTFILEID000000000001"
+    out = c.post("/api/videos/import").json()
+    assert len(out["imported"]) == 1 and out["imported"][0]["matched"] and out["imported"][0]["zone"] == "B1"
+    assert out["imported"][0]["recorded_at_source"] == "mp4_metadata"
+    v = api.state.videos.get(out["imported"][0]["video_id"])
+    assert v["equipment"][0]["equipment_id"] == "P-TEST1" and v["duration_s"] == 4.0
+    assert "camera clock" in v["recording_note"]
+    assert not (inbox / "TEST Pump Room.mp4").exists() and (inbox / "notes.txt").exists()
+    after = c.get("/api/videos").json()["referenced"]
+    assert [r["on_this_computer"] for r in after] == [True, False]
+    d = c.get("/api/alerts/ZONE-B1").json()
+    assert d["survey_video_refs"] == [] and d["survey_videos"][0]["video_id"] == v["video_id"]
+    _ffmpeg_test_mp4(inbox / "copy.mp4")          # identical bytes? different name -> new sha unless identical
+    again = c.post("/api/videos/import").json()
+    assert len(again["imported"]) + len(again["skipped"]) == 1
+
+
+def test_asset_register_tab_is_optional_and_read(tmp_path):
+    import openpyxl
+    from firerisk.sources.register import load_asset_register
+    from firerisk.config import BRANCH_PREFIX as B
+    p = tmp_path / "TEST.xlsx"
+    wb = openpyxl.Workbook(); wb.active.title = "other"; wb.save(p)
+    reg, refs, st = load_asset_register(p, "TEST")
+    assert reg == {} and refs == [] and st["present"] is False
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Asset"
+    ws.append(["Equipment_ID", "Equipment_Name", "Branch", "Floor", "Location_ID", "Reference_File", "Assets_Status"])
+    ws.append(["P-TEST1", "TEST pump", B, "B1", f"{B}-A-B1", "https://drive.google.com/file/d/TESTFILEID000000000001/view", "4. Operational"])
+    ws.append(["P-TEST2", "TEST pump room", B, None, f"{B}----", "https://drive.google.com/file/d/TESTFILEID000000000001/view", None])
+    ws.append(["P-TEST3", "TEST panel", B, None, f"{B}----", "https://drive.google.com/file/d/TESTFILEID000000000002/view", None])
+    ws.append(["E-OTHER", "other branch", "SITE-2", "B1", "SITE-2-B1", "https://drive.google.com/file/d/TESTFILEID000000000003/view", None])
+    wb.save(p)
+    reg, refs, st = load_asset_register(p, "TEST")
+    assert set(reg) == {"P-TEST1", "P-TEST2", "P-TEST3"} and st["video_references"] == 2
+    by = {r["drive_file_id"]: r for r in refs}
+    assert by["TESTFILEID000000000001"]["zone"] == "B1" and len(by["TESTFILEID000000000001"]["equipment"]) == 2
+    assert by["TESTFILEID000000000002"]["zone"] is None                 # no floor -> not guessed

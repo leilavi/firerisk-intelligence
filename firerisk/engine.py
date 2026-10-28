@@ -13,6 +13,7 @@ from pathlib import Path
 from .config import LOCAL_TZ, METERS, OPS_SOURCE_TITLE, SOURCE_CADENCE_DAYS, VEHICLE_SOURCE_TITLE
 from .correlation import aggregate_alerts
 from .equipment import EquipmentAlert, build_equipment_alerts, link_to_fire_alerts
+from .sources.register import ASSET_TAB, load_asset_register
 from .alert_fields import enrich_alerts
 from .hazards.pathways import evaluate, meter_signals
 from .hazards.tagging import tag_evidence
@@ -33,6 +34,8 @@ class AnalysisResult:
     source_status: list[dict]
     data_quality: list[dict] = field(default_factory=list)
     equipment_alerts: list[EquipmentAlert] = field(default_factory=list)
+    asset_register: dict[str, dict] = field(default_factory=dict)   # 'Asset' tab (context, display names)
+    video_refs: list[dict] = field(default_factory=list)            # survey-video references from the register
 
 
 def _episode_evidence(ep: M.Episode) -> Evidence:
@@ -78,7 +81,15 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
             if "error" not in s:
                 row.update(_freshness(s.get("latest_record"), now, SOURCE_CADENCE_DAYS.get(sheet)))
             status.append(row)
+        register, video_refs, rst = load_asset_register(ops_path, ops_meta.get("title", OPS_SOURCE_TITLE))
+        if rst.get("present"):
+            status.append({"source": "ops_data", "sheet": ASSET_TAB, **{k: v for k, v in rst.items() if k != "present"},
+                           "role": "equipment register (context)", "snapshot_at": ops_meta.get("downloaded_at")})
+        catalog = manifest.get("video_catalog", {})
+        for ref in video_refs:                        # file title / size recorded when the Drive files were checked
+            ref["drive"] = catalog.get(ref["drive_file_id"])
     else:
+        register, video_refs = {}, []
         status.append({"source": "ops_data", "sheet": None, "error": f"file not found: {ops_path.name}"})
 
     veh_meta = files.get("vehicles", {})
@@ -129,7 +140,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
     # linked to a fire-risk alert only with a stated reason; they never set or raise the fire-risk level.
     alerts = aggregate_alerts(fire_signals, index, now)
     enrich_alerts(alerts, signals, index, status, now)
-    equipment_alerts = build_equipment_alerts(evidence, meter_sigs, now)
+    equipment_alerts = build_equipment_alerts(evidence, meter_sigs, now, register)
     link_to_fire_alerts(equipment_alerts, alerts, index)
 
     dq = []
@@ -149,8 +160,9 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
 
     return AnalysisResult(
         generated_at=now, evidence=index, signals=signals, alerts=alerts, equipment_alerts=equipment_alerts,
+        asset_register=register, video_refs=video_refs,
         meter_calendars={m: [{"day": d.day.isoformat(), "value": d.value, "flag": d.flag, "spike": d.spike,
-                              "median": d.median} for d in cal] for m, cal in cals.items()},
+                              "median": d.median, "raw": d.raw} for d in cal] for m, cal in cals.items()},
         meter_episodes={m: [e.to_dict() for e in v] for m, v in eps.items()},
         meter_issues=issues, source_status=status, data_quality=dq)
 

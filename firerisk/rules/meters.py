@@ -8,7 +8,11 @@ ORIGIN: PORTED from skill v2.2 Stage 2B and §5A:
     fewer than 14 days -> whole-period baseline marked "preliminary";
   - spike day: |x - median| > 3 * MAD * 1.4826, or x < 50% / > 150% of median, AND |x - median| >= min_delta;
   - consecutive spike days in the same direction form one episode;
-  - EVN vs MSB cross-check: MSB-only spike while EVN is normal -> MSB reading error, not a load change.
+  - EVN vs MSB cross-check: MSB-only spike while EVN is normal -> MSB reading error, not a load change;
+  - skill §2B.7: a day with near-zero consumption followed by a day at least double it -> possible late reading
+    ("ghi trễ"). The pair is listed for verification and, like a gap (§2B.4), spread evenly over the two days
+    (flag "late_reading_averaged"; raw values kept). The averaged days are still checked for spikes but are not
+    used as baseline. (Added 2026-10-28: this skill check had not been ported before.)
 """
 
 from __future__ import annotations
@@ -26,7 +30,8 @@ from ..models import Evidence
 class DayValue:
     day: date
     value: float | None
-    flag: str = ""            # "" | "averaged_gap" | "missing" | "negative_excluded"
+    flag: str = ""            # "" | "averaged_gap" | "late_reading_averaged" | "missing" | "negative_excluded"
+    raw: float | None = None  # original value before late-reading averaging
     evidence_ids: list[str] = field(default_factory=list)
     spike: str = ""           # "" | "up" | "down"
     median: float | None = None
@@ -106,7 +111,31 @@ def daily_consumption(readings: list[Evidence], meter_id: str) -> tuple[list[Day
     while d <= last:
         cal.append(days.get(d, DayValue(d, None, "missing")))
         d += timedelta(days=1)
+    _late_readings(cal, meter_id, issues)
     return cal, issues
+
+
+LATE_NEAR_ZERO = 0.1   # "gần 0": at most 10% of the next day (preliminary reading of skill §2B.7)
+
+
+def _late_readings(cal: list[DayValue], meter_id: str, issues: list[dict]) -> None:
+    """Skill §2B.7: near-zero day then a day >= double -> possible late reading; spread the pair evenly."""
+    min_delta = METERS.get(meter_id, {}).get("min_delta", 0)
+    i = 0
+    while i < len(cal) - 1:
+        a, b = cal[i], cal[i + 1]
+        if (a.flag == "" and b.flag == "" and a.value is not None and b.value is not None and b.value > 0
+                and a.value <= LATE_NEAR_ZERO * b.value and b.value >= 2 * a.value and b.value >= min_delta):
+            avg = (a.value + b.value) / 2
+            issues.append({"type": "possible_late_reading", "meter": meter_id, "date": a.day.isoformat(),
+                           "detail": f"{a.day.isoformat()}: {a.value:g} then {b.day.isoformat()}: {b.value:g}; "
+                                     f"spread as {avg:g} per day (skill §2B.7, check the reading time)",
+                           "evidence_id": (b.evidence_ids or [None])[-1]})
+            for x in (a, b):
+                x.raw, x.value, x.flag = x.value, avg, "late_reading_averaged"
+            i += 2
+            continue
+        i += 1
 
 
 def _median_mad(vals: list[float]) -> tuple[float, float]:
@@ -120,7 +149,7 @@ def detect_spikes(cal: list[DayValue], meter_id: str) -> list[DayValue]:
     min_delta = METERS.get(meter_id, {}).get("min_delta", 0)
     clean_all = [dv.value for dv in cal if dv.value is not None and dv.flag == ""]
     for i, dv in enumerate(cal):
-        if dv.value is None or dv.flag:
+        if dv.value is None or dv.flag not in ("", "late_reading_averaged"):
             continue
         window = [x for x in cal[max(0, i - MAD_BASELINE_DAYS):i] if x.value is not None and x.flag == "" and not x.spike]
         vals = [x.value for x in window]

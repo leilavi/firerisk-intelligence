@@ -139,3 +139,22 @@ kept). Playwright desktop + tablet: no application errors.
 water-ingress incident), whole-building PA Watch. Equipment alerts: 8 (7 Warning, 1 Watch).
 
 **Not verified:** a real automatic Muse run with prompt v3; any real video analysis (no video yet).
+
+## 2026-10-28 10:31–10:55 — New sheet data, skill §2B.7, Asset register, survey-video import
+**Author (10:31):** survey-video content added to the operations sheet; run the fire-risk analysis.
+
+**Data:** Drive export of `Operations Data` (modified 2026-10-27 21:05 UTC+7): 845 meter rows (newest 28 Oct 06:22),
+new tab `Asset` (656 rows, 272 in scope). The incident tab's video columns hold no in-scope video. The `Asset` tab links
+7 MP4 files in `Reference_File` (Drive metadata checked: 91–648 MB, uploaded 27 Oct 16:04–16:16; recording time
+unknown). Previous snapshot kept in `snapshot/previous/`.
+
+**Finding and fix:** the main water meter rose to High because days with an unchanged reading (0) lowered the baseline
+and the next day's normal catch-up looked like a spike (16–27 Oct averaged 6.4 m³/day vs 5.9 in September). Skill
+§2B.7 ("near zero then double → check late reading") had not been ported; it is now (preliminary 10% cut-off).
+Result: Warning, driven by the 13–16 Oct rise (~156 m³ in 3 days); 11 possible late readings listed for verification.
+
+**Rule results on the new data:** fire-risk B1 High (unchanged; 4 linked equipment alerts), whole-building PA Watch.
+Equipment alerts: 7 Warning, 1 Watch; names now from the register (e.g. P-Th-Bi649 = UPS).
+
+**Not done:** no video analysed — the files are on Drive only; Claude's workspace cannot reach the Meta API and cannot
+download 2.7 GB through the connector. Tests: 92 passed.

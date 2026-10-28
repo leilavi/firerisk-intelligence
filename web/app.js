@@ -245,6 +245,7 @@ async function viewFire(id) {
   const s9 = `<h3 class="sub">Linked building equipment alerts (${d.related_equipment.length})</h3>
     ${d.related_equipment.length ? `<p class="muted small" style="margin:0 0 6px">Separate maintenance alerts with their own level. Linked only for the reason shown; their level is not changed by this alert.</p>${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span><b>${esc(x.asset_name || x.asset_id || x.alert_id)}</b> · ${esc(x.headline)}<br><span class="small muted">Why linked: ${x.reasons.map(esc).join("; ")}</span></span></a>`).join("")}` : '<p class="muted small">No equipment alert is linked to this fire-risk alert.</p>'}
     <h3 class="sub" style="margin-top:14px">Survey videos of this zone (${d.survey_videos.length})</h3>${videoContext(d.survey_videos)}
+    ${d.survey_video_refs?.length ? `<p class="small" style="margin:6px 0 0">${org("source")}${d.survey_video_refs.length} more video(s) of this zone are linked in the asset register but not on this computer yet: ${d.survey_video_refs.map((r) => esc(r.drive?.title || r.drive_file_id)).join(", ")}. <a href="#/media">Import them</a>.</p>` : ""}
     ${d.maintenance_history.length ? `<details><summary>Repair and inspection history of the equipment (${d.maintenance_history.length})</summary><div class="scroll"><table class="tbl"><tbody>${d.maintenance_history.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${esc(e.title)}<div class="muted small">${esc(KIND[e.kind] || e.kind)} · ${esc(e.asset_id)}</div></td><td class="small">${esc(e.status || "")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}
     ${strong.length ? `<details><summary>${strong.length} links between records</summary><p class="muted small">Records worth checking together. A link is not proof of cause.</p><div class="scroll"><table class="tbl"><tbody>${strong.slice(0, 40).map((l) => `<tr><td>${chip(l.a)}</td><td>${chip(l.b)}</td><td class="small">${l.reasons.map(esc).join("<br>")}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
 
@@ -285,7 +286,7 @@ async function viewFire(id) {
 }
 
 function videoContext(vs) {
-  if (!vs.length) return '<p class="muted small">No survey video for this zone yet. <a href="#/media">Add one</a>.</p>';
+  if (!vs.length) return '<p class="muted small">No survey video of this zone on this computer yet.</p>';
   return vs.map((v) => `<div class="vctx"><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="muted small">${esc([v.floor, v.area, v.room].filter(Boolean).join(" / "))}</span>
     <div class="insuff small" style="margin:6px 0">${esc(v.recording_note)}</div>
     ${v.observations.length ? `<p class="small muted" style="margin:0">${org("ai", "AI · video")}Observations by Muse Spark from the video (${dt(v.analysis_created_at)}). Approximate times; check the clip.</p><ul class="small">${v.observations.slice(0, 6).map((o) => `<li><a href="#/video/${esc(v.video_id)}?t=${o.time_start_s}">${fmtTime(o.time_start_s)}</a> ${esc(o.category.replace(/_/g, " "))}: ${esc(o.observation)} <span class="muted">(${esc(o.visible_certainty.replace(/_/g, " "))})</span></li>`).join("")}</ul>`
@@ -365,6 +366,15 @@ async function viewMedia() {
   $("#app").innerHTML = `<h1>Photos &amp; survey videos</h1>
     <section class="panel"><h2>Building survey videos</h2>
       <p class="muted small">A survey video shows what was visible <b>when it was recorded</b>. It is context for fire-risk alerts of the same zone: it never changes a rule level, does not prove that equipment works today, and does not confirm a hazard. Muse Spark can review an .mp4 video through the Meta video API when you press Analyse; nothing is sent automatically.</p>
+      <h3 class="sub" style="margin-top:14px">Videos linked in the asset register (${vids.referenced.length})</h3>
+      ${vids.referenced.length ? `<p class="small muted" style="margin:0 0 8px">${org("source")}From the <b>Asset</b> tab, column Reference_File. To bring them in: download the files from Google Drive, put them in <b>${esc(vids.inbox)}</b>, then press Import. Files are matched by name; zone and equipment come from the register.</p>
+        <div class="scroll"><table class="tbl"><thead><tr><th>File (Drive)</th><th>Linked equipment</th><th>Zone</th><th>Size</th><th>On this computer</th></tr></thead><tbody>
+        ${vids.referenced.map((r) => `<tr><td><b>${esc(r.drive?.title || r.drive_file_id)}</b><div class="muted small">uploaded to Drive ${dt(r.drive?.drive_created_time)} (not the recording time)</div></td>
+          <td class="small">${r.equipment.map((e) => `${esc(e.name || "")} <span class="muted">${esc(e.equipment_id)}</span>`).join("<br>")}</td>
+          <td class="small">${esc(r.zone_label)}${r.zone ? "" : `<div class="muted">${esc(r.zone_source)}</div>`}</td><td class="num small">${r.drive?.size ? (r.drive.size / 1048576).toFixed(0) + " MB" : "—"}</td>
+          <td class="small">${r.on_this_computer ? `<a href="#/video/${esc(r.video_id)}">yes · ${esc(VSTAT[r.analysis_status] || r.analysis_status)}</a>` : '<span class="muted">not yet</span>'}</td></tr>`).join("")}</tbody></table></div>
+        <p style="margin:10px 0 0"><button class="btn primary" id="vimport">Import from folder</button> <span class="small muted" id="vimsg"></span></p>` : '<p class="muted small">No video link in the asset register.</p>'}
+      <h3 class="sub" style="margin-top:18px">Or upload a video file</h3>
       <form id="vform" class="vform">
         <label>Video file (.mp4) <input type="file" id="vfile" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" required></label>
         <label>Zone <select id="vzone"><option value="">Not assigned</option>${zoneOpts}</select></label>
@@ -384,6 +394,15 @@ async function viewMedia() {
     <section class="panel" style="margin-top:16px"><h2>Photos referenced in the logs</h2>
       <div class="counts"><div class="count"><span class="n num">${m.summary.references}</span><span class="l">photo references</span></div><div class="count"><span class="n num">${m.summary.available}</span><span class="l">files available here</span></div></div>
       <p class="small muted">The logs point to photos, but the files are not connected yet, so nothing is analysed or shown. Files placed in <b>${esc(m.summary.media_dir)}</b> are matched to their records by name.</p></section>`;
+  const imp = $("#vimport");
+  if (imp) imp.onclick = async () => {
+    imp.disabled = true; $("#vimsg").textContent = "Checking the folder… large files take a while to fingerprint.";
+    try {
+      const r = await api("/api/videos/import", { method: "POST" });
+      $("#vimsg").textContent = `${r.imported.length} imported, ${r.skipped.length} skipped${r.skipped.length ? ": " + r.skipped.map((x) => `${x.file} (${x.reason})`).join("; ") : ""}.`;
+      if (r.imported.length) setTimeout(viewMedia, 1200); else imp.disabled = false;
+    } catch (e) { $("#vimsg").textContent = "Import failed: " + e.message; imp.disabled = false; }
+  };
   $("#vform").onsubmit = async (ev) => {
     ev.preventDefault();
     const file = $("#vfile").files[0]; if (!file) return;
@@ -436,7 +455,8 @@ async function viewVideo(id, t) {
       <label class="small">Recorded on <input type="datetime-local" id="mw" value="${esc((v.recorded_at || "").slice(0, 16))}"></label>
       <label class="small">Note <input id="mn" value="${esc(v.note || "")}"></label>
       <button class="btn" id="msave">Save</button><span class="small muted" id="mmsg"></span></div>
-      <p class="small muted">Uploaded ${dt(v.uploaded_at)} · recording date ${v.recorded_at ? "entered by a person" : "unknown"}.</p></section></aside></div>`;
+      <p class="small muted">Added ${dt(v.uploaded_at)} · recording date ${v.recorded_at_source === "mp4_metadata" ? "from the file's own metadata (camera clock)" : v.recorded_at ? "entered by a person" : "unknown"}.</p></section>
+      ${v.equipment?.length ? `<section class="q"><h2>Linked equipment</h2>${org("source")}<span class="small muted">asset register</span>${v.equipment.map((e) => `<div class="small" style="padding:4px 0"><b>${esc(e.name || e.equipment_id)}</b> <span class="muted">${esc(e.equipment_id)}${e.floor ? " · " + esc(e.floor) : ""}</span></div>`).join("")}</section>` : ""}</aside></div>`;
   const player = $("#player");
   const jump = (s) => { player.currentTime = s; player.play().catch(() => {}); player.scrollIntoView({ behavior: "smooth", block: "center" }); };
   $$("[data-t]").forEach((b) => (b.onclick = () => jump(+b.dataset.t)));
@@ -499,9 +519,9 @@ function trendChart(t) {
     const inEp = p.day >= t.start && p.day <= (t.end || t.start);
     if (inEp) gaps += `<rect x="${x(i) - 9}" y="${P - 8}" width="18" height="${H - P * 2 + 8}" fill="#FFE9D6" opacity=".7"/>`;
     if (p.value == null || p.flag === "negative_excluded") { pen = false; gaps += `<rect x="${x(i) - 3}" y="${P}" width="6" height="${H - P * 2}" fill="#DDE4EB"><title>${esc(p.day)}: ${esc(p.flag || "missing")}</title></rect>`; return; }
-    line += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`; pen = p.flag !== "averaged_gap";
+    line += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`; pen = !["averaged_gap", "late_reading_averaged"].includes(p.flag);
     marks += p.spike ? `<circle cx="${x(i)}" cy="${y(p.value)}" r="6" fill="#fff" stroke="#EE7417" stroke-width="2.5"><title>${esc(p.day)}: ${fmtNum(p.value)} (${p.spike})</title></circle>`
-      : `<circle cx="${x(i)}" cy="${y(p.value)}" r="2.6" fill="#3B6FB6"><title>${esc(p.day)}: ${fmtNum(p.value)}</title></circle>`;
+      : `<circle cx="${x(i)}" cy="${y(p.value)}" r="2.6" fill="#3B6FB6"><title>${esc(p.day)}: ${fmtNum(p.value)}${p.flag === "late_reading_averaged" ? ` (spread; recorded ${fmtNum(p.raw)} — possible late reading)` : ""}</title></circle>`;
     if (p.spike) labels += `<text x="${x(i)}" y="${y(p.value) - 11}" font-size="11" text-anchor="middle" font-weight="700" fill="#8A3A00">${fmtNum(p.value)}</text>`;
   });
   const med = t.median != null ? `<line x1="${P}" x2="${W - P}" y1="${y(t.median)}" y2="${y(t.median)}" stroke="#4F5D6E" stroke-dasharray="5 4"/><text x="${W - P}" y="${y(t.median) - 5}" font-size="10" text-anchor="end" fill="#4F5D6E">median ${fmtNum(t.median)}</text>` : "";

@@ -33,7 +33,7 @@ from .config import ASSETS, BUILDING_NAME, LOCAL_TZ, METERS, METER_FEEDS, SEVERI
 from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
-from .video import OLD_VIDEO_DAYS, VideoStore, extract_frame
+from .video import INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
 from .sources.drive_sync import SyncConfig, SyncError, sync_from_drive
 from .store import VERIFICATION_STATES, Store
 
@@ -149,7 +149,12 @@ def _alert(alert_id: str):
 
 
 def _asset_name(a: str | None) -> str | None:
-    return (ASSETS.get(a or "") or METERS.get(a or "") or {}).get("name") if a else None
+    if not a:
+        return None
+    name = (ASSETS.get(a) or METERS.get(a) or {}).get("name")
+    if not name and state.result is not None:        # fall back to the asset register (Asset tab)
+        name = (state.result.asset_register.get(a) or {}).get("name")
+    return name
 
 
 def _ev(e) -> dict:
@@ -410,6 +415,8 @@ def alert_detail(alert_id: str):
             "investigations": state.store.investigations(alert_id),
             "media": [m for m in media_inventory(res)["items"] if m["evidence_id"] in ev_ids],
             "survey_videos": state.videos.for_zone(a.zone),
+            "survey_video_refs": [r for r in state.videos.reference_status(res.video_refs)
+                                  if r.get("zone") == a.zone and not r["on_this_computer"]],
             "data_quality": [q for q in res.data_quality if q.get("evidence_id") in ev_ids]}
 
 
@@ -610,8 +617,19 @@ async def upload_video(request: Request, filename: str, zone: str | None = None,
 
 @app.get("/api/videos")
 def list_videos():
+    res = state.get()
     return {"videos": state.videos.list(), "old_after_days": OLD_VIDEO_DAYS, "zones": ZONE_LABELS,
-            "ai_configured": MuseConfig.load().configured}
+            "ai_configured": MuseConfig.load().configured, "inbox": str(INBOX_DIR),
+            "referenced": state.videos.reference_status(res.video_refs)}
+
+
+@app.post("/api/videos/import")
+def import_videos():
+    """Register the video files placed in the inbox folder (matched to the asset-register references)."""
+    res = state.get()
+    out = state.videos.import_folder(INBOX_DIR, res.video_refs)
+    state.attach_video_context(res)
+    return out
 
 
 def _video(video_id: str) -> dict:

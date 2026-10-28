@@ -1,6 +1,6 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-27 18:40 (UTC+7)**. A row is "Implemented" only with verification evidence.
+Status as of **2026-10-28 10:50 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
 Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
 **Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
@@ -48,6 +48,9 @@ add real photos/video when provided.
 | Investigation prompt v3: situation, scenarios with supporting and weakening evidence, limitations, linked equipment alerts and survey-video context | Implemented, **not yet run live** | New | Run once live and review | offline tests |
 | Dashboard 0.4: Overview with two sections, fire-risk list + 10-section detail, equipment-alert list + detail, origin labels SOURCE / DERIVED / RULE / AI / TEST | Implemented | New | Live check on PC | Playwright desktop 1440 + tablet 820 on a copy of the real snapshot, no app errors |
 | Survey videos: upload, zone/floor/area/room/recording time, player with jump-to-time, still frames (ffmpeg), Muse Spark video review via Files API + Responses API, validated observations as dated context of fire-risk alerts | Implemented, **no real video, never sent to Meta** | New | Run on the first real survey video | `test_video.py` (8 tests, TEST files, fake Meta API); browser upload of a generated TEST pattern in a scratch database |
+| Possible late reading check (skill §2B.7) | Implemented (was missing) | Modified (skill §2B.7) | — | 2 tests; real: 13 pairs, main water meter High → Warning |
+| Asset register tab + survey-video references (`sources/register.py`) | Implemented | New | — | `test_asset_register_tab_is_optional_and_read`; real: 272 items, 7 video links (5 zoned B1, 2 unassigned) |
+| Survey-video folder import + MP4 header time/duration | Implemented; **real videos not yet on the computer, none analysed** | New | Author downloads the 7 videos and presses Import | `test_folder_import_matches_register_reference`, `test_mp4_header_gives_creation_time_and_duration` |
 | Media inventory (photo references found in logs; local files matched by name) | Implemented | New | Connect the real photo/video folder | 1,006 photo references found; 0 files available yet |
 | Video frame sampling (ffmpeg) | Implemented; tested on a generated TEST pattern | New | Test on the first survey video | `test_frame_extraction_from_test_pattern` |
 | Muse Spark image description (`media.describe_image`) | Implemented, **not run** | New | Run on first real photos | Request format from official docs |

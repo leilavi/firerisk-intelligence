@@ -152,3 +152,42 @@ def test_meter_severity_mapping_skill_5a8():
     assert meter_signals([e], now)[0].severity == "high"
     e, now = _episode_ev("P-BG.TTC226", "Insufficient data")
     assert meter_signals([e], now) == []
+
+
+def test_late_reading_pair_is_spread_and_listed_skill_2b7():
+    """Skill §2B.7 example pattern: near-zero day then a much larger day -> possible late reading."""
+    from datetime import datetime, timedelta
+    from firerisk.config import LOCAL_TZ
+    from firerisk.models import Evidence
+    from firerisk.rules.meters import daily_consumption, detect_spikes
+    t0 = datetime(2026, 9, 1, 6, 15, tzinfo=LOCAL_TZ)
+    vals, total = [], 0
+    for d in range(40):                      # TEST: 6 m³/day, but day 30 copied (0) and day 31 catches up (12)
+        inc = 0 if d == 30 else 12 if d == 31 else 6
+        total += inc
+        vals.append(total)
+    rs = [Evidence(f"r{d}", "meter_reading", t0 + timedelta(days=d), "P-BG.TTC172", None, "TEST", "", None, None,
+                   values={"reading": v}) for d, v in enumerate(vals)]
+    cal, issues = daily_consumption(rs, "P-BG.TTC172")
+    detect_spikes(cal, "P-BG.TTC172")
+    pair = [x for x in cal if x.flag == "late_reading_averaged"]
+    assert [x.raw for x in pair] == [0, 12] and all(x.value == 6 for x in pair)
+    assert not any(x.spike for x in cal)                         # no false spike from the catch-up day
+    assert [i["type"] for i in issues] == ["possible_late_reading"]
+
+
+def test_real_spike_after_zero_day_is_still_detected():
+    from datetime import datetime, timedelta
+    from firerisk.config import LOCAL_TZ
+    from firerisk.models import Evidence
+    from firerisk.rules.meters import daily_consumption, detect_spikes
+    t0 = datetime(2026, 9, 1, 6, 15, tzinfo=LOCAL_TZ)
+    total, vals = 0, []
+    for d in range(40):                      # TEST: 0 then 200 -> spread 100/day is still far above 6/day
+        total += 0 if d == 30 else 200 if d == 31 else 6
+        vals.append(total)
+    rs = [Evidence(f"r{d}", "meter_reading", t0 + timedelta(days=d), "P-BG.TTC172", None, "TEST", "", None, None,
+                   values={"reading": v}) for d, v in enumerate(vals)]
+    cal, _ = daily_consumption(rs, "P-BG.TTC172")
+    detect_spikes(cal, "P-BG.TTC172")
+    assert [x.spike for x in cal if x.flag == "late_reading_averaged"] == ["up", "up"]

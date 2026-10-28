@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — 2026-10-28
+- Skill §2B.7 ported (was missing): near-zero day followed by a day ≥ double → "possible late reading", listed for
+  verification and spread over the two days. Real effect: main water meter High → Warning (11 such pairs; the remaining
+  finding is the 13–16 Oct rise of about 156 m³ in 3 days).
+- New optional source: the `Asset` tab (equipment register, 272 in-scope rows) — display names, floor/zone, and the
+  survey-video links in `Reference_File` (7 videos, linked to equipment; zone from the register's Floor, never guessed).
+- Survey-video import from a local folder: matched to the register by file name or size; recording time read from the
+  MP4 header when present (labelled "camera clock, not verified"); longer network timeout for video analysis.
+- 92 tests.
+
 ## 0.4.0 — 2026-10-27
 - Two independent alert systems: building equipment alerts (PORTED skill rules EQ1–EQ4) and fire-risk alerts (NEW),
   linked only with stated reasons; meter findings are equipment alerts, no longer fire-risk signals.

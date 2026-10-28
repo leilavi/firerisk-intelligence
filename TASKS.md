@@ -3,7 +3,8 @@
 ## Next
 - [x] Author: install + dashboard + first live Muse investigation (2026-10-27 14:19).
 - [x] Claude: read investigation from PC DB, saved evidence (public summary / private full), added opaque evidence-ID aliases (prompt v2).
-- [ ] Author: provide daily guard photos (Drive folder) and building survey videos (.mp4; upload on Photos & video, with zone and recording date).
+- [ ] Author: download the 7 survey videos from Drive into `data/private/media/survey_inbox/`, press Import, set the zone of the 2 unassigned ones, then Analyse (start with the smallest, Electrical Panel - B1, 91 MB).
+- [ ] Author: provide daily guard photos (Drive folder).
 - [ ] Author: open the new dashboard on the PC; first automatic Muse run (prompt v3) happens at start-up — Claude reviews it from the PC database.
 - [x] Claude: two alert systems, automatic Muse analysis, survey-video architecture (0.4.0).
 - [ ] Claude: SAM 3.1 — read official output-format docs, implement and test on one real image.

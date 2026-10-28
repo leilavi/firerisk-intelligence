@@ -73,6 +73,12 @@
 * No survey video → every function works; the alert shows "No survey video for this zone yet".
 * Newest record older than the source's expected cadence → `stale_source`.
 
+## Asset register and survey-video references (2026-10-28)
+`sources/register.py` reads the optional `Asset` tab: equipment names, floor → zone, status, next due date (context and
+display only), and Drive links in `Reference_File` as survey-video references. File title and size come from Drive
+metadata recorded in the private manifest (`video_catalog`). Videos are brought to the computer by putting the
+downloaded files in `data/private/media/survey_inbox/` and pressing Import; they are matched by name or size.
+
 ## Evidence fingerprint (when Muse Spark runs again)
 `ai/investigation.fingerprint` hashes: prompt version, rule level, each finding record (ID, status, open/closed,
 time, meter label, ongoing), what the context records SAY (kind, equipment, status, pass/fault — not their IDs, so

@@ -63,6 +63,12 @@ Low = derived meter analysis only; Insufficient data = all records carry data-qu
 Data anomaly (meter pattern only) · Risk indicator (recorded faults, not confirmed) · Not enough data to confirm ·
 Confirmed — only when a person sets the verification status "Confirmed on site"; rules and AI never set it.
 
+## Possible late reading (PORTED, skill §2B.7 — added 2026-10-28)
+A day whose consumption is at most 10% of the next day's, with the next day at least double it (and ≥ the meter's
+minimum delta), is listed as "possible late reading" for verification. Like a gap (§2B.4), the two days are spread
+evenly (raw values kept). The averaged days are still checked for spikes but are not used in the baseline, so a real
+jump stays visible. The 10% cut-off is a preliminary reading of the skill's "gần 0".
+
 ## Meter rules (PORTED, skill Stage 2B and §5A) — `firerisk/rules/meters.py`
 Consumption day attribution, averaged gaps, excluded decreasing readings, 28-day median/MAD baseline
 (3 × MAD × 1.4826, or <50% / >150% of median, with per-meter minimum deltas), episodes, EVN-vs-MSB

@@ -99,8 +99,10 @@ Statuses (Vietnamese, as requested by the author): *Chưa phân tích AI · Đan
 phân tích AI · Phân tích AI thất bại · Đang sử dụng giải thích theo quy tắc*. Every cited evidence ID is checked;
 unknown IDs are removed and reported. If the AI fails, the alert, its level and the rule-based explanation stay.
 
-## Survey videos (prepared, no real video yet)
-Upload an .mp4 on **Photos & video**, assign zone/floor/area/room and the recording time. On request, Muse Spark
+## Survey videos
+Videos linked in the `Asset` tab (column `Reference_File`) are listed on **Photos & video**; download them from Drive into
+`data/private/media/survey_inbox/` and press **Import** (zone and equipment come from the register). An .mp4 can also
+be uploaded directly with zone/floor/area/room and the recording time. On request, Muse Spark
 reviews it through the Meta video API (Files API + Responses API `input_video`, per the official docs; uploaded copy
 expires in 1 hour and is deleted after the call). Observations show the time in the clip and are context for the
 zone's fire-risk alerts only: a video shows the situation when it was recorded, never the current state. Not yet run
@@ -118,7 +120,7 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **AI** (Mu
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and source status.
 
 ## Tests
-`python -m pytest -q` — 87 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
+`python -m pytest -q` — 92 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
 on **test fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals), API, offline AI tests
 (fake HTTP transport, clearly not the real API), Google Drive sync against a local mock of the Apps Script web app
 (redirect, wrong token, web page instead of data, invalid or missing file), the two alert systems and automatic AI

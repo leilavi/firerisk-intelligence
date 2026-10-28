@@ -96,7 +96,9 @@ def _days(a: datetime, b: datetime) -> float:
     return abs((a - b).total_seconds()) / 86400
 
 
-def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], now: datetime) -> list[EquipmentAlert]:
+def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], now: datetime,
+                           register: dict | None = None) -> list[EquipmentAlert]:
+    register = register or {}
     recs = [e for e in evidence if e.kind in ("asset_service", "incident") and "test_record" not in e.flags]
     groups: dict[str, list[Evidence]] = defaultdict(list)
     for e in recs:
@@ -143,29 +145,34 @@ def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], n
         if not rules:
             continue
         ev_ids = list(dict.fromkeys(i for r in rules for i in r["evidence_ids"]))
-        alerts.append(_make(key, asset, items, crit, rules, ev_ids, open_, evidence, now))
+        alerts.append(_make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, register=register))
 
     for s in meter_sigs:   # R8 meter signals = equipment alerts for meters (skill §5A.8 levels unchanged)
         items = [e for e in evidence if e.evidence_id in set(s.evidence_ids)]
         rules = [{"rule": "EQ4_METER_" + s.rule_id, "severity": s.severity, "basis": s.basis + " (skill §5A.8)",
                   "evidence_ids": list(s.evidence_ids)}]
         a = _make(s.asset_id, s.asset_id, items, _critical(s.asset_id, items), rules, list(s.evidence_ids),
-                  [e for e in items if e.values.get("ongoing")], evidence, now, meter_signal=s)
+                  [e for e in items if e.values.get("ongoing")], evidence, now, meter_signal=s, register=register)
         alerts.append(a)
     alerts.sort(key=lambda a: (-_rank(a.severity), -(a.last_seen.timestamp() if a.last_seen else 0)))
     return alerts
 
 
-def _make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, meter_signal: Signal | None = None):
+def _make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, meter_signal: Signal | None = None,
+          register: dict | None = None):
     sev = max((r["severity"] for r in rules), key=_rank)
     index = {e.evidence_id: e for e in evidence}
     found = [index[i] for i in ev_ids if i in index]
     times = [e.timestamp for e in found if e.timestamp]
     name = (ASSETS.get(asset or "") or METERS.get(asset or "") or {}).get("name") if asset else None
+    reg = (register or {}).get(asset or "")
+    if not name and reg and reg.get("name"):      # name from the asset register (Asset tab)
+        name = reg["name"]
     if not name:   # equipment not in the configured list: show its ID and the record's own short text
         short = (found[0].title[:40] if found else "")
         name = f"{asset} ({short})" if asset and short else asset or short or key
-    zone = next((e.zone for e in found if e.zone), None) or (ASSETS.get(asset or "") or METERS.get(asset or "") or {}).get("zone")
+    zone = (next((e.zone for e in found if e.zone), None) or (ASSETS.get(asset or "") or METERS.get(asset or "") or {}).get("zone")
+            or (reg or {}).get("zone"))
     kind = "meter" if meter_signal else "equipment"
     alert_id = f"EQ-{asset}" if asset else f"EQ-{key.split(':', 1)[1]}"
     if meter_signal:
