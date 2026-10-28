@@ -71,7 +71,7 @@ def _links(f: dict, v: dict, res, is_active) -> list[dict]:
     return out
 
 
-def collect(videos, res, store, is_active) -> dict:
+def collect(videos, res, store, is_active, localizer=None) -> dict:
     """All AI video findings (latest successful v2 analysis of each video), their links, status and coverage."""
     findings, per_video = [], []
     for v in videos.list():
@@ -92,7 +92,7 @@ def collect(videos, res, store, is_active) -> dict:
                           "analysed_at": (v2 or latest_ok or {}).get("created_at"), "model": (v2 or latest_ok or {}).get("model"),
                           "method": (v2 or {}).get("method"), "areas": (v2 or {}).get("areas", []),
                           "coverage": (v2 or {}).get("coverage") or {}, "findings_count": len((v2 or {}).get("findings", []))})
-        for f in (v2 or {}).get("findings", []):
+        for idx, f in enumerate((v2 or {}).get("findings", [])):
             fid = finding_id(v["video_id"], f)
             st = (store.current_status(fid) or {}).get("status", "new")
             links = _links(f, v, res, is_active)
@@ -107,7 +107,9 @@ def collect(videos, res, store, is_active) -> dict:
                 "time_end_s": f.get("time_end_s"), "recorded_at": v.get("recorded_at"), "analysed_at": v2.get("created_at"),
                 "status": st, "status_label": STATUS_LABEL.get(st, st), "links": links, "linked": bool(links),
                 "verified": st in ("confirmed", "resolved"), "origin": "ai_vision",
-                "official_level": None})
+                "official_level": None, "analysis_id": v2.get("id"), "item_index": idx,
+                # SAM 3.1 visual localization: supporting evidence only (never a level or a verification)
+                "localization": localizer.item_result(v2["id"], "finding", idx) if localizer else None})
     open_ = [f for f in findings if f["status"] not in ("resolved", "false_alarm")]
     order = lambda f: (CAT_ORDER.index(f["category"]), f["certainty"] != "clearly_visible", f["linked"])
     counts = {"total": len(findings), "new": sum(1 for f in findings if f["status"] == "new"),

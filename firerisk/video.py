@@ -50,6 +50,8 @@ ANALYSABLE_MIME = {"video/mp4"}            # docs/video-understanding: supported
 ACCEPTED_EXT = {".mp4": "video/mp4", ".mov": "video/quicktime", ".m4v": "video/mp4"}
 FILE_EXPIRY_SECONDS = 3600                 # uploaded copy at Meta expires after 1 h (minimum allowed)
 VIDEO_PROMPT_VERSION = "survey-video-v2"   # v2: full fire-safety review (A-G), area assessments, findings, coverage
+VIDEO_SCHEMA_REV = "v2.1"                  # v2.1 (2026-10-28): + segment_phrase per finding/observation (SAM 3.1).
+                                           # Same prompt version on purpose: adding the field must not re-analyse videos.
 OLD_VIDEO_DAYS = 30                        # display hint only: "recorded more than 30 days ago"
 VIDEO_TIMEOUT_S = 900                      # per network wait during video upload / analysis
 INBOX_DIR = Path(os.environ.get("FIRERISK_VIDEO_INBOX", ROOT / "data" / "private" / "media" / "survey_inbox"))
@@ -99,13 +101,13 @@ VIDEO_SCHEMA = {
             "type": "object", "additionalProperties": False,
             "required": ["title", "category", "time_start_s", "time_end_s", "area_label", "what_is_visible",
                          "fire_safety_link", "potential_consequence_if_confirmed", "certainty", "recommended_check",
-                         "records_to_collect"],
+                         "records_to_collect", "segment_phrase"],
             "properties": {
                 "title": _S, "category": {"type": "string", "enum": FINDING_CATS}, "time_start_s": _T, "time_end_s": _T,
                 "area_label": _S, "what_is_visible": _S, "fire_safety_link": _S,
                 "potential_consequence_if_confirmed": _S,
                 "certainty": {"type": "string", "enum": ["clearly_visible", "possibly_visible"]},
-                "recommended_check": _S, "records_to_collect": _S}}},
+                "recommended_check": _S, "records_to_collect": _S, "segment_phrase": _S}}},
         "coverage": {
             "type": "object", "additionalProperties": False,
             "required": ["categories_assessed", "categories_not_assessable", "needs_more_footage", "image_limitations"],
@@ -117,14 +119,14 @@ VIDEO_SCHEMA = {
         "observations": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
             "required": ["time_start_s", "time_end_s", "location_in_video", "category", "observation",
-                         "visible_certainty", "fire_safety_relevance"],
+                         "visible_certainty", "fire_safety_relevance", "segment_phrase"],
             "properties": {
                 "time_start_s": {"type": "number"}, "time_end_s": {"type": "number"},
                 "location_in_video": {"type": "string"},
                 "category": {"type": "string", "enum": CATEGORIES},
                 "observation": {"type": "string"},
                 "visible_certainty": {"type": "string", "enum": ["clearly_visible", "possibly_visible"]},
-                "fire_safety_relevance": {"type": "string"}}}},
+                "fire_safety_relevance": {"type": "string"}, "segment_phrase": _S}}},
         "not_determinable": {"type": "array", "items": {"type": "string"}},
         "limitations": {"type": "string"},
     },
@@ -159,6 +161,10 @@ findings: notable items worth checking on site, each with exact times from the v
   matters for fire safety, the possible consequence IF confirmed (conditional wording), certainty, the recommended
   check and the records to collect (e.g. maintenance record, test report, floor plan). Do not invent rooms, counts,
   readings or times. No findings is a valid answer.
+segment_phrase (every finding and observation): ONE short English noun phrase, 1-3 lower-case words, naming the single
+  visible physical object the item is about, for a segmentation model (e.g. "fire extinguisher", "electrical panel",
+  "smoke detector", "cable tray", "cardboard box"). No sentence, no condition words, no location, no list, never
+  people. Use "" when the item is about something absent or not visible, a whole area, or no specific object.
 coverage: which groups the footage allowed you to assess, which it did not, what more footage is needed, and image
   limitations (blur, angle, lighting, speed).
 Rules: (1) Do not guess what is outside the frame or what happened before or after the recording.
@@ -347,6 +353,7 @@ class VideoStore:
             raise KeyError(video_id)
         now = datetime.now(LOCAL_TZ)
         rec = {"video_id": video_id, "created_at": now.isoformat(timespec="seconds"), "prompt_version": VIDEO_PROMPT_VERSION,
+               "schema_rev": VIDEO_SCHEMA_REV,
                "model_requested": client.config.model, "recorded_at": v.get("recorded_at"), "zone": v.get("zone"),
                "trigger": trigger}
         with self.lock:

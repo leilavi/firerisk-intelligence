@@ -37,6 +37,8 @@ from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
 from .drive_videos import DriveVideoSync, drive_video_items, video_settings
+from .localize import FRAMES_DIR, Localizer, sam_settings
+from .sam import SamClient
 from .video import VIDEO_PROMPT_VERSION, INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
 from .sources.drive_sync import SyncConfig, SyncError, sync_from_drive
 from .store import VERIFICATION_STATES, Store
@@ -61,6 +63,7 @@ class State:
         self.videos = VideoStore(DB_PATH)
         self.drive_videos = DriveVideoSync(self.videos, INBOX_DIR)
         self.translator = Translator(DB_PATH)
+        self.localizer = Localizer(DB_PATH, self.videos)
 
     def analyse(self) -> AnalysisResult:
         with self.lock:
@@ -106,6 +109,17 @@ class State:
         r = self.get()
         self.attach_video_context(r)
         self.ai.schedule(r)
+        self.start_localization()
+
+    def start_localization(self) -> bool:
+        """SAM 3.1 visual localization of the items of new Muse Spark video analyses (background, daily limit).
+        Never touches alerts or levels; a failure only leaves items 'not checked'."""
+        if not MuseConfig.load().configured:
+            return False
+        try:
+            return self.localizer.start(SamClient, self.ai.client_factory, scope="new")
+        except Exception:
+            return False
 
     def auto_analyse_videos(self) -> list[dict]:
         """Automatic Muse Spark review of new survey videos: one at a time, one attempt per video, daily limit."""
@@ -1212,7 +1226,7 @@ def analyse_video_endpoint(video_id: str):
 def video_findings():
     """AI video findings (Muse Captain survey-video review v2), separate from rule-based alerts, plus coverage."""
     from .video_findings import collect
-    out = collect(state.videos, state.get(), state.store, _is_active)
+    out = collect(state.videos, state.get(), state.store, _is_active, localizer=state.localizer)
     for f in out["findings"]:
         for k in ("title", "what_is_visible", "fire_safety_link", "potential_consequence_if_confirmed",
                   "recommended_check", "records_to_collect", "area_label"):
@@ -1233,6 +1247,33 @@ def video_finding_status(finding_id: str, body: StatusIn):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     return state.store.current_status(finding_id)
+
+
+@app.get("/api/localization")
+def localization_status():
+    """SAM 3.1 visual localization: background state, daily limit and item status counts."""
+    cfg = sam_settings()
+    return {"status": state.localizer.status, "counts": state.localizer.counts(), "daily_limit": cfg["daily_limit"],
+            "requests_today": state.localizer.requests_today(), "auto": cfg["auto"],
+            "backlog_boundary_analysis_id": state.localizer.auto_boundary(), "model": "sam-3.1"}
+
+
+@app.get("/api/localization/{analysis_id}/{kind}/{index}")
+def localization_item(analysis_id: int, kind: str, index: int):
+    if kind not in ("finding", "observation"):
+        raise HTTPException(404, "unknown item kind")
+    return state.localizer.item_result(analysis_id, kind, index)
+
+
+@app.get("/api/frames/{folder}/{name}")
+def localization_frame(folder: str, name: str):
+    """Private still frame extracted for localization (served only by this local dashboard)."""
+    if not re.fullmatch(r"[0-9a-f]{16}", folder) or not re.fullmatch(r"t\d{6}\.jpg", name):
+        raise HTTPException(404, "not found")
+    p = FRAMES_DIR / folder / name
+    if not p.exists():
+        raise HTTPException(404, "frame not available")
+    return FileResponse(p, media_type="image/jpeg")
 
 
 @app.get("/api/zones")

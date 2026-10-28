@@ -1,0 +1,133 @@
+{
+  "check": "sam_client_live",
+  "run_at_utc": "2026-10-28T13:36:09+00:00",
+  "client": "firerisk/sam.py SamClient",
+  "phrase": "push button",
+  "video": "VID-20261028-114134-4fa5.mp4",
+  "frame_time_s": 7.85,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "result": "LOCATED",
+  "model_returned": "sam-3.1",
+  "request_seconds": 2.08,
+  "images_billed": 1,
+  "store_false_sent": true,
+  "store_false_accepted": true,
+  "parse_complete": true,
+  "diagnostics": [],
+  "frame_size_in_answer": {
+    "0": [
+      1280,
+      720
+    ]
+  },
+  "max_confidence": 0.6521739363670349,
+  "objects": [
+    {
+      "object_id": "0",
+      "box": {
+        "x1": 1045,
+        "y1": 124,
+        "x2": 1203,
+        "y2": 265,
+        "w": 158,
+        "h": 141
+      },
+      "confidence": 0.6521739363670349,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "1",
+      "box": {
+        "x1": 394,
+        "y1": 483,
+        "x2": 542,
+        "y2": 631,
+        "w": 148,
+        "h": 148
+      },
+      "confidence": 0.6404494643211365,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "2",
+      "box": {
+        "x1": 1058,
+        "y1": 500,
+        "x2": 1221,
+        "y2": 640,
+        "w": 163,
+        "h": 140
+      },
+      "confidence": 0.6332378387451172,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "3",
+      "box": {
+        "x1": 33,
+        "y1": 478,
+        "x2": 195,
+        "y2": 672,
+        "w": 162,
+        "h": 194
+      },
+      "confidence": 0.5631399154663086,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "4",
+      "box": {
+        "x1": 64,
+        "y1": 89,
+        "x2": 216,
+        "y2": 250,
+        "w": 152,
+        "h": 161
+      },
+      "confidence": 0.6213017702102661,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "5",
+      "box": {
+        "x1": 410,
+        "y1": 89,
+        "x2": 550,
+        "y2": 252,
+        "w": 140,
+        "h": 163
+      },
+      "confidence": 0.6363636255264282,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "6",
+      "box": {
+        "x1": 736,
+        "y1": 487,
+        "x2": 885,
+        "y2": 632,
+        "w": 149,
+        "h": 145
+      },
+      "confidence": 0.6332378387451172,
+      "mask_decoded": true
+    },
+    {
+      "object_id": "7",
+      "box": {
+        "x1": 738,
+        "y1": 105,
+        "x2": 884,
+        "y2": 255,
+        "w": 146,
+        "h": 150
+      },
+      "confidence": 0.6289855241775513,
+      "mask_decoded": true
+    }
+  ]
+}

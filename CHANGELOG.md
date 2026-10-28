@@ -7,6 +7,18 @@
   400, `model_not_found` reported, `store: false` with a single documented fallback) and parser on Meta's official
   `meta-sam-parser` (empty = no match; malformed lines, boxes outside the frame and undecodable masks reported, never
   guessed; confidence never invented). `scripts/check_sam_client.py` for a live check. 33 offline tests.
+  Live client check PASS (`evidence/sam_client_check_20261028_203608.json`: 8 objects, `store:false` accepted).
+- Phase 3: `segment_phrase` added to the video review schema (schema_rev v2.1; prompt version stays survey-video-v2 so
+  no video is re-analysed). Separate tables `finding_phrases`, `video_finding_locations` (frame-level rows,
+  fingerprint-unique, answers reused for the same video bytes + phrase + frame time), `localizer_meta`. Phrases for
+  older items: Muse Spark text-only request (spark_derived), fallback fixed keyword map (category_map), else none.
+  `scripts/locate_video_findings.py` (`--dry-run` works on a copy of the database; cost from the official price
+  $2.50 / 1,000 images). Original Muse records are never modified.
+- Phase 4: 1-3 upright frames per item inside its time range (ffmpeg), private under data/private/media/frames/.
+  After every new Muse Spark video analysis the dashboard localizes its items in the background (daily limit
+  FIRERISK_SAM_DAILY_LIMIT, default 300; FIRERISK_AUTO_SAM=0 turns it off). Analyses that existed when SAM was
+  installed are the backlog for the script. New endpoints: /api/localization, /api/localization/{analysis}/{kind}/{i},
+  /api/frames/{folder}/{file}; /api/video-findings carries each finding's localization. 19 new tests.
 
 ## 0.9.0 — 2026-10-28
 - Overview: GROUND LEVEL removed from the Building Risk Map (geometry, line, label and gap); floors, markers, colours
