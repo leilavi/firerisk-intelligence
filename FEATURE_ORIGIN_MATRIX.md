@@ -1,6 +1,6 @@
 # Feature Origin Matrix
 
-Status as of **2026-10-28 11:15 (UTC+7)**. A row is "Implemented" only with verification evidence.
+Status as of **2026-10-28 15:10 (UTC+7)**. A row is "Implemented" only with verification evidence.
 
 Origin: **Existing** = in the pre-existing skill v2.2 (natural-language instructions only, no code) ·
 **Modified** = existing rule re-implemented in code during the Hackathon (marked `ORIGIN: PORTED` in code) ·
@@ -52,6 +52,9 @@ add real photos/video when provided.
 | Asset register tab + survey-video references (`sources/register.py`) | Implemented | New | — | `test_asset_register_tab_is_optional_and_read`; real: 272 items, 7 video links (5 zoned B1, 2 unassigned) |
 | Survey-video folder import + MP4 header time/duration | Implemented; **real videos not yet on the computer, none analysed** | New | Author downloads the 7 videos and presses Import | `test_folder_import_matches_register_reference`, `test_mp4_header_gives_creation_time_and_duration` |
 | Read the whole Drive data folder (listing incl. "Video Uploaded"); download every survey video with a read-only token; automatic Muse video review; observations → fire-risk alert context (`drive_videos.py`) | Implemented; **mock-tested; Drive connection not yet set up on the author's PC, so no real download or analysis yet** | New | Author deploys the Apps Script once | `test_drive_videos.py` (6), `test_folder_listing_is_stored_and_videos_catalogued` |
+| Survey videos read from Drive and analysed by Muse Spark (real run) | **Verified live**: 8 videos, 64 observations, remote copies deleted | New | — | PC database video_analyses 1–8 (2026-10-28 11:52–12:40) |
+| Building Risk Map overview, per-risk plain-English cards, six-section detail, gallery (`/api/building`, `web/*`) | Implemented | New | Live check on PC | `test_building_map.py`; Playwright on real data copy (desktop, tablet, phone) |
+| English display layer: glossary + Muse Spark translation cache (`ai/translate.py`) | Implemented; translation **not yet run live** | New | First run on PC | `test_translation_is_cached_pseudonymised_and_marked`, `test_api_shows_translation_next_to_original` |
 | Media inventory (photo references found in logs; local files matched by name) | Implemented | New | Connect the real photo/video folder | 1,006 photo references found; 0 files available yet |
 | Video frame sampling (ffmpeg) | Implemented; tested on a generated TEST pattern | New | Test on the first survey video | `test_frame_extraction_from_test_pattern` |
 | Muse Spark image description (`media.describe_image`) | Implemented, **not run** | New | Run on first real photos | Request format from official docs |

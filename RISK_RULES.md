@@ -90,3 +90,9 @@ equipment alert only.
 The rule level is authoritative. Muse Spark gives its own priority with a rationale, shown next to the rule level.
 Automatic analysis: every fire-risk alert at or above `FIRERISK_AI_MIN_LEVEL` (default Watch) whose evidence
 fingerprint has no successful analysis; at most `FIRERISK_AI_DAILY_LIMIT` (default 20) automatic calls per day.
+
+## Presentation rules (0.7, no change to alert logic)
+* Map counts risks (rule signals) of active fire-risk alerts per floor; highest severity wins; equipment alerts are
+  shown separately and never colour the map.
+* "Why it matters" texts are fixed plain-English explanations per pathway (`alert_fields.PLAIN_WHY`, preliminary,
+  cautious wording); they do not state that a fault or fire has happened.

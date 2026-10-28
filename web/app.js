@@ -5,7 +5,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const SEV = ["normal", "watch", "warning", "high", "emergency"];
-const LABEL = { normal: "Normal", watch: "Watch", warning: "Warning", high: "High risk", emergency: "Emergency", unknown: "Not enough data" };
+const LABEL = { normal: "Normal", watch: "Watch", warning: "Warning", high: "High Risk", emergency: "Emergency", unknown: "No Data Available" };
 const KIND = {
   incident: "Incident report", construction: "Works log", asset_service: "Repair / maintenance",
   inspection_check: "Daily checklist", generator_run: "Generator log", meter_episode: "Meter analysis",
@@ -46,17 +46,31 @@ async function loadStatus() {
   const sy = S.sync || {};
   const syncTxt = !sy.configured ? "" : sy.last && !sy.last.ok
     ? ` · <span style="color:var(--high-ink)">Drive update failed ${dt(sy.last.started_at)}</span>`
-    : sy.last_ok_at ? ` · Drive checked ${dt(sy.last_ok_at)}` : "";
-  $("#freshness").innerHTML = `Analysed <b>${dt(S.generated_at)}</b> · newest record ${ago(oldest)}${syncTxt}${issues ? ` · <span style="color:var(--high-ink)">${issues} source issue(s)</span>` : ""}`;
+    : sy.last_ok_at ? ` · Drive synced <b>${dt(sy.last_ok_at)}</b>` : "";
+  $("#freshness").innerHTML = `Last analysis <b>${dt(S.generated_at)}</b>${syncTxt}${issues ? ` · <span style="color:var(--high-ink)">${issues} source issue(s)</span>` : ""}`;
   const rb = $("#refresh");
-  if (!rb.disabled) rb.textContent = sy.configured ? "Update from Drive" : "Re-run analysis";
+  if (!rb.disabled) rb.textContent = sy.configured ? "Update Data from Drive" : "Re-run Analysis";
   rb.title = sy.configured ? "Download the latest files from Google Drive, then re-run the analysis" : "Re-run the analysis on the current data snapshot";
   const ai = $("#ai-status");
-  ai.textContent = S.ai.configured ? (S.ai.mode === "live" ? `AI ready · ${S.ai.model}` : "AI in TEST mode") : "AI not configured";
+  ai.textContent = S.ai.configured ? (S.ai.mode === "live" ? `AI Ready · ${S.ai.model}` : "AI in TEST Mode") : "AI Not Configured";
   ai.className = "aipill" + (S.ai.configured ? " on" : "");
 }
 
-/* ============================== Shared bits for the two alert systems ============================== */
+/* ============================== Shared helpers (0.7) ============================== */
+const VI_RE = /[À-ÖØ-öø-ỹĐđ]/;
+const SHEETS = { "chỉ số điện nước": "Daily meter readings & checklists", "BC hư hỏng TS": "Asset repairs & maintenance", "NK thi công - sự cố": "Incident & works log", "Dầu M Phát điện": "Generator log", Asset: "Asset register" };
+const SRCNAME = { ops_data: "Operations Data", vehicles: "Visitor & vehicle counts" };
+/* English display text for a source field. Originals are kept: AI translations and pending ones are marked. */
+function tr(o, k) {
+  const v = o?.[k];
+  if (v == null || v === "") return "";
+  const en = o[`${k}_en`], origin = o[`${k}_en_origin`];
+  if (en && origin === "ai_translation") return `${esc(en)}<span class="tl" title="Translated by Muse Spark. Original (Vietnamese): ${esc(v)}">translated</span>`;
+  if (en) return esc(en);
+  if (VI_RE.test(String(v))) return `${esc(v)}<span class="tl pending" title="English translation not available yet; original Vietnamese shown">original · translation pending</span>`;
+  return esc(v);
+}
+const plain = (o, k) => o?.[`${k}_en`] || o?.[k] || "";
 const AI_CLS = { done: "done", running: "running", failed: "failed", not_analysed: "none" };
 function aiPill(st, withFallback) {
   if (!st) return "";
@@ -65,234 +79,375 @@ function aiPill(st, withFallback) {
   const fb = withFallback && st.fallback ? ` <span class="aist rulefb" title="${esc(st.fallback_label_en)}">${esc(st.fallback_label)}</span>` : "";
   return main + fb;
 }
-const levelCounts = (by) => `<div class="lvlcounts">${["emergency", "high", "warning", "watch"].map((s) => `<span class="lc ${s}">${lvl(s)}<b class="num">${by[s] || 0}</b></span>`).join("")}</div>`;
 const isActive = (a) => !["resolved", "false_alarm"].includes(a.verification?.status);
-const STATUS_TXT = { new: "New", acknowledged: "Acknowledged", investigating: "Investigating", confirmed: "Confirmed on site", resolved: "Resolved", false_alarm: "False alarm" };
-const stat = (a) => esc(STATUS_TXT[a.verification?.status || "new"] || a.verification?.status);
+const STATUS_TXT = { new: "Open", acknowledged: "Acknowledged", investigating: "Investigating", confirmed: "Confirmed on Site", resolved: "Resolved", false_alarm: "False Alarm" };
+const stat = (a) => esc(STATUS_TXT[a.verification?.status || a.status || "new"] || a.status);
+const RTYPE = { water_electrical: "Water in electrical rooms", detection_impairment: "Fire detection", motor_overheat: "Motor overheating", backup_power: "Standby power", fire_water: "Fire-fighting water", smoke_control: "Smoke exhaust", pa_system: "Evacuation announcements", fire_event: "Fire or smoke reported", electrical_anomaly: "Electrical pattern", consumption_anomaly: "Consumption pattern" };
+const FSTATE = { emergency: "Emergency", high: "High Risk", warning: "Warning", watch: "Watch", no_active_alert: "No Active Fire-Risk Alert", not_assessed: "Not Assessed" };
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const riskStatus = (r) => r.open ? '<span class="rst open">Unresolved</span>' : '<span class="rst fixed">Marked fixed in records</span>';
 
-/* ============================== Overview ============================== */
+/* ============================== Overview: Building Risk Map ============================== */
+let B = null, selFloor = null;
 async function viewOverview() {
-  const o = await api("/api/overview");
-  const F = o.fire, E = o.equipment;
-  const byZone = {};
-  [...F.needs_check, ...F.others].forEach((a) => { if (!byZone[a.zone] || rank(a.severity) > rank(byZone[a.zone].severity)) byZone[a.zone] = a; });
-  const floor = (z) => {
-    const a = byZone[z]; const recs = S.zone_records[z] || 0;
-    const st = a ? a.severity : recs ? "normal" : "unknown";
-    const what = a ? esc(a.headline) : recs ? `No fire-risk signal · ${recs} records checked` : "No records for this floor";
-    const tag = a ? "a" : "div";
-    return `<${tag} class="floor ${st}" ${a ? `href="#/fire/${esc(a.alert_id)}"` : ""}><span class="code">${esc(z)}</span><span class="what">${what}</span>
-      <span>${a ? lvl(st) : st === "unknown" ? lvl("unknown") : `<span class="lamp" title="Normal"></span>`}</span></${tag}>`;
-  };
-  const whole = byZone.Building;
-  const aiLine = F.ai_configured
-    ? Object.entries(F.ai).map(([k, n]) => `<span class="aist ${AI_CLS[k] || "none"}">${esc(F.ai_labels[k])}: <b class="num">${n}</b></span>`).join(" ")
-    : `<span class="aist none">Muse Spark not configured</span> <span class="aist rulefb">${esc(F.ai_labels.fallback)}</span>`;
+  B = await api("/api/building");
+  const sm = B.summary;
+  const worst = [...B.floors].filter((f) => f.risk_count).sort((a, b) => rank(b.state) - rank(a.state) || b.open_risks - a.open_risks)[0];
+  if (!selFloor || !B.floors.some((f) => f.zone === selFloor)) selFloor = worst ? worst.zone : "B1";
+  const by = sm.risks_by_level;
   $("#app").innerHTML = `
-    ${S.sources_down.length || S.sources_stale.length ? `<div class="warnbox" style="margin:0 0 14px"><b>Data source issue.</b> ${[...S.sources_down.map((x) => `${esc(x.sheet || x.source)}: ${esc(x.error)}`), ...S.sources_stale.map((x) => `${esc(x.sheet || x.source)}: newest record ${x.age_days} days old`)].join("; ")}. <a href="#/quality">Check data sources</a></div>` : ""}
-    <div class="ovgrid">
-      <section class="panel sys fire" aria-labelledby="fire-h">
-        <div class="syshead"><h2 id="fire-h">Fire-risk alerts</h2><span class="big num">${F.active}</span><span class="muted">active</span>
-          <a class="btn primary" href="#/fire" style="margin-left:auto">Open fire-risk alerts</a></div>
-        ${levelCounts(F.by_level)}
-        <div class="ovsplit">
-          <div><h3 class="sub">Needs checking</h3>
-            <div class="priority">${F.needs_check.map(pcard).join("") || '<div class="empty">No fire-risk alert at Warning level or with unresolved records.</div>'}</div>
-            ${F.others.length ? `<h3 class="sub" style="margin-top:14px">Other fire-risk alerts</h3>${F.others.map((a) => `<a class="mini" href="#/fire/${esc(a.alert_id)}">${lvl(a.severity)}<span><b>${esc(a.zone_label)}</b> · ${esc(a.headline)}</span></a>`).join("")}` : ""}
-            <p class="small" style="margin:12px 0 0"><b>Muse Spark:</b> ${aiLine}</p></div>
-          <div><h3 class="sub">Where</h3><div class="building compact">${ZONE_ORDER.map(floor).join("")}
-            ${whole ? `<a class="floor ground ${whole.severity}" href="#/fire/${esc(whole.alert_id)}"><span class="code">All</span><span class="what">${esc(whole.headline)}</span>${lvl(whole.severity)}</a>` : ""}</div>
-            <p class="muted small" style="margin:8px 0 0">Colour = highest fire-risk level in that zone. Grey = no records to judge.</p></div>
-        </div>
-      </section>
-      <section class="panel sys equip" aria-labelledby="eq-h">
-        <div class="syshead"><h2 id="eq-h">Building equipment alerts</h2><span class="big num">${E.active}</span><span class="muted">active</span>
-          <a class="btn" href="#/equipment" style="margin-left:auto">Open equipment alerts</a></div>
-        ${levelCounts(E.by_level)}
-        <p class="small muted" style="margin:6px 0 10px">${E.critical_open} critical equipment item(s) with open faults · ${E.meters_with_findings} meter(s) with consumption findings</p>
-        <div class="eqlist">${E.top.map(eqRow).join("") || '<div class="empty">No equipment alert.</div>'}</div>
-      </section>
-    </div>`;
+    ${sm.sources_down.length ? `<div class="warnbox" style="margin:0 0 12px"><b>Data source problem.</b> ${sm.sources_down.map((x) => esc(`${x.sheet || x.source}: ${x.error}`)).join("; ")} — results may be incomplete. <a href="#/quality">Data Sources</a></div>` : ""}
+    <section class="summary" aria-label="Building risk summary">
+      <div class="sum-main fs-${esc(sm.overall)}"><span class="k">Building status</span><span class="v">${fsIcon(sm.overall)}${esc(sm.overall_label)}</span>
+        <span class="k2" title="${esc(sm.overall_rule)}">Highest level among active fire-safety risks</span></div>
+      <div class="sum-cell"><span class="k">Active fire-safety risks</span><span class="v num">${sm.risk_count}</span>
+        <span class="mini-lv">${["emergency", "high", "warning", "watch"].filter((s) => by[s]).map((s) => `<span class="dot ${s}"></span>${by[s]} ${esc(LABEL[s])}`).join(" · ") || "none"}</span></div>
+      <div class="sum-cell"><span class="k">Floors affected</span><span class="v num">${sm.floors_affected}</span><span class="mini-lv">${sm.building_wide_risks ? `+ ${sm.building_wide_risks} building-wide` : "of 6"}</span></div>
+      <div class="sum-cell ${sm.urgent_actions ? "urgent" : ""}"><span class="k">Urgent actions</span><span class="v num">${sm.urgent_actions}</span><span class="mini-lv" title="${esc(sm.urgent_rule)}">open High Risk / Emergency</span></div>
+      <div class="sum-cell"><span class="k">Last analysis</span><span class="v sm">${dt(sm.last_analysis)}</span><span class="mini-lv">${sm.last_drive_sync_ok ? `Drive synced ${dt(sm.last_drive_sync_ok)}` : "Drive not synced yet"}</span></div>
+    </section>
+    <div class="mapgrid">
+      <section class="panel mappanel" aria-labelledby="map-h"><div class="maphead"><h2 id="map-h">Building Risk Map</h2><span class="muted small">Select a floor</span></div>
+        ${buildingSvg(B.floors)}
+        <div class="legend">${["emergency", "high", "warning", "watch"].map((s) => `<span><i class="sw fs-${s}"></i>${esc(LABEL[s])}</span>`).join("")}<span><i class="sw fs-no_active_alert"></i>No active alert</span><span><i class="sw fs-not_assessed"></i>Not assessed</span></div>
+        <p class="small muted" style="margin:8px 0 0">${esc(sm.coverage_note)}</p></section>
+      <section class="panel floorpanel" id="floorpanel" aria-live="polite"></section>
+    </div>
+    <div class="ovrow">
+      <section class="panel"><h2>Urgent actions</h2>${B.urgent.length ? B.urgent.map((r) => `<div class="uact"><span>${lvl(r.severity)}</span><span><b>${esc(r.action)}</b><div class="small muted">${esc(r.risk)} · ${esc(r.location)}</div></span><a class="btn" href="#/fire/${esc(r.alert_id)}?risk=${encodeURIComponent(r.signal_id)}">View details</a></div>`).join("") : '<div class="empty">No open High Risk or Emergency risk.</div>'}</section>
+      <section class="panel"><div class="maphead"><h2>Equipment alerts</h2><a href="#/equipment">All equipment alerts</a></div>
+        <p class="small muted" style="margin:0 0 8px">Maintenance and operating findings. They are not fire risks by themselves; some are linked to a fire-safety risk with a stated reason.</p>
+        <div class="eqsum">${["emergency", "high", "warning", "watch"].map((s) => `<span class="lc">${lvl(s)}<b class="num">${sm.equipment_by_level[s] || 0}</b></span>`).join("")}</div>
+        <p class="small" style="margin:8px 0 0"><b class="num">${sm.equipment_active}</b> active equipment alerts. <a href="#/equipment">Review</a></p></section>
+    </div>
+    <section class="panel" style="margin-top:16px"><h2>Recent events and evidence</h2><div class="recent">
+      <div><h3 class="sub">Latest fire-relevant records</h3>${B.recent.records.map((e) => `<div class="rrow"><span class="when">${day(e.timestamp)}</span><span>${tr(e, "title")}<div class="small muted">${esc(KIND[e.kind] || e.kind)} · ${esc(e.zone || "Building")} ${chip(e.evidence_id)}</div></span></div>`).join("") || '<div class="empty">No Data Available</div>'}</div>
+      <div><h3 class="sub">Survey videos analysed by Muse Spark</h3>${B.recent.videos.map((v) => `<a class="rrow" href="#/video/${esc(v.video_id)}"><span class="when">${v.recorded_at ? day(v.recorded_at) : "date unknown"}</span><span>${esc(v.filename)}<div class="small muted">${esc(v.zone_label)} · ${v.observations} observations · recorded ${v.recorded_at ? dt(v.recorded_at) : "at an unknown time"}</div></span></a>`).join("") || '<div class="empty">Evidence Unavailable: no analysed survey video.</div>'}</div>
+    </div></section>`;
+  $$(".floor-g").forEach((g) => {
+    const pick = () => { selFloor = g.dataset.zone; $$(".floor-g").forEach((x) => x.classList.toggle("sel", x === g)); renderFloor(); };
+    g.addEventListener("click", pick);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
+  renderFloor();
+  bindEvidence();
 }
 
-function pcard(a) {
-  return `<a class="pcard ${esc(a.severity)}" href="#/fire/${esc(a.alert_id)}">
-    ${lvl(a.severity)}<span class="zone">${esc(a.zone_label)}</span><span class="stat">${stat(a)}</span>
-    <span class="head">${esc(a.headline)}</span>
-    <span class="meta"><span>Act ${esc(a.deadline?.text || "—")}</span><span>${a.open_items} unresolved record(s)</span>${a.related_equipment ? `<span>${a.related_equipment} linked equipment alert(s)</span>` : ""}<span>${aiPill(a.ai_status)}</span></span></a>`;
-}
-function eqRow(a) {
-  return `<a class="arow eq ${esc(a.severity)}" href="#/equipment/${encodeURIComponent(a.alert_id)}">
-    <span>${lvl(a.severity)}<div class="stat" style="margin-top:6px">${stat(a)}</div></span>
-    <span><span class="t">${esc(a.asset_name || a.asset_id || "Equipment")}</span>${a.critical ? ' <span class="crit">critical equipment</span>' : ""}<div class="why">${esc(a.why)}</div>
-      <div class="muted small">${esc(a.asset_id || "no equipment code")} · ${esc(a.zone_label)} · ${a.type === "meter" ? "consumption" : "technical"}${a.fire_links.length ? ` · <b>linked to ${a.fire_links.map((l) => esc(l.fire_alert_id)).join(", ")}</b>` : ""}</div></span>
-    <span class="stat c3">Detected <b>${day(a.detected_at)}</b><br>Latest record <b>${day(a.last_seen)}</b></span>
-    <span class="stat c4">Act <b>${esc(a.deadline?.text || "—")}</b><br>${a.open_items} open</span></a>`;
+const FS_COLOR = { emergency: "#D92D20", high: "#EE7417", warning: "#E8B100", watch: "#3B76C4", no_active_alert: "#E4E9EF", not_assessed: "#F3F5F7" };
+function fsIcon(s) { return ICON[s] || (s === "not_assessed" ? ICON.unknown : ""); }
+function buildingSvg(floors) {
+  const byZ = Object.fromEntries(floors.map((f) => [f.zone, f]));
+  const W = 560, X = 64, BW = 392, FH = 78, top = 46;
+  const order = ["Roof", "F4", "F3", "F2", "F1", "B1"];
+  const ys = {}; let y = top;
+  order.forEach((z) => { ys[z] = y; y += z === "Roof" ? 46 : FH; if (z === "F1") y += 14; });
+  const ground = ys.F1 + FH + 7;
+  const H = ys.B1 + FH + 26;
+  const band = (z) => {
+    const f = byZ[z]; if (!f) return "";
+    const h = z === "Roof" ? 46 : FH, yy = ys[z], col = FS_COLOR[f.state];
+    const strong = rank(f.state) >= 1;
+    const fill = strong ? col : col, op = strong ? (f.state === "watch" ? 0.22 : 0.28) : 1;
+    const hatch = f.state === "not_assessed" ? `<rect x="${X}" y="${yy}" width="${BW}" height="${h}" fill="url(#hatch)"/>` : "";
+    const wins = z === "Roof" ? "" : Array.from({ length: 7 }, (_, i) => `<rect x="${X + 22 + i * 50}" y="${yy + 16}" width="30" height="${h - 32}" rx="3" fill="#fff" opacity="${z === "B1" ? 0.35 : 0.7}"/>`).join("");
+    const badge = f.risk_count ? `<g transform="translate(${X + BW - 138},${yy + h / 2 - 17})"><rect width="128" height="34" rx="17" fill="${col}"/><text x="64" y="22.5" text-anchor="middle" font-size="15" font-weight="700" fill="${f.state === "warning" ? "#3B2E00" : "#fff"}">${esc(FSTATE[f.state])} · ${f.risk_count}</text></g>` : `<text x="${X + BW - 14}" y="${yy + h / 2 + 5}" text-anchor="end" font-size="14" fill="#4F5D6E">${f.state === "not_assessed" ? "Not assessed" : "No active alert"}</text>`;
+    const attn = f.needs_attention ? `<circle cx="${X - 18}" cy="${yy + h / 2}" r="7" fill="${col}"><title>Needs attention</title></circle>` : "";
+    return `<g class="floor-g ${z === selFloor ? "sel" : ""}" data-zone="${z}" role="button" tabindex="0" aria-label="${esc(f.label)}: ${esc(FSTATE[f.state])}${f.risk_count ? `, ${f.risk_count} active fire-safety risk(s)` : ""}">
+      <rect class="fbg" x="${X}" y="${yy}" width="${BW}" height="${h}" fill="${z === "B1" ? "#C9D2DC" : "#DCE3EA"}"/>
+      <rect x="${X}" y="${yy}" width="${BW}" height="${h}" fill="${fill}" opacity="${op}"/>${hatch}${wins}
+      <rect class="fsel" x="${X - 3}" y="${yy - 3}" width="${BW + 6}" height="${h + 6}" rx="4" fill="none" stroke="#0F7B83" stroke-width="4"/>
+      <rect x="${X + 8}" y="${yy + h / 2 - 14}" width="54" height="28" rx="6" fill="#fff" opacity=".92"/><text x="${X + 35}" y="${yy + h / 2 + 6}" text-anchor="middle" font-size="19" font-weight="800" fill="#1C2733">${z}</text>
+      ${badge}${attn}</g>`;
+  };
+  const bw = byZ.Building;
+  const side = bw && bw.risk_count ? `<g class="floor-g ${selFloor === "Building" ? "sel" : ""}" data-zone="Building" role="button" tabindex="0" aria-label="Whole building: ${esc(FSTATE[bw.state])}, ${bw.risk_count} risk(s)">
+      <rect class="fbg" x="${X + BW + 14}" y="${ys.F4}" width="40" height="${ys.F1 + FH - ys.F4}" rx="8" fill="${FS_COLOR[bw.state]}" opacity=".3"/>
+      <rect class="fsel" x="${X + BW + 11}" y="${ys.F4 - 3}" width="46" height="${ys.F1 + FH - ys.F4 + 6}" rx="10" fill="none" stroke="#0F7B83" stroke-width="4"/>
+      <text transform="translate(${X + BW + 39},${(ys.F4 + ys.F1 + FH) / 2}) rotate(-90)" text-anchor="middle" font-size="13" font-weight="700" fill="#1C2733">Whole building · ${esc(FSTATE[bw.state])} · ${bw.risk_count}</text></g>` : "";
+  return `<svg class="bmap" viewBox="0 0 ${W} ${H}" role="group" aria-label="Building front view with floors">
+    <defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#B8C2CC" stroke-width="2"/></pattern></defs>
+    <rect x="${X + 40}" y="${top - 18}" width="70" height="18" fill="#C9D2DC"/><rect x="${X + 250}" y="${top - 26}" width="46" height="26" fill="#C9D2DC"/>
+    ${order.map(band).join("")}
+    <line x1="20" x2="${W - 20}" y1="${ground}" y2="${ground}" stroke="#6B7785" stroke-width="3"/><text x="24" y="${ground - 6}" font-size="11" fill="#4F5D6E">Ground level</text>
+    <rect x="20" y="${ground + 2}" width="${W - 40}" height="${H - ground - 4}" fill="#8B6B4A" opacity=".08"/>
+    ${side}</svg>`;
 }
 
-/* ============================== Fire-risk alerts list ============================== */
+function renderFloor() {
+  const f = B.floors.find((x) => x.zone === selFloor);
+  const el = $("#floorpanel");
+  if (!f) { el.innerHTML = '<div class="empty">No Data Available</div>'; return; }
+  const top = f.top_risk;
+  const msg = f.state === "not_assessed" ? `<div class="insuff">Not Assessed: there are no records for this floor in the data, so its fire risk cannot be judged.</div>`
+    : !f.risk_count ? `<div class="neutralbox">No active fire-safety risk was found in ${f.records_checked} records for this floor. This is not a confirmation that the floor is safe: the data has no smoke, heat or gas sensors.</div>` : "";
+  el.innerHTML = `<div class="fphead fs-${esc(f.state)}"><div><span class="k">${esc(f.zone === "Building" ? "Whole building" : f.zone)}</span><h2>${esc(f.label)}</h2></div><span class="fstate">${fsIcon(f.state)}${esc(f.state_label)}</span></div>
+    ${top ? `<div class="headline-risk"><span class="k">Most important</span><p class="lead">${esc(top.risk)}</p><p>${esc(top.why_it_matters)}</p><p class="small"><b>Next step:</b> ${esc(top.action)}</p></div>` : msg}
+    ${f.risks.length ? `<h3 class="sub" style="margin-top:14px">All fire-safety risks here (${f.risks.length})</h3>${f.risks.map((r) => riskCard(r, true)).join("")}` : ""}
+    <h3 class="sub" style="margin-top:14px">Also on this ${f.zone === "Building" ? "building" : "floor"}</h3>
+    <ul class="facts">
+      <li>${f.equipment_alerts.length ? `<a href="#/equipment">${f.equipment_alerts.length} equipment alert(s)</a>: ${f.equipment_alerts.slice(0, 3).map((e) => esc(e.asset_name_en || e.asset_name || e.asset_id)).join(", ")}${f.equipment_alerts.length > 3 ? "…" : ""}` : "No active equipment alert"}</li>
+      <li>${f.videos ? `<a href="#/media?floor=${esc(f.zone)}">${f.videos} survey video(s)</a>, ${f.videos_analysed} analysed by Muse Spark` : "Evidence Unavailable: no survey video for this floor"}</li>
+      <li>${f.records_checked} source records checked · ${f.register_items} items in the asset register</li></ul>`;
+  bindRiskCards(el);
+}
+
+function riskCard(r, compact) {
+  const why = `<p class="rc-why">${esc(r.why_it_matters)}</p>`, act = `<p class="rc-act"><span>Recommended action:</span> ${esc(r.action)}</p>`;
+  return `<article class="rcard sv-${esc(r.severity)}${compact ? " compact" : ""}" data-alert="${esc(r.alert_id)}" data-signal="${esc(r.signal_id)}">
+    <div class="rc-top"><span class="rc-lv">${lvl(r.severity)}</span>${compact ? "" : `<span class="rc-loc">${esc(r.location)}</span>`}${riskStatus(r)}</div>
+    <h4>${esc(r.risk)}</h4>
+    ${compact ? "" : why}
+    <p class="rc-meta"><b>${esc(r.evidence)}</b>${r.last_seen ? ` · latest ${day(r.last_seen)}` : ""}</p>
+    ${compact ? `<div class="rc-extra" hidden>${why}${act}</div>` : act}
+    <div class="rc-btns"><button class="btn" data-expand>View details</button><a class="btn quiet" href="#/fire/${esc(r.alert_id)}?risk=${encodeURIComponent(r.signal_id)}#s3">View evidence</a></div>
+    <div class="rc-more" hidden></div></article>`;
+}
+
+const detailCache = {};
+async function alertDetail(id) { return detailCache[id] || (detailCache[id] = await api(`/api/alerts/${encodeURIComponent(id)}`)); }
+function bindRiskCards(root) {
+  $$("[data-expand]", root).forEach((b) => b.onclick = async () => {
+    const card = b.closest(".rcard"), more = $(".rc-more", card);
+    const extra = $(".rc-extra", card);
+    if (!more.hidden) { more.hidden = true; if (extra) extra.hidden = true; b.textContent = "View details"; return; }
+    if (extra) extra.hidden = false;
+    b.textContent = "Loading…";
+    try {
+      const d = await alertDetail(card.dataset.alert);
+      more.innerHTML = riskDetailInline(d, card.dataset.signal);
+      more.hidden = false; b.textContent = "Hide details"; bindEvidence();
+    } catch (e) { more.innerHTML = `<div class="errbox">Could not load the details: ${esc(e.message)}</div>`; more.hidden = false; b.textContent = "View details"; }
+  });
+}
+function riskDetailInline(d, signalId) {
+  const s = d.signals.find((x) => x.signal_id === signalId) || d.signals[0];
+  const recs = d.evidence.filter((e) => s.evidence_ids.includes(e.evidence_id));
+  const inv = d.investigation, r = inv && inv.status === "ok" ? inv.result : null;
+  return `<div class="inl"><h5>What was detected</h5>${recs.map((e) => `<div class="small rrow"><span class="when">${day(e.timestamp)}</span><span>${tr(e, "title")} ${e.is_open ? '<span class="open">● unresolved</span>' : ""}<div class="muted">${org(e.origin)}${esc(e.source?.sheet_en || "")}${e.source?.row ? ` · row ${e.source.row}` : ""} · status: ${tr(e, "status") || "—"} ${chip(e.evidence_id)}</div></span></div>`).join("")}
+    <h5>Why this matters</h5><ol class="chain">${s.fields.risk_chain.map((c) => `<li>${esc(c)}</li>`).join("")}</ol><p class="small muted">${org("rule")}A possible chain of events, not a prediction. ${esc(s.fields.trigger_condition || "")}</p>
+    <h5>AI analysis</h5>${r ? `<p class="small">${org(inv.api_mode === "test" ? "test" : "ai")}${esc(r.situation || r.summary)}</p>${d.ai_status.result_is_current ? "" : '<p class="small muted">This AI analysis was made on older evidence.</p>'}` : `<p class="small muted">${esc(d.ai_status.label)} — the rule-based explanation above applies.</p>`}
+    <h5>Recommended actions</h5><ul class="small">${s.fields.preventive_actions.map((a) => `<li>${esc(a)}</li>`).join("")}</ul>
+    <p style="margin:8px 0 0"><a href="#/fire/${esc(d.alert.alert_id)}?risk=${encodeURIComponent(s.signal_id)}">Open the full investigation</a></p></div>`;
+}
+
+/* ============================== Fire Safety Risks ============================== */
 async function viewFireList() {
   const alerts = await api("/api/fire-alerts");
-  const zones = [...new Set(alerts.map((a) => a.zone_label))];
-  $("#app").innerHTML = `<h1>Fire-risk alerts</h1>
-    <p class="muted">Combinations of records that may point to a fire or fire-safety risk, one alert per zone. The level is set by the rules; Muse Spark only explains.</p>
+  const risks = alerts.flatMap((a) => (a.risks || []).map((r) => ({ ...r, alert_id: a.alert_id, zone: a.zone, zone_label: a.zone_label, astatus: a.status, verification: a.verification, ai_status: a.ai_status })));
+  const zones = [...new Set(risks.map((r) => r.zone_label))], types = [...new Set(risks.map((r) => r.risk_type))];
+  $("#app").innerHTML = `<h1>Fire Safety Risks</h1>
+    <p class="muted">Each card is one risk found by the rule set. Risks of the same zone form one investigation (fire-risk alert) with shared evidence and one Muse Spark analysis. These are potential risks, not confirmed fires.</p>
     <div class="filters" role="group" aria-label="Filters">
-      ${[["all", "All levels"], ["warning", "Warning and above"], ["high", "High risk and above"]].map(([k, t], i) => `<button class="chipbtn" data-f="${k}" aria-pressed="${i === 0}">${t}</button>`).join("")}
-      <select id="fz" style="width:auto" aria-label="Zone"><option value="">All zones</option>${zones.map((z) => `<option>${esc(z)}</option>`).join("")}</select>
-      <select id="fa" style="width:auto" aria-label="AI status"><option value="">Any AI status</option>${["not_analysed", "running", "done", "failed"].map((k) => `<option value="${k}">${esc((alerts.find((a) => a.ai_status.code === k)?.ai_status.label) || { not_analysed: "Chưa phân tích AI", running: "Đang phân tích bằng Muse Spark", done: "Đã hoàn tất phân tích AI", failed: "Phân tích AI thất bại" }[k])}</option>`).join("")}</select>
-      <label class="small muted"><input type="checkbox" id="hide-res" checked> Hide resolved</label>
-    </div><div id="rows"></div>`;
-  let f = "all";
+      <select id="fs" aria-label="Severity"><option value="">All severities</option>${["emergency", "high", "warning", "watch"].map((s) => `<option value="${s}">${esc(LABEL[s])} and above</option>`).join("")}</select>
+      <select id="fz" aria-label="Floor or zone"><option value="">All floors</option>${zones.map((z) => `<option>${esc(z)}</option>`).join("")}</select>
+      <select id="fo" aria-label="Status"><option value="">Any status</option><option value="open">Unresolved records</option><option value="fixed">Marked fixed in records</option>${Object.entries(STATUS_TXT).map(([k, v]) => `<option value="v:${k}">Alert: ${esc(v)}</option>`).join("")}</select>
+      <select id="ft" aria-label="Risk type"><option value="">All risk types</option>${types.map((t) => `<option value="${esc(t)}">${esc(RTYPE[t] || t)}</option>`).join("")}</select>
+      <span class="small muted" id="fc"></span></div><div id="rows" class="rgrid"></div>`;
   const render = () => {
-    const hide = $("#hide-res").checked, z = $("#fz").value, ai = $("#fa").value;
-    const list = alerts.filter((a) => (f === "all" || rank(a.severity) >= rank(f)) && (!z || a.zone_label === z) && (!ai || a.ai_status.code === ai) && !(hide && !isActive(a)));
-    $("#rows").innerHTML = list.map((a) => `<a class="arow ${esc(a.severity)}" href="#/fire/${esc(a.alert_id)}">
-      <span>${lvl(a.severity)}<div class="stat" style="margin-top:6px">${stat(a)}</div></span>
-      <span><span class="t">${esc(a.zone_label)}</span> <span class="muted small">${esc(a.alert_id)}</span><div>${esc(a.headline)}</div><div class="why">${esc(a.why)}</div>
-        <div class="small" style="margin-top:4px">${aiPill(a.ai_status, true)}${a.related_equipment ? ` <span class="muted">· ${a.related_equipment} linked equipment alert(s)</span>` : ""}</div></span>
-      <span class="stat c3">Detected <b>${day(a.detected_at)}</b><br>Latest evidence <b>${day(a.last_seen)}</b></span>
-      <span class="stat c4">Act <b>${esc(a.deadline?.text || "—")}</b><br>${a.open_items} unresolved</span></a>`).join("") || '<div class="empty">No fire-risk alert matches these filters.</div>';
+    const sv = $("#fs").value, z = $("#fz").value, o = $("#fo").value, t = $("#ft").value;
+    const list = risks.filter((r) => (!sv || rank(r.severity) >= rank(sv)) && (!z || r.zone_label === z) && (!t || r.risk_type === t)
+      && (!o || (o === "open" ? r.open : o === "fixed" ? !r.open : (r.verification?.status || "new") === o.slice(2))));
+    $("#fc").textContent = `${list.length} of ${risks.length} risks`;
+    $("#rows").innerHTML = list.map((r) => riskCard(r)).join("") || '<div class="empty">No risk matches these filters.</div>';
+    bindRiskCards($("#rows"));
   };
-  $$(".chipbtn").forEach((b) => b.addEventListener("click", () => { f = b.dataset.f; $$(".chipbtn").forEach((x) => x.setAttribute("aria-pressed", x === b)); render(); }));
-  ["#hide-res", "#fz", "#fa"].forEach((s) => $(s).addEventListener("change", render));
+  ["#fs", "#fz", "#fo", "#ft"].forEach((s) => $(s).addEventListener("change", render));
   render();
 }
 
-/* ============================== Fire-risk alert detail (10 sections) ============================== */
+/* ============================== Fire-risk alert detail (6 sections) ============================== */
 let aiPoll = null;
-async function viewFire(id) {
+async function viewFire(id, focusRisk) {
   clearInterval(aiPoll);
-  const d = await api(`/api/alerts/${encodeURIComponent(id)}`);
-  const a = d.alert, F = d.fields, sm = d.summary, st = d.ai_status;
+  delete detailCache[id];
+  const d = await alertDetail(id);
+  const a = d.alert, F = d.fields, st = d.ai_status;
   const inv = d.investigation, r = inv && inv.status === "ok" ? inv.result : null;
-  const aiCurrent = !!(r && st.result_is_current);
-  const insufficient = F.assessment_class === "insufficient_evidence";
-  const findings = d.evidence.filter((e) => e.role === "finding" && e.kind !== "meter_episode")
-    .sort((x, y) => (y.is_open === true) - (x.is_open === true) || (y.timestamp || "").localeCompare(x.timestamp || ""));
-  const episodes = d.evidence.filter((e) => e.kind === "meter_episode");
-  const context = d.evidence.filter((e) => e.role === "context");
-  const top = d.rule_explanation[0];
-  const ids = (l) => (l || []).map(chip).join("") || '<span class="muted small">none</span>';
   const aiTag = inv && inv.api_mode === "test" ? org("test", "TEST · mock API") : org("ai");
-  const aiStale = r && !st.result_is_current ? `<div class="warnbox">This AI analysis (${dt(inv.created_at)}) was made on older evidence. ${st.code === "running" ? "A new analysis is running." : "The current evidence has not been analysed yet."}</div>` : "";
-  const sec = (n, title, body, extra = "") => `<section class="q ${extra}" id="s${n}"><h2><span class="qn">${n}</span>${title}</h2>${body}</section>`;
-
-  const s1 = `<p class="lead">${esc(F.headline)}</p>
-    <p style="margin:6px 0">Zone <b>${esc(a.zone_label)}</b> · ${a.open_items} unresolved record(s) · ${F.affected_assets.length} equipment item(s)</p>
-    <div class="assets">${F.affected_assets.map(([eid, name]) => `<button class="asset" data-asset="${esc(eid)}"><b>${esc(name || eid)}</b><span class="muted small">${esc(eid)}</span></button>`).join("") || '<span class="muted">No equipment code in the records.</span>'}</div>
-    ${insufficient ? '<div class="insuff">Chưa đủ dữ liệu để xác nhận — not enough data to confirm. The records are signals, not a confirmed hazard.</div>' : `<p class="muted small" style="margin:8px 0 0">${org("rule")}${esc(F.assessment_text)}</p>`}`;
-
+  const ids = (l) => (l || []).map(chip).join("") || '<span class="muted small">none</span>';
+  const insufficient = F.assessment_class === "insufficient_evidence";
+  const sigById = Object.fromEntries(d.signals.map((s) => [s.signal_id, s]));
+  const risks = F.risks || [];
   const evRow = (e) => {
     const v = e.values || {};
     let val = "";
     if (e.kind === "meter_episode") val = `${fmtNum(v.peak)} <small>vs median ${fmtNum(v.median)} ${esc(v.unit || "")}${v.unit_verified ? "" : " (unit unverified)"}</small>`;
     else if (e.kind === "generator_run" && v.minutes != null) val = `${v.minutes} min`;
     return `<div class="evi"><span class="when">${day(e.timestamp)}</span>
-      <span><span class="what">${esc(e.title)}</span>${e.is_open ? '<span class="open">● unresolved</span>' : ""}
-        <div class="src">${org(e.origin)}${esc(KIND[e.kind] || e.kind)} · ${esc(e.source?.sheet || "")}${e.source?.row ? ` · row ${e.source.row}` : ""} ${chip(e.evidence_id)}</div>
-        ${e.status ? `<div class="src">Status in source: ${esc(e.status)}</div>` : ""}</span><span class="val">${val}</span></div>`;
+      <span><span class="what">${tr(e, "title")}</span>${e.is_open ? '<span class="open">● unresolved</span>' : ""}
+        <div class="src">${org(e.origin)}${esc(KIND[e.kind] || e.kind)} · <span title="Original tab: ${esc(e.source?.sheet || "")}">${esc(e.source?.sheet_en || "")}</span>${e.source?.row ? ` · row ${e.source.row}` : ""} ${chip(e.evidence_id)}</div>
+        ${e.status ? `<div class="src">Status in source: ${tr(e, "status")}</div>` : ""}</span><span class="val">${val}</span></div>`;
   };
-  const s2 = `${findings.slice(0, 8).map(evRow).join("") || '<div class="empty">Chưa có dữ liệu — no source record.</div>'}
-    ${findings.length > 8 ? `<details><summary>${findings.length - 8} more records</summary>${findings.slice(8).map(evRow).join("")}</details>` : ""}
-    ${d.rule_explanation.length ? `<details><summary>Rules that fired (${d.rule_explanation.length})</summary>${d.signals.map((s) => `<div class="sig"><div class="row">${lvl(s.severity)}<b>${esc(s.title)}</b><span class="muted small">${esc(s.rule_id)} · ${s.origin === "PORTED" ? "rule from the earlier skill" : "new rule"}</span></div><div class="small">${org("rule")}${esc(s.basis)}</div></div>`).join("")}</details>` : ""}`;
+  const findings = d.evidence.filter((e) => e.role === "finding" && e.kind !== "meter_episode")
+    .sort((x, y) => (y.is_open === true) - (x.is_open === true) || (y.timestamp || "").localeCompare(x.timestamp || ""));
+  const context = d.evidence.filter((e) => e.role === "context");
+  const sec = (n, title, body) => `<section class="q" id="s${n}"><h2><span class="qn">${n}</span>${title}</h2>${body}</section>`;
 
-  const s3 = `${d.trends.length ? `<p class="muted small" style="margin:0 0 8px">${org("derived")}Daily consumption from the real readings, 7 days before and after each anomaly. Dashed = baseline median; ringed = anomaly days; grey = missing or averaged.</p>${d.trends.slice(0, 2).map(trendChart).join("")}${d.trends.length > 2 ? `<details><summary>${d.trends.length - 2} more meter windows</summary>${d.trends.slice(2).map(trendChart).join("")}</details>` : ""}` : ""}
-    <h3 class="sub">Timeline of the records</h3>
-    <ol class="tline">${d.timeline.filter((e) => e.role === "finding").slice(-14).map((e) => `<li><span class="when">${day(e.timestamp)}</span> ${esc(e.title)}${e.is_open ? '<span class="open">● unresolved</span>' : ""} ${chip(e.evidence_id)}</li>`).join("") || "<li class='muted'>Chưa có dữ liệu</li>"}</ol>
-    ${episodes.length ? "" : `<p class="muted small">No meter trend is part of this fire-risk alert.${d.related_equipment.some((x) => x.type === "meter") ? " Meter findings in this zone are separate equipment alerts with their own charts — see section 9." : ""}</p>`}`;
+  const s1 = `${risks.map((c) => `<div class="det-risk ${c.signal_id === focusRisk ? "focus" : ""}" id="r-${esc(c.signal_id)}">
+      <div class="rc-top">${lvl(c.severity)}<span class="rc-loc">${esc(c.location)}</span>${riskStatus(c)}</div>
+      <h4>${esc(c.risk)}</h4><p class="small muted">First record ${day(c.first_seen)} · latest ${day(c.last_seen)} · ${esc(c.evidence)} · ${c.origin === "PORTED" ? "rule from the earlier skill" : "new rule"} ${esc(c.rule_id)}</p></div>`).join("")}
+    <p style="margin:10px 0 0">Equipment and rooms: ${F.affected_assets.map(([eid, name]) => `<button class="asset" data-asset="${esc(eid)}"><b>${esc(name || eid)}</b><span class="muted small">${esc(eid)}</span></button>`).join("") || '<span class="muted">No equipment code in the records.</span>'}</p>
+    ${insufficient ? '<div class="insuff">Not enough evidence to confirm. The records are signals, not a confirmed hazard.</div>' : `<p class="small muted">${org("rule")}${esc(F.assessment_text)}. No fire has been reported in these records.</p>`}`;
 
-  const s4 = `<div class="aihead">${aiTag}${aiPill(st, true)}
-      <button class="btn ${aiCurrent ? "" : "primary"}" id="ai-run" ${st.configured && st.code !== "running" ? "" : "disabled"}>${st.code === "running" ? "Analysing…" : r ? "Re-analyse with Muse Spark" : "Analyse with Muse Spark"}</button></div>
-    ${!st.configured ? '<div class="warnbox">Muse Spark is not configured on this computer (no API key). The rule-based explanation in sections 5–8 is used.</div>' : ""}
-    ${st.code === "failed" ? `<div class="errbox">Phân tích AI thất bại — ${esc(st.error?.kind || "")}: ${esc(st.error?.message || "")}. The alert, its level and the rule explanation are unaffected.</div>` : ""}
-    ${st.not_queued_reason && st.code === "not_analysed" ? `<p class="small muted">Not analysed automatically: ${esc(st.not_queued_reason)}.</p>` : ""}
-    ${aiStale}
-    ${r ? `<div class="aibox"><div class="small muted">${esc(inv.model)} · ${dt(inv.created_at)} · ${esc(inv.seconds)} s · ${esc(inv.trigger || "button")}</div>
-      ${inv.validation?.ok === false ? `<div class="warnbox">${inv.validation.invalid_evidence_ids?.length ? `Removed ${inv.validation.invalid_evidence_ids.length} citation(s) to records that do not exist. ` : ""}${inv.validation.unsupported_facts?.length ? `${inv.validation.unsupported_facts.length} statement(s) without a valid source are marked unsupported.` : ""}</div>` : ""}
-      <h3 class="sub">What is happening</h3><p>${esc(r.situation || r.summary)}</p>
-      ${r.situation ? `<p class="small">${esc(r.summary)}</p>` : ""}
-      <p class="small">AI priority ${lvl(r.risk_assessment.ai_priority)} · official rule level ${lvl(a.severity)} — ${r.risk_assessment.agrees_with_rule_severity ? "agrees" : "differs; the rule level stays"}: ${esc(r.risk_assessment.rationale)}</p>
-      <details><summary>Facts the AI read from the records (${r.observed_facts.length})</summary><ul class="small">${r.observed_facts.map((f) => `<li>${esc(f.statement)} ${f.supported === false ? '<b style="color:var(--emergency)">unsupported</b>' : ""} ${ids(f.evidence_ids)}</li>`).join("")}</ul></details>
-      ${r.hypotheses?.length ? `<details><summary>Possible causes — hypotheses (${r.hypotheses.length})</summary>${r.hypotheses.map((h) => `<div class="hyp"><span class="plaus">${esc(h.plausibility)}</span> <b>${esc(h.cause)}</b><div class="small">${esc(h.reasoning)}</div><div class="small muted">Supports: ${ids(h.supporting_evidence_ids)} Contradicts: ${ids(h.contradicting_evidence_ids)}</div><div class="small"><i>How to verify:</i> ${esc(h.how_to_verify)}</div></div>`).join("")}</details>` : ""}</div>`
-      : st.code === "running" ? '<p class="muted">Muse Spark is reading the evidence. The alert above is already complete; this section fills in when the analysis is validated.</p>'
-      : '<p class="muted">Chưa phân tích AI. Sections 5–8 show the rule-based explanation.</p>'}`;
+  const s2 = `${risks.map((c) => { const s = sigById[c.signal_id]; return `<div class="whyblock"><h4>${esc(c.risk)}</h4><p>${esc(c.why_it_matters)}</p>
+      <ol class="chain">${s.fields.risk_chain.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+      <p class="small muted">${org("rule")}Possible chain of events, not a prediction. Condition: ${esc(s.fields.trigger_condition)} Consequence if not handled: ${esc(s.fields.consequence)}</p>
+      ${s.fields.possible_causes?.length ? `<details><summary>Possible causes listed by the rules (not verified)</summary><ul class="small">${s.fields.possible_causes.map((pc) => `<li>${esc(pc.cause)} <span class="muted">(${esc(pc.basis)})</span></li>`).join("")}</ul></details>` : ""}</div>`; }).join("")}
+    <p class="small"><b>Not verified:</b> ${F.unknowns.slice(0, 4).map(esc).join(" · ")}${F.unknowns.length > 4 ? ` · <a href="javascript:void(0)" data-jump="s4">more</a>` : ""}</p>`;
 
-  const scen = r?.scenarios?.length ? r.scenarios : null;
-  const s5 = `${scen ? `<p class="small muted" style="margin:0 0 8px">${aiTag}Scenarios proposed by Muse Spark from the evidence. Hypotheses, not predictions; no probabilities.</p>
-      ${scen.map((sc, i) => `<div class="scen"><b>${i + 1}. ${esc(sc.scenario)}</b> <span class="plaus">${esc(sc.plausibility)}</span><div class="small">${esc(sc.how_it_could_develop)}</div></div>`).join("")}` : ""}
-    <p class="small muted" style="margin:${scen ? "14px" : "0"} 0 6px">${org("rule")}Escalation path defined by the rule set${scen ? "" : " (rule-based explanation)"}:</p>
-    ${d.rule_explanation.slice(0, 3).map((x) => `<div class="sig"><b>${esc(x.title)}</b><ol class="chain">${x.risk_chain.map((c) => `<li>${esc(c)}</li>`).join("")}</ol>
-      <div class="small muted">Trigger: ${esc(x.trigger_condition)} · Consequence: ${esc(x.consequence)}</div></div>`).join("")}`;
-
-  const s6 = `${scen ? scen.map((sc, i) => `<div class="scen"><b>${i + 1}. ${esc(sc.scenario)}</b>
-      <div class="small"><span class="pro">Supports</span> ${ids(sc.supporting_evidence_ids)}</div>
-      <div class="small"><span class="con">Weakens</span> ${ids(sc.weakening_evidence_ids)}</div>
-      <div class="small"><i>Would confirm:</i> ${esc(sc.what_would_confirm)}</div></div>`).join("") : `<p class="small muted" style="margin:0 0 6px">${org("rule")}Without an AI analysis: records behind the rules, and context records that may weaken them.</p>`}
-    <details ${scen ? "" : "open"}><summary>Records that may weaken the alert (${context.length})</summary><p class="muted small">Latest daily checklists and scheduled generator runs. A passing checklist does not prove the issue is gone.</p>${context.map(evRow).join("") || '<div class="empty">None in the data.</div>'}</details>
-    ${top ? `<details><summary>Possible causes listed by the rules (not verified)</summary><ul class="small">${top.possible_causes.map((c) => `<li>${esc(c.cause)} <span class="muted">(${esc(c.basis)})</span></li>`).join("")}</ul></details>` : ""}`;
-
-  const s7 = `${insufficient ? '<div class="insuff">Chưa đủ dữ liệu để xác nhận.</div>' : ""}
-    <ul class="unk">${F.unknowns.map((u) => `<li>${org("rule")}${esc(u)}</li>`).join("")}
-      ${d.data_quality.length ? `<li>${org("rule")}${d.data_quality.length} data issue(s) in these records <details><summary>Show</summary>${d.data_quality.map((q) => `<div class="small">${chip(q.evidence_id)} ${esc(q.type.replace(/_/g, " "))}</div>`).join("")}</details></li>` : ""}
-      ${r ? (r.missing_information || []).map((m) => `<li>${aiTag}<b>${esc(m.item)}</b> — ${esc(m.why_it_matters)}</li>`).join("") + (r.limitations || []).map((x) => `<li>${aiTag}Limitation: ${esc(x)}</li>`).join("") : ""}</ul>`;
-
-  const s8 = `<p class="muted small" style="margin:-4px 0 8px">${org("rule")}Checks from the rule set. Deadline <b>${esc(F.deadline.text)}</b> (${esc(F.deadline.basis)}). Fire-safety guidance here is preliminary and not reviewed by a certified expert.</p>
-    <ul class="actions">${dedupe(F.actions.map((x) => x.action)).map((x) => `<li><span class="box" aria-hidden="true"></span><span>${esc(x)}</span></li>`).join("")}</ul>
-    ${top ? `<p class="small" style="margin:10px 0 0"><b>Close the alert when:</b> ${esc(d.signals[0].fields.closure_condition)}</p>` : ""}
-    ${r?.recommended_actions?.length ? `<h3 class="sub" style="margin-top:14px">${aiTag}Additional checks suggested by Muse Spark</h3><ul class="actions">${r.recommended_actions.map((x) => `<li><span class="box" aria-hidden="true"></span><span><b>${esc((x.urgency || "").replace(/_/g, " "))}</b> — ${esc(x.action)} <span class="muted small">(${esc(x.responsible_role)})</span><br><span class="small muted">${esc(x.reason)}</span> ${ids(x.evidence_ids)}</span></li>`).join("")}</ul>` : ""}`;
-
-  const strong = a.links.filter((l) => !(l.types.length === 1 && l.types[0] === "same_zone_time_window"));
-  const s9 = `<h3 class="sub">Linked building equipment alerts (${d.related_equipment.length})</h3>
-    ${d.related_equipment.length ? `<p class="muted small" style="margin:0 0 6px">Separate maintenance alerts with their own level. Linked only for the reason shown; their level is not changed by this alert.</p>${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span><b>${esc(x.asset_name || x.asset_id || x.alert_id)}</b> · ${esc(x.headline)}<br><span class="small muted">Why linked: ${x.reasons.map(esc).join("; ")}</span></span></a>`).join("")}` : '<p class="muted small">No equipment alert is linked to this fire-risk alert.</p>'}
+  const s3 = `<h3 class="sub">Source records (${findings.length})</h3>${findings.slice(0, 6).map(evRow).join("") || '<div class="empty">No Data Available</div>'}
+    ${findings.length > 6 ? `<details><summary>${findings.length - 6} more records</summary>${findings.slice(6).map(evRow).join("")}</details>` : ""}
+    ${d.trends.length ? `<h3 class="sub" style="margin-top:14px">Meter readings around each anomaly</h3><p class="small muted">${org("derived")}Daily consumption from real readings, 7 days before and after.</p>${d.trends.slice(0, 2).map(trendChart).join("")}` : ""}
     <h3 class="sub" style="margin-top:14px">Survey videos of this zone (${d.survey_videos.length})</h3>${videoContext(d.survey_videos)}
-    ${d.survey_video_refs?.length ? `<p class="small" style="margin:6px 0 0">${org("source")}${d.survey_video_refs.length} more video(s) of this zone are linked in the asset register but not on this computer yet: ${d.survey_video_refs.map((r) => esc(r.drive?.title || r.drive_file_id)).join(", ")}. ${S.sync?.configured ? "They are downloaded from Drive automatically" : "They are downloaded from Drive automatically once the Drive connection is set up"} — <a href="#/media">see status</a>.</p>` : ""}
-    ${d.maintenance_history.length ? `<details><summary>Repair and inspection history of the equipment (${d.maintenance_history.length})</summary><div class="scroll"><table class="tbl"><tbody>${d.maintenance_history.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${esc(e.title)}<div class="muted small">${esc(KIND[e.kind] || e.kind)} · ${esc(e.asset_id)}</div></td><td class="small">${esc(e.status || "")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("")}</tbody></table></div></details>` : ""}
-    ${strong.length ? `<details><summary>${strong.length} links between records</summary><p class="muted small">Records worth checking together. A link is not proof of cause.</p><div class="scroll"><table class="tbl"><tbody>${strong.slice(0, 40).map((l) => `<tr><td>${chip(l.a)}</td><td>${chip(l.b)}</td><td class="small">${l.reasons.map(esc).join("<br>")}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`;
+    ${d.survey_video_refs?.length ? `<p class="small">${d.survey_video_refs.length} more video(s) of this zone are listed on Drive but not on this computer yet. <a href="#/media">See status</a>.</p>` : ""}
+    <h3 class="sub" style="margin-top:14px">Linked equipment alerts (${d.related_equipment.length})</h3>
+    ${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span><b>${esc(x.asset_name_en || x.asset_name || x.asset_id || x.alert_id)}</b> · ${esc(x.headline_en || x.headline)}<br><span class="small muted">${org("rule")}Why linked: ${x.reasons.map(esc).join("; ")}</span></span></a>`).join("") || '<p class="muted small">No equipment alert is linked to this risk.</p>'}
+    ${context.length ? `<details><summary>Records that may weaken the alert (${context.length})</summary><p class="small muted">Latest daily checklists and scheduled generator runs. A passed checklist does not prove the issue is gone.</p>${context.map(evRow).join("")}</details>` : ""}
+    ${d.maintenance_history.length ? `<details><summary>Inspection and maintenance records of the equipment (${d.maintenance_history.length})</summary>${d.maintenance_history.map(evRow).join("")}</details>` : ""}`;
 
-  const s10 = `<div class="hist2"><div><h3 class="sub">Status changes</h3>${d.status_log.map((x) => `<div class="small">${dt(x.changed_at)} — ${esc(STATUS_TXT[x.status] || x.status)}${x.note ? `: ${esc(x.note)}` : ""}${x.changed_by ? ` (${esc(x.changed_by)})` : ""}</div>`).join("") || '<span class="muted small">No status change yet.</span>'}</div>
-    <div><h3 class="sub">Level per analysis run</h3>${d.history.slice(0, 8).map((h) => `<div class="small">${dt(h.recorded_at)} ${lvl(h.severity)} <span class="muted">${h.open_items} open</span></div>`).join("") || '<span class="muted small">First run.</span>'}</div>
-    <div><h3 class="sub">AI analyses</h3>${d.investigations.map((x) => `<div class="small">${dt(x.created_at)} — ${esc(x.status)} ${esc(x.model || "")}</div>`).join("") || '<span class="muted small">None yet.</span>'}</div></div>`;
+  const s4 = `<div class="aihead">${aiTag}${aiPill(st, true)}<button class="btn ${r && st.result_is_current ? "" : "primary"}" id="ai-run" ${st.configured && st.code !== "running" ? "" : "disabled"}>${st.code === "running" ? "Analysing…" : r ? "Re-analyse with Muse Spark" : "Analyse with Muse Spark"}</button></div>
+    ${!st.configured ? '<div class="warnbox">Muse Spark is not configured on this computer. The rule-based explanation is shown in the other sections.</div>' : ""}
+    ${st.code === "failed" ? `<div class="errbox">AI Analysis Failed — ${esc(st.error?.kind || "")}: ${esc(st.error?.message || "")}. The alert, its severity and the rule explanation are unaffected.</div>` : ""}
+    ${r && !st.result_is_current ? `<div class="warnbox">This analysis (${dt(inv.created_at)}) was made on older evidence.${st.code === "running" ? " A new analysis is running." : ""}</div>` : ""}
+    ${r ? `<div class="aibox"><div class="small muted">${esc(inv.model)} · ${dt(inv.created_at)} · ${esc(inv.seconds)} s · ${esc(inv.trigger === "auto" ? "automatic" : "on request")}</div>
+      ${inv.validation?.ok === false ? `<div class="warnbox">${inv.validation.invalid_evidence_ids?.length ? `Removed ${inv.validation.invalid_evidence_ids.length} citation(s) to records that do not exist. ` : ""}${inv.validation.unsupported_facts?.length ? `${inv.validation.unsupported_facts.length} statement(s) without a valid source are marked unsupported.` : ""}</div>` : ""}
+      <h3 class="sub">AI interpretation</h3><p>${esc(r.situation || r.summary)}</p>
+      <p class="small">AI priority ${lvl(r.risk_assessment.ai_priority)} · official rule severity ${lvl(a.severity)} — ${r.risk_assessment.agrees_with_rule_severity ? "agrees" : "differs; the rule severity stays"}. ${esc(r.risk_assessment.rationale)}</p>
+      <details open><summary>Confirmed observations the AI read from the records (${r.observed_facts.length})</summary><ul class="small">${r.observed_facts.map((f) => `<li>${esc(f.statement)} ${f.supported === false ? '<b style="color:var(--emergency)">unsupported</b>' : ""} ${ids(f.evidence_ids)}</li>`).join("")}</ul></details>
+      ${r.hypotheses?.length ? `<details><summary>Possible causes — hypotheses, not confirmed (${r.hypotheses.length})</summary>${r.hypotheses.map((h) => `<div class="hyp"><span class="plaus">${esc(h.plausibility)}</span> <b>${esc(h.cause)}</b><div class="small">${esc(h.reasoning)}</div><div class="small muted">Supports: ${ids(h.supporting_evidence_ids)} Contradicts: ${ids(h.contradicting_evidence_ids)}</div><div class="small"><i>How to verify:</i> ${esc(h.how_to_verify)}</div></div>`).join("")}</details>` : ""}
+      ${r.scenarios?.length ? `<details><summary>Possible scenarios — not predictions (${r.scenarios.length})</summary>${r.scenarios.map((sc) => `<div class="scen"><b>${esc(sc.scenario)}</b> <span class="plaus">${esc(sc.plausibility)}</span><div class="small">${esc(sc.how_it_could_develop)}</div><div class="small"><span class="pro">Supports</span> ${ids(sc.supporting_evidence_ids)} <span class="con">Weakens</span> ${ids(sc.weakening_evidence_ids)}</div><div class="small"><i>Would confirm:</i> ${esc(sc.what_would_confirm)}</div></div>`).join("")}</details>` : ""}
+      <details><summary>Missing information and limits of the analysis</summary><ul class="unk">${(r.missing_information || []).map((m) => `<li><b>${esc(m.item)}</b> — ${esc(m.why_it_matters)}</li>`).join("")}${(r.limitations || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p class="small"><b>Uncertainty:</b> ${esc(r.uncertainty)}</p></details></div>`
+      : st.code === "running" ? '<p class="muted">Muse Spark is reading the evidence. The rule-based sections are already complete.</p>' : '<p class="muted">Not Analysed by AI yet. The rule-based explanation applies.</p>'}
+    <h3 class="sub" style="margin-top:14px">Not verified (rule set)</h3><ul class="unk">${F.unknowns.map((u) => `<li>${esc(u)}</li>`).join("")}${d.data_quality.length ? `<li>${d.data_quality.length} data issue(s) in these records</li>` : ""}</ul>`;
 
-  $("#app").innerHTML = `
-    <div class="crumbs"><a href="#/fire">Fire-risk alerts</a> / ${esc(a.alert_id)}</div>
-    <div class="dhead">${lvl(a.severity, true)}<h1>${esc(a.zone_label)}</h1>${org("rule")}<span>${aiPill(st, true)}</span></div>
-    <nav class="toc" aria-label="Sections">${["Overview", "Evidence", "Trend", "Muse Spark", "Scenarios", "For / against", "Not verified", "Actions", "Related", "History"].map((t, i) => `<a href="javascript:void(0)" data-jump="s${i + 1}">${i + 1}. ${t}</a>`).join("")}</nav>
-    <div class="layout"><div>
-      ${sec(1, "Risk and location", s1)}${sec(2, "Real evidence", s2)}${sec(3, "Trend and timeline", s3)}
-      ${sec(4, "Muse Spark analysis", s4, "ai")}${sec(5, "Possible risk scenarios", s5)}${sec(6, "Evidence for and against each scenario", s6)}
-      ${sec(7, "Missing data and what is not verified", s7)}${sec(8, "Recommended actions and checks", s8)}
-      ${sec(9, "Related alerts, incidents and records", s9)}${sec(10, "Handling history", s10)}
-    </div>
-    <aside class="side">
-      <section class="q"><h2>Level and urgency</h2>
-        <dl class="kv"><dt>Rule level</dt><dd>${lvl(a.severity)}</dd><dt>Urgency</dt><dd>${esc(F.urgency.label)}</dd><dt>Act</dt><dd><b>${esc(F.deadline.text)}</b></dd>
-        <dt>Confidence</dt><dd>${esc(F.confidence.level)} <span class="muted small">— ${esc(F.confidence.reason)}</span></dd>
-        <dt>Detected</dt><dd>${dt(sm.detected_at)}</dd><dt>Last update</dt><dd>${day(a.last_seen)}</dd><dt>AI</dt><dd>${aiPill(st)}</dd></dl></section>
-      <section class="q"><h2>Verification</h2>${verifyBox(d)}</section>
-    </aside></div>`;
+  const s5 = `<p class="small muted" style="margin:-4px 0 8px">${org("rule")}Deadline <b>${esc(F.deadline.text)}</b> (${esc(F.deadline.basis)}). Guidance is preliminary and has not been reviewed by a certified fire-safety expert. If water is in contact with energised equipment, or there is any sign of fire or smoke, follow the building's emergency procedure.</p>
+    ${risks.map((c) => { const s = sigById[c.signal_id]; return `<div class="actgroup"><h4>${lvl(c.severity)} ${esc(c.risk)}</h4><ul class="actions">${s.fields.preventive_actions.map((x, i) => `<li><span class="box" aria-hidden="true"></span><span>${i === 0 ? "<b>First:</b> " : ""}${esc(x)}</span></li>`).join("")}</ul><p class="small"><b>Close when:</b> ${esc(s.fields.closure_condition)}</p></div>`; }).join("")}
+    ${r?.recommended_actions?.length ? `<h3 class="sub" style="margin-top:12px">${aiTag}Additional checks suggested by Muse Spark</h3><ul class="actions">${r.recommended_actions.map((x) => `<li><span class="box" aria-hidden="true"></span><span><b>${esc((x.urgency || "").replace(/_/g, " "))}</b> — ${esc(x.action)} <span class="muted small">(${esc(x.responsible_role)})</span><br><span class="small muted">${esc(x.reason)}</span> ${ids(x.evidence_ids)}</span></li>`).join("")}</ul>` : ""}`;
+
+  const s6 = `<div class="hist2"><div><h3 class="sub">Status changes</h3>${d.status_log.map((x) => `<div class="small">${dt(x.changed_at)} — ${esc(STATUS_TXT[x.status] || x.status)}${x.note ? `: ${esc(x.note)}` : ""}${x.changed_by ? ` (${esc(x.changed_by)})` : ""}</div>`).join("") || '<span class="muted small">No status change yet.</span>'}</div>
+    <div><h3 class="sub">Severity per analysis run</h3>${d.history.slice(0, 8).map((h) => `<div class="small">${dt(h.recorded_at)} ${lvl(h.severity)} <span class="muted">${h.open_items} open</span></div>`).join("") || '<span class="muted small">First run.</span>'}</div>
+    <div><h3 class="sub">AI analyses</h3>${d.investigations.slice(0, 8).map((x) => `<div class="small">${dt(x.created_at)} — ${esc(x.status === "ok" ? "completed" : x.status)}</div>`).join("") || '<span class="muted small">None yet.</span>'}</div></div>
+    <h3 class="sub" style="margin-top:12px">Timeline of the records</h3><ol class="tline">${d.timeline.filter((e) => e.role === "finding").slice(-14).map((e) => `<li><span class="when">${day(e.timestamp)}</span> ${tr(e, "title")}${e.is_open ? '<span class="open">● unresolved</span>' : ""} ${chip(e.evidence_id)}</li>`).join("") || "<li class='muted'>No Data Available</li>"}</ol>`;
+
+  $("#app").innerHTML = `<div class="crumbs"><a href="#/fire">Fire Safety Risks</a> / ${esc(a.alert_id)}</div>
+    <div class="dhead">${lvl(a.severity, true)}<h1>${esc(a.zone_label)}</h1><span class="aist rulefb">Status: ${stat(d.summary)}</span>${aiPill(st)}</div>
+    <nav class="toc" aria-label="Sections">${["What Was Detected", "Why This Matters", "Supporting Evidence", "AI Analysis", "Recommended Actions", "History"].map((t, i) => `<a href="javascript:void(0)" data-jump="s${i + 1}">${i + 1}. ${t}</a>`).join("")}</nav>
+    <div class="layout"><div>${sec(1, "What Was Detected", s1)}${sec(2, "Why This Matters", s2)}${sec(3, "Supporting Evidence", s3)}${sec(4, "AI Analysis", s4)}${sec(5, "Recommended Actions", s5)}${sec(6, "History", s6)}</div>
+    <aside class="side"><section class="q"><h2>Severity and urgency</h2>
+      <dl class="kv"><dt>Severity</dt><dd>${lvl(a.severity)} <span class="small muted">(rule)</span></dd><dt>Status</dt><dd>${stat(d.summary)}</dd><dt>Urgency</dt><dd>${esc(F.urgency.label)}</dd><dt>Act</dt><dd><b>${esc(F.deadline.text)}</b></dd>
+      <dt>Confidence</dt><dd>${esc(F.confidence.level)} <span class="muted small">— ${esc(F.confidence.reason)}</span></dd><dt>Detected</dt><dd>${dt(d.summary.detected_at)}</dd><dt>Latest record</dt><dd>${day(a.last_seen)}</dd><dt>AI</dt><dd>${aiPill(st)}</dd></dl></section>
+      <section class="q"><h2>Verification</h2>${verifyBox(d)}</section></aside></div>`;
   $$("[data-jump]").forEach((el) => (el.onclick = () => document.getElementById(el.dataset.jump).scrollIntoView({ behavior: "smooth" })));
   bindEvidence(); bindAssets(); bindVerify(a.alert_id);
+  if (focusRisk) setTimeout(() => document.getElementById(`r-${focusRisk}`)?.scrollIntoView({ block: "center" }), 50);
   const b = $("#ai-run");
   if (b) b.onclick = async () => {
     b.disabled = true; b.textContent = "Queued…";
     try { await api(`/api/alerts/${encodeURIComponent(id)}/investigate`, { method: "POST" }); } catch (e) { alertBar("The AI request failed: " + e.message); }
-    viewFire(id);
+    viewFire(id, focusRisk);
   };
-  if (st.code === "running") aiPoll = setInterval(async () => {   // poll only while an analysis runs
+  if (st.code === "running") aiPoll = setInterval(async () => {
     if (!location.hash.startsWith("#/fire/")) return clearInterval(aiPoll);
     const n = await api(`/api/alerts/${encodeURIComponent(id)}/ai-status`).catch(() => null);
-    if (n && n.code !== "running") { clearInterval(aiPoll); viewFire(id); }
+    if (n && n.code !== "running") { clearInterval(aiPoll); viewFire(id, focusRisk); }
   }, 5000);
 }
 
 function videoContext(vs) {
-  if (!vs.length) return '<p class="muted small">No survey video of this zone on this computer yet.</p>';
-  return vs.map((v) => `<div class="vctx"><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="muted small">${esc([v.floor, v.area, v.room].filter(Boolean).join(" / "))}</span>
-    <div class="insuff small" style="margin:6px 0">${esc(v.recording_note)}</div>
-    ${v.observations.length ? `<p class="small muted" style="margin:0">${org("ai", "AI · video")}Observations by Muse Spark from the video (${dt(v.analysis_created_at)}). Approximate times; check the clip.</p><ul class="small">${v.observations.slice(0, 6).map((o) => `<li><a href="#/video/${esc(v.video_id)}?t=${o.time_start_s}">${fmtTime(o.time_start_s)}</a> ${esc(o.category.replace(/_/g, " "))}: ${esc(o.observation)} <span class="muted">(${esc(o.visible_certainty.replace(/_/g, " "))})</span></li>`).join("")}</ul>`
-      : `<p class="small muted" style="margin:0">Not analysed yet.</p>`}</div>`).join("");
+  if (!vs.length) return '<p class="muted small">Evidence Unavailable: no survey video of this zone on this computer.</p>';
+  return vs.map((v) => `<div class="vctx"><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="muted small">${esc([plain(v, "floor"), plain(v, "area"), plain(v, "room")].filter(Boolean).join(" / "))}</span>
+    <div class="small muted" style="margin:4px 0">${esc(v.recording_note)}</div>
+    ${v.observations.length ? `<details><summary class="small">${org("ai_vision")}${v.observations.length} observations by Muse Spark (${dt(v.analysis_created_at)})</summary><p class="small muted" style="margin:4px 0">Approximate times — check the clip.</p><ul class="small">${v.observations.map((o) => `<li><a href="#/video/${esc(v.video_id)}?t=${o.time_start_s}">${fmtTime(o.time_start_s)}</a> ${esc(o.category.replace(/_/g, " "))}: ${esc(o.observation)} <span class="muted">(${esc(o.visible_certainty.replace(/_/g, " "))})</span></li>`).join("")}</ul></details>`
+      : `<p class="small muted" style="margin:0">Not analysed by Muse Spark yet.</p>`}</div>`).join("");
 }
-const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+function eqRow(a) {
+  return `<a class="arow eq ${esc(a.severity)}" href="#/equipment/${encodeURIComponent(a.alert_id)}">
+    <span>${lvl(a.severity)}<div class="stat" style="margin-top:6px">${stat(a)}</div></span>
+    <span><span class="t">${esc(a.asset_name_en || a.asset_name || a.asset_id || "Equipment")}</span>${a.critical ? ' <span class="crit">critical equipment</span>' : ""}<div class="why">${esc(a.headline_en || a.why)}</div>
+      <div class="muted small">${esc(a.asset_id || "no equipment code")} · ${esc(a.zone_label)} · ${a.type === "meter" ? "consumption" : "technical"}${a.fire_links.length ? ` · <b>linked to a fire-safety risk (${a.fire_links.map((l) => esc(l.fire_alert_id)).join(", ")})</b>` : ""}</div></span>
+    <span class="stat c3">Detected <b>${day(a.detected_at)}</b><br>Latest record <b>${day(a.last_seen)}</b></span>
+    <span class="stat c4">Act <b>${esc(a.deadline?.text || "—")}</b><br>${a.open_items} open</span></a>`;
+}
+
+/* ============================== Photos & Videos gallery ============================== */
+async function viewMedia(query) {
+  const [m, vids, bld] = await Promise.all([api("/api/media"), api("/api/videos"), api("/api/building")]);
+  const q = new URLSearchParams(query || "");
+  const alertZones = new Set(bld.floors.filter((f) => f.risk_count).map((f) => f.zone));
+  const floors = [...new Set(vids.videos.map((v) => v.zone || ""))];
+  const zoneOpts = Object.entries(vids.zones).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join("");
+  $("#app").innerHTML = `<h1>Photos &amp; Videos</h1>
+    <p class="muted">Real evidence from the building. A survey video shows what was visible <b>when it was recorded</b>; it never changes a rule severity and does not prove that equipment works today.</p>
+    <div class="filters" role="group" aria-label="Filters">
+      <select id="gf" aria-label="Floor"><option value="">All floors</option>${floors.map((z) => `<option value="${esc(z)}" ${q.get("floor") === z ? "selected" : ""}>${esc(vids.zones[z] || "Not assigned")}</option>`).join("")}</select>
+      <select id="ga" aria-label="Linked alert"><option value="">With or without fire-safety risk</option><option value="yes">Floor has an active fire-safety risk</option></select>
+      <input type="date" id="gd" aria-label="Recorded on" title="Recorded on">
+      <input type="text" id="gq" placeholder="Search name, room or equipment" style="width:240px">
+      <span class="small muted" id="gc"></span></div>
+    <div id="gallery" class="gallery"></div>
+    <section class="panel" style="margin-top:18px"><h2>Google Drive</h2>${driveVideos(vids)}
+      <details style="margin-top:14px"><summary>Other ways to add a video</summary>
+        <p class="small muted">Put downloaded files in <b>${esc(vids.inbox)}</b> and press <button class="btn" id="vimport">Import from folder</button> <span class="small muted" id="vimsg"></span>, or upload one file below.</p>
+        <form id="vform" class="vform">
+          <label>Video file (.mp4) <input type="file" id="vfile" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" required></label>
+          <label>Floor <select id="vzone"><option value="">Not assigned</option>${zoneOpts}</select></label>
+          <label>Floor name <input id="vfloor" placeholder="e.g. Basement 1"></label>
+          <label>Area <input id="varea" placeholder="e.g. technical corridor"></label>
+          <label>Room <input id="vroom" placeholder="e.g. MSB room"></label>
+          <label>Recorded on <input type="datetime-local" id="vwhen"></label>
+          <label class="wide">Note <input id="vnote2" placeholder="optional"></label>
+          <button class="btn primary" type="submit">Upload</button><span class="small muted" id="vmsg2"></span>
+        </form></details></section>
+    <section class="panel" style="margin-top:16px"><h2>Photos referenced in the logs</h2>
+      <p class="small muted" style="margin:0">${m.summary.references} photo references found in the records; ${m.summary.available} files available on this computer. Evidence Unavailable until the photo files are connected; files placed in <b>${esc(m.summary.media_dir)}</b> are matched to their records by name.</p></section>`;
+  const render = () => {
+    const f = $("#gf").value, al = $("#ga").value, d = $("#gd").value, s = $("#gq").value.toLowerCase();
+    const list = vids.videos.filter((v) => (!f || (v.zone || "") === f) && (!al || alertZones.has(v.zone)) && (!d || (v.recorded_at || "").slice(0, 10) === d)
+      && (!s || `${v.filename} ${v.room || ""} ${v.area || ""} ${(v.equipment || []).map((e) => `${e.name || ""} ${e.equipment_id}`).join(" ")}`.toLowerCase().includes(s)));
+    $("#gc").textContent = `${list.length} of ${vids.videos.length} videos`;
+    $("#gallery").innerHTML = list.map((v) => `<a class="gcard" href="#/video/${esc(v.video_id)}">
+      <video preload="metadata" muted src="/api/videos/${encodeURIComponent(v.video_id)}/file#t=2" aria-hidden="true"></video>
+      <div class="gbody"><b>${esc(v.filename)}</b><div class="small muted">${esc(v.zone_label)}${v.room ? " · " + tr(v, "room") : ""}</div>
+        <div class="small">${v.recorded_at ? `Recorded ${dt(v.recorded_at)}${v.recorded_at_source === "mp4_metadata" ? " (camera clock)" : ""}` : "Recording date unknown"}${v.duration_s ? ` · ${fmtTime(v.duration_s)}` : ""}</div>
+        <div class="small">${v.analysis_status === "ok" ? `${org("ai_vision")}Analysed by Muse Spark` : esc(VSTAT[v.analysis_status] || v.analysis_status)}${alertZones.has(v.zone) ? ' · <span class="rst open">floor has a fire-safety risk</span>' : ""}</div>
+        <div class="small muted">${v.drive_file_id ? `${org("source")}Google Drive${v.equipment?.length ? ` · Asset register: ${v.equipment.map((e) => esc(e.equipment_id)).join(", ")}` : ""}` : "Uploaded on this computer"}</div></div></a>`).join("") || '<div class="empty">No video matches these filters.</div>';
+  };
+  ["#gf", "#ga", "#gd"].forEach((x) => $(x).addEventListener("change", render)); $("#gq").addEventListener("input", render);
+  render();
+  bindMediaForms(vids);
+}
+function bindMediaForms(vids) {
+  const dsb = $("#vdrive");
+  if (dsb) dsb.onclick = async () => { dsb.disabled = true; try { await api("/api/videos/drive-sync", { method: "POST" }); } catch (e) { alertBar("Could not start: " + e.message); } viewMedia(); };
+  clearInterval(vidPoll);
+  if (vids.drive_sync.progress?.running) vidPoll = setInterval(async () => {
+    if (!location.hash.startsWith("#/media")) return clearInterval(vidPoll);
+    const n = await api("/api/videos").catch(() => null);
+    if (!n) return;
+    if (!n.drive_sync.progress?.running) { clearInterval(vidPoll); viewMedia(); return; }
+    const el = $("#vprog"); if (el) el.innerHTML = progressText(n.drive_sync.progress);
+  }, 4000);
+  const imp = $("#vimport");
+  if (imp) imp.onclick = async () => {
+    imp.disabled = true; $("#vimsg").textContent = "Checking the folder…";
+    try { const r = await api("/api/videos/import", { method: "POST" }); $("#vimsg").textContent = `${r.imported.length} imported, ${r.skipped.length} skipped.`; if (r.imported.length) setTimeout(viewMedia, 1200); else imp.disabled = false; }
+    catch (e) { $("#vimsg").textContent = "Import failed: " + e.message; imp.disabled = false; }
+  };
+  $("#vform").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const file = $("#vfile").files[0]; if (!file) return;
+    const msg = $("#vmsg2"); msg.textContent = "Reading video length…";
+    const duration = await new Promise((res) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => res(v.duration); v.onerror = () => res(null); v.src = URL.createObjectURL(file); });
+    const p = new URLSearchParams({ filename: file.name });
+    const set = (k, v) => { if (v) p.set(k, v); };
+    set("zone", $("#vzone").value); set("floor", $("#vfloor").value); set("area", $("#varea").value); set("room", $("#vroom").value);
+    set("recorded_at", $("#vwhen").value); set("note", $("#vnote2").value); if (duration && isFinite(duration)) p.set("duration_s", duration.toFixed(1));
+    msg.textContent = `Uploading ${(file.size / 1048576).toFixed(1)} MB…`;
+    try { const v = await api(`/api/videos?${p}`, { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } }); location.hash = `#/video/${v.video_id}`; }
+    catch (e) { msg.textContent = "Upload failed: " + e.message; }
+  };
+}
 
 /* ============================== Equipment alerts ============================== */
 async function viewEquipList() {
@@ -327,13 +482,13 @@ async function viewEquip(id) {
   const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   $("#app").innerHTML = `
     <div class="crumbs"><a href="#/equipment">Building equipment alerts</a> / ${esc(a.alert_id)}</div>
-    <div class="dhead">${lvl(a.severity, true)}<h1>${esc(a.asset_name || a.asset_id)}</h1>${org("rule")}${a.critical ? '<span class="crit">critical equipment</span>' : ""}</div>
+    <div class="dhead">${lvl(a.severity, true)}<h1>${esc(sm.asset_name_en || a.asset_name || a.asset_id)}</h1>${org("rule")}${a.critical ? '<span class="crit">critical equipment</span>' : ""}</div>
     <p class="muted" style="margin:-6px 0 14px">${esc(a.asset_id || "no equipment code")} · ${esc(a.zone_label)} · ${F.kind === "meter" ? "consumption finding" : "technical finding"} · rules from the earlier skill (${a.rules.map((r) => esc(r.rule)).join(", ")})</p>
     <div class="layout"><div>
-      <section class="q"><h2><span class="qn">1</span>Problem</h2><p class="lead">${esc(F.headline)}</p><ul>${F.why_short.map((w) => `<li>${org("rule")}${esc(w)}</li>`).join("")}</ul></section>
+      <section class="q"><h2><span class="qn">1</span>Problem</h2><p class="lead">${esc(sm.headline_en || F.headline)}</p><ul>${F.why_short.map((w) => `<li>${org("rule")}${esc(w)}</li>`).join("")}</ul></section>
       <section class="q"><h2><span class="qn">2</span>Evidence</h2>
         ${F.evidence.map((e) => { const m = e.measure; const der = (e.flags || []).includes("derived");
-          return `<div class="evi"><span class="when">${day(e.time)}</span><span><span class="what">${esc(e.title)}</span>${e.unresolved ? '<span class="open">● open</span>' : ""}<div class="src">${org(der ? "derived" : "source")}${esc(KIND[e.kind] || e.kind)} · ${esc(e.source || "derived from meter readings")} ${chip(e.evidence_id)}</div>${e.status ? `<div class="src">Status in source: ${esc(e.status)}</div>` : ""}</span>
+          return `<div class="evi"><span class="when">${day(e.time)}</span><span><span class="what">${tr(e, "title")}</span>${e.unresolved ? '<span class="open">● open</span>' : ""}<div class="src">${org(der ? "derived" : "source")}${esc(KIND[e.kind] || e.kind)} · ${esc(e.source || "derived from meter readings")} ${chip(e.evidence_id)}</div>${e.status ? `<div class="src">Status in source: ${tr(e, "status")}</div>` : ""}</span>
           <span class="val">${m && m.value != null ? `${fmtNum(m.value)} <small>${m.baseline_median != null ? `vs median ${fmtNum(m.baseline_median)} ` : ""}${esc(m.unit || "")}${m.unit_verified === false ? " (unit unverified)" : ""}</small>` : ""}</span></div>`; }).join("") || '<div class="empty">Chưa có dữ liệu</div>'}
         ${d.trends.length ? `<h3 class="sub" style="margin-top:12px">Readings around each period</h3>${d.trends.slice(0, 3).map(trendChart).join("")}` : ""}</section>
       <section class="q"><h2><span class="qn">3</span>Comparison and possible causes</h2>
@@ -347,7 +502,7 @@ async function viewEquip(id) {
       <section class="q"><h2><span class="qn">6</span>Not verified</h2><ul class="unk">${F.unknowns.map((u) => `<li>${esc(u)}</li>`).join("")}${d.data_quality.map((q) => `<li>Data issue: ${esc(q.type.replace(/_/g, " "))} ${chip(q.evidence_id)}</li>`).join("")}</ul></section>
       <section class="q"><h2><span class="qn">7</span>Linked fire-risk alerts</h2>
         ${d.fire_alerts.length ? `<p class="muted small" style="margin:0 0 6px">This equipment alert is evidence or context in the fire-risk alert(s) below. Its own level is unchanged.</p>${d.fire_alerts.map((x) => `<a class="mini" href="#/fire/${esc(x.alert_id)}">${lvl(x.severity)}<span><b>${esc(x.zone_label)}</b> · ${esc(x.headline)}<br><span class="small muted">Why linked: ${x.reasons.map(esc).join("; ")}</span></span></a>`).join("")}` : '<p class="muted">Not part of any fire-risk alert. Not every equipment fault is a fire risk.</p>'}</section>
-      ${d.maintenance_history.length ? `<section class="q"><h2><span class="qn">8</span>Maintenance and inspection history</h2><div class="scroll"><table class="tbl"><tbody>${d.maintenance_history.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${esc(e.title)}<div class="muted small">${esc(KIND[e.kind] || e.kind)}</div></td><td class="small">${esc(e.status || "")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("")}</tbody></table></div></section>` : ""}
+      ${d.maintenance_history.length ? `<section class="q"><h2><span class="qn">8</span>Maintenance and inspection history</h2><div class="scroll"><table class="tbl"><tbody>${d.maintenance_history.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${tr(e, "title")}<div class="muted small">${esc(KIND[e.kind] || e.kind)}</div></td><td class="small">${tr(e, "status")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("")}</tbody></table></div></section>` : ""}
     </div>
     <aside class="side">
       <section class="q"><h2>Level and urgency</h2><dl class="kv">${row("Rule level", lvl(a.severity))}${row("Urgency", esc(F.urgency.label))}${row("Act", `<b>${esc(F.deadline.text)}</b>`)}
@@ -359,68 +514,6 @@ async function viewEquip(id) {
   bindEvidence(); bindVerify(a.alert_id);
 }
 
-/* ============================== Photos & survey videos ============================== */
-async function viewMedia() {
-  const [m, vids] = await Promise.all([api("/api/media"), api("/api/videos")]);
-  const zoneOpts = Object.entries(vids.zones).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join("");
-  $("#app").innerHTML = `<h1>Photos &amp; survey videos</h1>
-    <section class="panel"><h2>Building survey videos</h2>
-      <p class="muted small">A survey video shows what was visible <b>when it was recorded</b>. It is context for fire-risk alerts of the same zone: it never changes a rule level, does not prove that equipment works today, and does not confirm a hazard. Muse Spark reviews each .mp4 through the Meta video API (the uploaded copy expires after 1 hour and is deleted right after the analysis).</p>
-      ${driveVideos(vids)}
-      <details style="margin-top:14px"><summary>Other ways to add a video</summary>
-        <p class="small muted">Put downloaded files in <b>${esc(vids.inbox)}</b> and press <button class="btn" id="vimport">Import from folder</button> <span class="small muted" id="vimsg"></span>, or upload one file below.</p>
-      <form id="vform" class="vform">
-        <label>Video file (.mp4) <input type="file" id="vfile" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" required></label>
-        <label>Zone <select id="vzone"><option value="">Not assigned</option>${zoneOpts}</select></label>
-        <label>Floor <input id="vfloor" placeholder="e.g. Basement 1"></label>
-        <label>Area <input id="varea" placeholder="e.g. technical corridor"></label>
-        <label>Room <input id="vroom" placeholder="e.g. MSB room"></label>
-        <label>Recorded on <input type="datetime-local" id="vwhen"></label>
-        <label class="wide">Note <input id="vnote2" placeholder="optional"></label>
-        <button class="btn primary" type="submit">Upload</button><span class="small muted" id="vmsg2"></span>
-      </form></details>
-      ${vids.videos.length ? `<div class="scroll" style="margin-top:14px"><table class="tbl"><thead><tr><th>Video</th><th>Zone / place</th><th>Recorded</th><th>Size</th><th>Muse Spark</th></tr></thead><tbody>
-        ${vids.videos.map((v) => `<tr class="click" onclick="location.hash='#/video/${esc(v.video_id)}'"><td><b>${esc(v.filename)}</b><div class="muted small">${esc(v.video_id)}</div></td><td>${esc(v.zone_label)}<div class="muted small">${esc([v.floor, v.area, v.room].filter(Boolean).join(" / "))}</div></td>
-          <td class="small">${v.recorded_at ? dt(v.recorded_at) : '<span class="muted">unknown</span>'}${v.age_days > vids.old_after_days ? `<div class="muted">${v.age_days} days ago</div>` : ""}</td><td class="num small">${(v.size / 1048576).toFixed(1)} MB</td>
-          <td class="small">${v.analysable ? esc(VSTAT[v.analysis_status] || v.analysis_status) : `<span class="muted">${esc(v.analysable_reason)}</span>`}</td></tr>`).join("")}</tbody></table></div>`
-        : '<div class="empty" style="margin-top:14px">No survey video on this computer yet.</div>'}
-    </section>
-    <section class="panel" style="margin-top:16px"><h2>Photos referenced in the logs</h2>
-      <div class="counts"><div class="count"><span class="n num">${m.summary.references}</span><span class="l">photo references</span></div><div class="count"><span class="n num">${m.summary.available}</span><span class="l">files available here</span></div></div>
-      <p class="small muted">The logs point to photos, but the files are not connected yet, so nothing is analysed or shown. Files placed in <b>${esc(m.summary.media_dir)}</b> are matched to their records by name.</p></section>`;
-  const dsb = $("#vdrive");
-  if (dsb) dsb.onclick = async () => { dsb.disabled = true; try { await api("/api/videos/drive-sync", { method: "POST" }); } catch (e) { alertBar("Could not start: " + e.message); } viewMedia(); };
-  clearInterval(vidPoll);
-  if (vids.drive_sync.progress?.running) vidPoll = setInterval(async () => {
-    if (location.hash !== "#/media") return clearInterval(vidPoll);
-    const n = await api("/api/videos").catch(() => null);
-    if (!n) return;
-    if (!n.drive_sync.progress?.running) { clearInterval(vidPoll); viewMedia(); return; }
-    const el = $("#vprog"); if (el) el.innerHTML = progressText(n.drive_sync.progress);
-  }, 4000);
-  const imp = $("#vimport");
-  if (imp) imp.onclick = async () => {
-    imp.disabled = true; $("#vimsg").textContent = "Checking the folder… large files take a while to fingerprint.";
-    try {
-      const r = await api("/api/videos/import", { method: "POST" });
-      $("#vimsg").textContent = `${r.imported.length} imported, ${r.skipped.length} skipped${r.skipped.length ? ": " + r.skipped.map((x) => `${x.file} (${x.reason})`).join("; ") : ""}.`;
-      if (r.imported.length) setTimeout(viewMedia, 1200); else imp.disabled = false;
-    } catch (e) { $("#vimsg").textContent = "Import failed: " + e.message; imp.disabled = false; }
-  };
-  $("#vform").onsubmit = async (ev) => {
-    ev.preventDefault();
-    const file = $("#vfile").files[0]; if (!file) return;
-    const msg = $("#vmsg2"); msg.textContent = "Reading video length…";
-    const duration = await new Promise((res) => { const v = document.createElement("video"); v.preload = "metadata"; v.onloadedmetadata = () => res(v.duration); v.onerror = () => res(null); v.src = URL.createObjectURL(file); });
-    const q = new URLSearchParams({ filename: file.name });
-    const set = (k, v) => { if (v) q.set(k, v); };
-    set("zone", $("#vzone").value); set("floor", $("#vfloor").value); set("area", $("#varea").value); set("room", $("#vroom").value);
-    set("recorded_at", $("#vwhen").value); set("note", $("#vnote2").value); if (duration && isFinite(duration)) q.set("duration_s", duration.toFixed(1));
-    msg.textContent = `Uploading ${(file.size / 1048576).toFixed(1)} MB to this computer…`;
-    try { const v = await api(`/api/videos?${q}`, { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } }); location.hash = `#/video/${v.video_id}`; }
-    catch (e) { msg.textContent = "Upload failed: " + e.message; }
-  };
-}
 function progressText(p) {
   if (!p || (!p.running && !p.finished_at)) return "";
   const c = p.current;
@@ -437,7 +530,7 @@ function driveVideos(vids) {
   const rows = list.map((r) => {
     const st = r.on_this_computer ? `<a href="#/video/${esc(r.video_id)}">on this computer · ${esc(VSTAT[r.analysis_status] || r.analysis_status)}</a>` : '<span class="muted">on Drive only</span>';
     return `<tr><td><b>${esc(r.title)}</b><div class="muted small">${r.drive?.folder ? esc(r.drive.folder) + " · " : ""}${r.drive?.drive_created_time ? "added to Drive " + dt(r.drive.drive_created_time) : ""}</div></td>
-      <td class="small">${r.equipment.length ? r.equipment.map((e) => `${esc(e.name || "")} <span class="muted">${esc(e.equipment_id)}</span>`).join("<br>") : '<span class="muted">not linked in the asset register</span>'}</td>
+      <td class="small">${r.equipment.length ? r.equipment.map((e) => `${esc(e.name_en || e.name || "")} <span class="muted">${esc(e.equipment_id)}</span>`).join("<br>") : '<span class="muted">not linked in the asset register</span>'}</td>
       <td class="small">${esc(r.zone_label)}${r.zone ? "" : `<div class="muted">${esc(r.zone_source || "")}</div>`}</td>
       <td class="num small">${r.size ? (r.size / 1048576).toFixed(0) + " MB" : "—"}</td><td class="small">${st}</td></tr>`;
   }).join("");
@@ -483,7 +576,7 @@ async function viewVideo(id, t) {
       <label class="small">Note <input id="mn" value="${esc(v.note || "")}"></label>
       <button class="btn" id="msave">Save</button><span class="small muted" id="mmsg"></span></div>
       <p class="small muted">Added ${dt(v.uploaded_at)} · recording date ${v.recorded_at_source === "mp4_metadata" ? "from the file's own metadata (camera clock)" : v.recorded_at ? "entered by a person" : "unknown"}.</p></section>
-      ${v.equipment?.length ? `<section class="q"><h2>Linked equipment</h2>${org("source")}<span class="small muted">asset register</span>${v.equipment.map((e) => `<div class="small" style="padding:4px 0"><b>${esc(e.name || e.equipment_id)}</b> <span class="muted">${esc(e.equipment_id)}${e.floor ? " · " + esc(e.floor) : ""}</span></div>`).join("")}</section>` : ""}</aside></div>`;
+      ${v.equipment?.length ? `<section class="q"><h2>Linked equipment</h2>${org("source")}<span class="small muted">asset register</span>${v.equipment.map((e) => `<div class="small" style="padding:4px 0"><b>${esc(e.name_en || e.name || e.equipment_id)}</b> <span class="muted">${esc(e.equipment_id)}${e.floor ? " · " + esc(e.floor) : ""}</span></div>`).join("")}</section>` : ""}</aside></div>`;
   const player = $("#player");
   const jump = (s) => { player.currentTime = s; player.play().catch(() => {}); player.scrollIntoView({ behavior: "smooth", block: "center" }); };
   $$("[data-t]").forEach((b) => (b.onclick = () => jump(+b.dataset.t)));
@@ -590,8 +683,8 @@ async function viewEvents() {
     const list = evs.filter((e) => (!k || e.kind === k) && (!q || (e.title + " " + e.text).toLowerCase().includes(q)));
     $("#fc").textContent = `${list.length} records`;
     $("#erows").innerHTML = list.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td class="small">${org(e.origin)}${esc(KIND[e.kind] || e.kind)}</td><td>${esc(e.zone || "—")}</td>
-      <td>${esc(e.title)}</td><td>${(e.tags || []).filter((t) => !["checklist_pass", "fault"].includes(t.tag)).map((t) => `<span class="org source" title="matched: ${esc(t.term)}">${esc(TAGNAME[t.tag] || t.tag)}</span>`).join("")}</td>
-      <td class="small">${esc(e.status || "")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("");
+      <td>${tr(e, "title")}</td><td>${(e.tags || []).filter((t) => !["checklist_pass", "fault"].includes(t.tag)).map((t) => `<span class="org source" title="Matched wording in the original record: ${esc(t.term)}">${esc(TAGNAME[t.tag] || t.tag)}</span>`).join("")}</td>
+      <td class="small">${tr(e, "status")}${e.is_open ? '<span class="open">● open</span>' : ""}</td></tr>`).join("");
     bindEvidence();
   };
   $("#fk").addEventListener("change", render); $("#fq").addEventListener("input", render); render();
@@ -603,11 +696,11 @@ async function viewQuality() {
   q.issues.forEach((i) => (groups[i.type] = groups[i.type] || []).push(i));
   $("#app").innerHTML = `<h1>Data sources</h1><p class="muted">What the analysis read, how fresh it is, and what looked wrong. Freshness is judged by the newest record, because the file's modified time can lag behind app-written rows.</p>
     <div class="scroll"><table class="tbl"><thead><tr><th>Source</th><th>Tab</th><th>State</th><th>Rows read</th><th>In scope</th><th>Newest record</th><th>Snapshot taken</th></tr></thead><tbody>
-    ${q.sources.map((s) => `<tr><td>${esc(s.source)}</td><td>${esc(s.sheet || "—")}</td><td>${s.error ? `${lvl("unknown")} <span class="small">${esc(s.error)}</span>` : s.stale ? `${lvl("warning")} <span class="small">older than expected (${s.age_days} d)</span>` : `${lvl("normal")} <span class="small">${s.expected_cadence_days ? `${s.age_days} d old` : "event log"}</span>`}</td>
+    ${q.sources.map((s) => `<tr><td>${esc(SRCNAME[s.source] || s.source)}</td><td><span title="Original tab name: ${esc(s.sheet || "")}">${esc(SHEETS[s.sheet] || s.sheet || "—")}</span></td><td>${s.error ? `${lvl("unknown")} <span class="small">${esc(s.error)}</span>` : s.stale ? `${lvl("warning")} <span class="small">older than expected (${s.age_days} d)</span>` : `${lvl("normal")} <span class="small">${s.expected_cadence_days ? `${s.age_days} d old` : "event log"}</span>`}</td>
       <td class="num">${esc(s.rows_read ?? "—")}</td><td class="num">${esc(s.in_scope ?? "—")}</td><td class="small">${dt(s.latest_record)}</td><td class="small">${dt(s.snapshot_at)}</td></tr>`).join("")}</tbody></table></div>
     ${syncPanel(await api("/api/sync"), q.sources)}
     <h2 style="margin:24px 0 10px">Issues found (${q.issues.length})</h2>
-    ${Object.entries(groups).map(([k, l]) => `<details ${l.length < 6 ? "open" : ""}><summary>${esc(k.replace(/_/g, " "))} (${l.length})</summary><ul class="small">${l.map((i) => `<li>${i.evidence_id ? chip(i.evidence_id) : ""} ${esc(i.title || i.detail || i.meter || i.sheet || "")} ${i.date ? esc(i.date) : ""}</li>`).join("")}</ul></details>`).join("") || '<div class="empty">No data issues found.</div>'}`;
+    ${Object.entries(groups).map(([k, l]) => `<details ${l.length < 6 ? "open" : ""}><summary>${esc(k.replace(/_/g, " "))} (${l.length})</summary><ul class="small">${l.map((i) => `<li>${i.evidence_id ? chip(i.evidence_id) : ""} ${i.title ? tr(i, "title") : esc(i.detail || i.meter || i.sheet || "")} ${i.date ? esc(i.date) : ""}</li>`).join("")}</ul></details>`).join("") || '<div class="empty">No data issues found.</div>'}`;
   bindEvidence();
 }
 
@@ -634,18 +727,19 @@ async function openEvidence(id) {
   const s = e.source || {};
   const vals = Object.entries(e.values || {}).filter(([k]) => !["derived_from", "instructions"].includes(k) && e.values[k] !== null && e.values[k] !== "")
     .map(([k, v]) => `<dt>${esc(k.replace(/_/g, " "))}</dt><dd>${esc(typeof v === "object" ? JSON.stringify(v) : v)}</dd>`).join("");
-  openDrawer("Source record", `<p>${org(e.origin)}</p><h3>${esc(e.title)}</h3>
+  openDrawer("Source record", `<p>${org(e.origin)}</p><h3>${tr(e, "title")}</h3>
     <dl class="kv" style="margin-top:12px"><dt>Type</dt><dd>${esc(KIND[e.kind] || e.kind)}</dd><dt>Time</dt><dd>${dt(e.timestamp)}</dd>
     <dt>Equipment</dt><dd>${esc(e.asset_id || "—")} ${esc(e.asset_name || "")}</dd><dt>Zone</dt><dd>${esc(e.zone || "—")}</dd>
-    <dt>Status in source</dt><dd>${esc(e.status || "—")}${e.is_open ? '<span class="open">● unresolved</span>' : ""}</dd>
-    <dt>Original text</dt><dd>${esc(e.text || "—")}</dd>
+    <dt>Status in source</dt><dd>${tr(e, "status") || "—"}${e.is_open ? '<span class="open">● unresolved</span>' : ""}</dd>
+    <dt>Text (English)</dt><dd>${e.text ? tr(e, "text") : "—"}</dd>
+    ${e.text && e.text_en && e.text_en !== e.text ? `<dt>Original text</dt><dd class="small muted">${esc(e.text)}</dd>` : ""}
     <dt>Hazard words</dt><dd>${(e.tags || []).filter((t) => t.tag !== "checklist_pass").map((t) => `<span class="org source">${esc(TAGNAME[t.tag] || t.tag)}: “${esc(t.term)}”</span>`).join(" ") || "—"}</dd>
     <dt>Data flags</dt><dd>${(e.flags || []).filter((f) => f !== "derived").map((f) => esc(f.replace(/_/g, " "))).join(", ") || "none"}</dd></dl>
     <h3 style="margin-top:18px">Where it comes from</h3>
-    <dl class="kv"><dt>File</dt><dd>${esc(s.source_title)}</dd><dt>Tab</dt><dd>${esc(s.sheet)}</dd><dt>Row</dt><dd>${s.row ? esc(s.row) : "derived from the readings below"}</dd><dt>Record ID</dt><dd>${esc(s.record_id || "—")}</dd></dl>
+    <dl class="kv"><dt>File</dt><dd>${esc(s.source_title)}</dd><dt>Tab</dt><dd>${esc(s.sheet_en || SHEETS[s.sheet] || s.sheet)} <span class="muted small">(original: ${esc(s.sheet)})</span></dd><dt>Row</dt><dd>${s.row ? esc(s.row) : "derived from the readings below"}</dd><dt>Record ID</dt><dd>${esc(s.record_id || "—")}</dd></dl>
     ${e.window ? `<h3 style="margin-top:18px">Daily values around this anomaly</h3>${trendChart({ points: e.window, median: e.values.median, start: e.timestamp.slice(0, 10), end: e.values.end, meter: e.asset_id, meter_name: e.asset_name, unit: e.values.unit, unit_verified: e.values.unit_verified, label: e.values.label, evidence_id: e.evidence_id })}` : ""}
     ${e.derived_records ? `<details><summary>${e.derived_records.length} meter readings used</summary><table class="tbl"><thead><tr><th>Time</th><th>Reading</th><th>Row</th></tr></thead><tbody>${e.derived_records.map((r) => `<tr><td class="small">${dt(r.timestamp)}</td><td class="num">${esc(r.values.reading)}</td><td class="num">${esc(r.source.row)}</td></tr>`).join("")}</tbody></table></details>` : ""}
-    <h3 style="margin-top:18px">Values</h3><dl class="kv">${vals || "<dd>—</dd>"}</dl>
+    <h3 style="margin-top:18px">Original field values (as recorded)</h3><dl class="kv">${vals || "<dd>—</dd>"}</dl>
     ${e.media_refs?.length ? `<h3 style="margin-top:18px">Photos referenced (not connected yet)</h3>${e.media_refs.map((r) => `<div class="small muted">${esc(r)}</div>`).join("")}` : ""}
     <p class="small muted">Used in: ${(e.in_alerts || []).map(esc).join(", ") || "no alert"}</p>`);
 }
@@ -655,7 +749,7 @@ async function openAsset(id) {
   openDrawer("Equipment", `<h3>${esc(a.name || id)}</h3><p class="muted small">${esc(id)}${a.meta?.zone ? ` · zone ${esc(a.meta.zone)}` : ""}</p>
     ${a.signals.length ? `<p>${a.signals.map((s) => `${lvl(s.severity)} ${esc(s.title)}`).join("<br>")}</p>` : '<p class="muted">No rule signal.</p>'}
     <h3 style="margin-top:14px">Record history (${a.records.length})</h3>
-    <table class="tbl"><tbody>${a.records.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${esc(e.title)}<div class="muted small">${esc(KIND[e.kind] || e.kind)} · ${esc(e.status || "")}</div></td></tr>`).join("") || '<tr><td class="muted">No records.</td></tr>'}</tbody></table>`);
+    <table class="tbl"><tbody>${a.records.map((e) => `<tr class="click" data-ev="${esc(e.evidence_id)}"><td class="small">${day(e.timestamp)}</td><td>${tr(e, "title")}<div class="muted small">${esc(KIND[e.kind] || e.kind)} · ${tr(e, "status")}</div></td></tr>`).join("") || '<tr><td class="muted">No Data Available</td></tr>'}</tbody></table>`);
 }
 $("#drawer-close").addEventListener("click", () => ($("#drawer").hidden = true));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#drawer").hidden = true; });
@@ -666,22 +760,23 @@ async function route() {
   const [path, query] = h.split("?");
   const navKey = path === "#/" ? "overview" : path.startsWith("#/fire") || path.startsWith("#/alert") ? "fire"
     : path.startsWith("#/equipment") ? "equipment" : path.startsWith("#/video") || path === "#/media" ? "media" : path.slice(2);
-  $$("nav a").forEach((a) => a.classList.toggle("active", a.dataset.nav === navKey));
+  $$("nav a").forEach((a) => { a.classList.toggle("active", a.dataset.nav === navKey); if (a.dataset.nav === navKey) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   clearInterval(aiPoll); clearInterval(vidPoll);
+  const qp = new URLSearchParams((query || "").split("#")[0]);
   try {
     if (!S) await loadStatus();
-    if (path.startsWith("#/fire/")) return await viewFire(decodeURIComponent(path.slice(7)));
+    if (path.startsWith("#/fire/")) return await viewFire(decodeURIComponent(path.slice(7)), qp.get("risk"));
     if (path.startsWith("#/alert/")) return await viewFire(decodeURIComponent(path.slice(8)));      // old links
     if (path === "#/fire" || path === "#/alerts") return await viewFireList();
     if (path.startsWith("#/equipment/")) return await viewEquip(decodeURIComponent(path.slice(12)));
     if (path === "#/equipment") return await viewEquipList();
-    if (path.startsWith("#/video/")) return await viewVideo(decodeURIComponent(path.slice(8)), new URLSearchParams(query || "").get("t"));
+    if (path.startsWith("#/video/")) return await viewVideo(decodeURIComponent(path.slice(8)), qp.get("t"));
     if (path === "#/events") return await viewEvents();
     if (path === "#/quality") return await viewQuality();
-    if (path === "#/media") return await viewMedia();
+    if (path === "#/media") return await viewMedia(query);
     return await viewOverview();
   } catch (e) {
-    $("#app").innerHTML = `<div class="errbox">The dashboard could not load data from the backend: ${esc(e.message)}. Check that run_dashboard is still running.</div>`;
+    $("#app").innerHTML = `<div class="errbox"><b>The dashboard cannot reach its backend.</b> ${esc(e.message)}. Check that the run_dashboard window is still open, then reload this page.</div>`;
   }
 }
 $("#refresh").addEventListener("click", async () => {

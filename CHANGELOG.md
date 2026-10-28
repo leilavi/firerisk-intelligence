@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 — 2026-10-28
+- Building-centred Overview: building summary (status = highest active risk, risks by severity, floors affected,
+  urgent actions, last analysis / Drive sync), interactive Building Risk Map (front view, Roof–B1 + whole-building
+  band; keyboard accessible), floor panel with the most important risk in plain English and expandable risk cards,
+  urgent actions, equipment-alert summary, recent records and analysed survey videos. `GET /api/building`.
+- Floor states: Emergency / High Risk / Warning / Watch from active risks; "No Active Fire-Risk Alert" when records
+  exist but no rule fired; "Not Assessed" when there are no records. Green is never used (the rules cannot confirm a
+  floor is safe; there are no smoke/heat/gas sensors). Watch is now blue, Warning yellow.
+- One card per risk (rule signal): location, risk, why it matters (plain English, cautious), severity, status,
+  evidence count, first action. Fire Safety Risks page with filters (severity, floor, status, risk type). Alert detail
+  in six sections: What Was Detected, Why This Matters, Supporting Evidence, AI Analysis, Recommended Actions, History.
+- English UI: AI status labels, rule texts, tab names and record statuses (deterministic glossary); free-text records
+  and register names translated by Muse Spark in the background and cached, originals kept and marked
+  (`*_en`, `*_en_origin`). Investigation prompt v4 (English only).
+- Photos & Videos gallery with filters (floor, date, linked risk, text) and source links.
+- Privacy fix: lower-case honorifics ("anh Nam") are now pseudonymised before AI calls.
+- 108 tests.
+
 ## 0.6.1 — 2026-10-28
 - First real run on the author's PC (11:40): Drive sync OK (9 files, 8 videos), automatic Muse Spark analysis of
   ZONE-B1 and ZONE-Building with prompt v3 (27 s, 22 s, both valid), 2 videos downloaded with MP4 recording times.

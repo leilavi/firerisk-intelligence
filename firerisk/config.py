@@ -69,7 +69,7 @@ ASSETS: dict[str, dict] = {
     "P-BG.TTC009": {"name": "Fire alarm control panel / heat-detector monitor module (basement shaft AB)", "zone": "B1", "fire_role": "fire_detection", "source": "data"},
     "P-PCCC642": {"name": "Lightning protection system", "zone": "Building", "fire_role": "lightning", "source": "data"},
     "P-BG.TTC028": {"name": "Wastewater treatment (XLNT) control panel", "zone": "B1", "fire_role": "motor_equipment", "source": "data"},
-    "P-BG.TTC167": {"name": "XLNT air blower AB-01A", "zone": "B1", "fire_role": "motor_equipment", "source": "data"},
+    "P-BG.TTC167": {"name": "Wastewater air blower AB-01A (XLNT)", "zone": "B1", "fire_role": "motor_equipment", "source": "data"},
     "P-BG.TTC117": {"name": "Domestic water pump panel", "zone": "B1", "fire_role": "other", "source": "data"},
     "P-BG.TTC219": {"name": "Air conditioner, floor 2", "zone": "F2", "fire_role": "hvac", "source": "data"},
     "P-BG.TTC102": {"name": "Camera room air conditioner", "zone": "B1", "fire_role": "hvac", "source": "data"},

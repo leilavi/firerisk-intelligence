@@ -135,7 +135,7 @@ def test_auto_analysis_runs_once_validates_citations_and_cannot_change_level(tmp
     assert api.state.ai.wait_idle(20)
     assert fake.calls == calls_after_first
     d = c.get("/api/alerts/ZONE-B1").json()
-    assert d["ai_status"]["code"] == "done" and d["ai_status"]["label"] == "Đã hoàn tất phân tích AI"
+    assert d["ai_status"]["code"] == "done" and d["ai_status"]["label"] == "AI Analysis Complete"
     assert not d["ai_status"]["fallback"]
     inv = d["investigation"]
     assert inv["trigger"] == "auto" and inv["api_mode"] == "test"
@@ -181,7 +181,7 @@ def test_api_failure_keeps_alerts_and_uses_rule_explanation(tmp_path, monkeypatc
     d = c.get("/api/alerts/ZONE-B1").json()
     assert d["alert"]["severity"] == "high" and d["evidence"]
     st = d["ai_status"]
-    assert st["code"] == "failed" and st["fallback"] and st["fallback_label"] == "Đang sử dụng giải thích theo quy tắc"
+    assert st["code"] == "failed" and st["fallback"] and st["fallback_label"] == "Rule-Based Explanation"
     assert d["rule_explanation"] and all(x["origin"] == "rule" for x in d["rule_explanation"])
     assert d["rule_explanation"][0]["risk_chain"]
     n = fake.calls

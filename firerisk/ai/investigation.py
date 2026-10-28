@@ -17,7 +17,7 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v3"  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
+PROMPT_VERSION = "investigation-v4"  # v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
                                      #     related equipment alerts in the package
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building
@@ -45,7 +45,8 @@ Rules you must follow:
    They show what was visible THEN, not the current state; they do not prove equipment works and do not confirm
    a hazard. Mention them by their video alias (V01...) in text only; never put them in evidence_ids.
 Be concise: short sentences, no repetition between fields.
-Write in clear English. Keep Vietnamese equipment names in parentheses where useful."""
+Write in clear, plain English only (the dashboard is English). Translate Vietnamese record wording; keep equipment
+codes as written."""
 
 _ID_LIST = {"type": "array", "items": {"type": "string"}}
 SCHEMA = {

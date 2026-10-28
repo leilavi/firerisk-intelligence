@@ -184,3 +184,22 @@ sync 11:40:18 ok (ops sheet updated, listing 9 files / 8 videos); ai_investigati
 15.7 s; neither has a zone in the register). The process stopped during the third download (.part left at 36.7 MB,
 browser "Failed to fetch"); no video analysed yet because analysis waited for all downloads. Fixed in 0.6.1 (see
 CHANGELOG). Compliance R-02: automatic analysis now also verified live.
+
+## 2026-10-28 14:07–15:10 — Dashboard redesign around the building (0.7)
+**Author:** attachment "Thiết kế lại Dashboard FireRisk Intelligence" (building risk map, plain English, levels of
+detail, English UI, separate equipment alerts, real data only).
+
+**Read from the author's PC before starting:** all 8 Drive videos downloaded (11:41–12:33) and analysed live by
+Muse Spark through the video API (video_analyses 1–8, 89–408 s each, 5.3k–33.8k tokens, 64 observations, every
+uploaded copy deleted). ZONE-B1 re-analysed automatically after each new video (ai_investigations 6–11). Sync runs
+every 30 min until 12:56. Video recording times 27 Oct 15:23–15:39 from the MP4 headers.
+
+**Audit:** 252 distinct Vietnamese strings reached the UI (records, statuses, tab names, register names, AI labels).
+
+**Built:** `/api/building`, per-risk cards (`alert_fields.signal_card`, `PLAIN_WHY`), English glossary + Muse
+translation cache (`ai/translate.py`), new Overview / Fire Safety Risks / six-section detail / gallery (`web/*`),
+English labels everywhere, prompt v4. Alert-generation rules unchanged (all 102 earlier tests still pass).
+
+**Tests:** 108 passed. Playwright on a copy of the author's real data and database (videos themselves not copied):
+desktop 1440, tablet 820, phone 390 — no application errors (only the absent video files return 404 in the sandbox).
+Translations could not be produced in Claude's workspace (no Meta API access); they are generated on the PC.

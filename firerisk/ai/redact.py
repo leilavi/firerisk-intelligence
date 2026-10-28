@@ -12,7 +12,7 @@ import re
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 # Vietnamese honorific/role + capitalised name, e.g. "Anh Nam", "KTV Văn Hùng", "Chị Lan"
 _HONORIFIC_NAME = re.compile(
-    r"\b(Anh|Chị|Chú|Cô|Bác|KTV|Kỹ thuật viên|Bạn)\s+((?:[A-ZĐÀ-Ỹ][\wÀ-ỹ]*)(?:\s+[A-ZĐÀ-Ỹ][\wÀ-ỹ]*){0,2})")
+    r"\b((?i:anh|chị|chú|cô|bác|ktv|kỹ thuật viên|bạn))\s+((?:[A-ZĐÀ-Ỹ][\wÀ-ỹ]*)(?:\s+[A-ZĐÀ-Ỹ][\wÀ-ỹ]*){0,2})")
 
 
 class Redactor:

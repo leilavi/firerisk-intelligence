@@ -128,7 +128,7 @@ def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], n
                 # overdue date alone does not show, so the raise stops at Warning (preliminary).
                 rules.append({"rule": "EQ2_OVERDUE", "severity": _up(sev, cap="warning"),
                               "basis": f"open repair past its expected completion by {days:g} day(s)"
-                                       + ("; raised one level (skill §10.4 'Quá hạn')" if sev == "watch" else
+                                       + ("; raised one level (skill §10.4, overdue)" if sev == "watch" else
                                           "; already Warning - an overdue date alone does not justify High (skill §7)"),
                               "evidence_ids": [e.evidence_id for e in overdue]})
         dated = [e for e in faults if e.timestamp]
@@ -214,7 +214,7 @@ def equipment_fields(a: EquipmentAlert, items: list[Evidence], kind: str, meter_
         if any(r["rule"] == "EQ3_REPEATED_FAULT" for r in a.rules):
             actions.append("Review the repeated faults together to find a common cause before the next repair")
         closure = "Repair record closed with the work described and the equipment checked in operation."
-        unknowns = ["Cause of the fault (Nguyên nhân chưa được xác minh)"]
+        unknowns = ["Cause of the fault (not verified)"]
         if a.asset_id is None:
             unknowns.append("Equipment_ID not recorded on the incident")
         causes = []
@@ -225,7 +225,7 @@ def equipment_fields(a: EquipmentAlert, items: list[Evidence], kind: str, meter_
         "evidence": [_evidence_line(e) for e in sorted(items, key=lambda e: e.timestamp or now)],
         "comparison": comparison,
         "possible_causes": causes,
-        "cause_status": "Cause not verified (Nguyên nhân chưa được xác minh)",
+        "cause_status": "Cause not verified",
         "consequence": consequence,
         "risk_chain": chain,
         "trigger_condition": trigger,

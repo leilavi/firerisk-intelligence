@@ -27,12 +27,12 @@ from ..env import load_env
 from .investigation import fingerprint, investigate
 from .muse import MuseClient, MuseConfig
 
-STATE_LABELS = {   # Vietnamese labels requested by the author; English shown alongside
-    "not_analysed": ("Chưa phân tích AI", "Not analysed by AI yet"),
-    "running": ("Đang phân tích bằng Muse Spark", "Analysing with Muse Spark"),
-    "done": ("Đã hoàn tất phân tích AI", "AI analysis complete"),
-    "failed": ("Phân tích AI thất bại", "AI analysis failed"),
-    "fallback": ("Đang sử dụng giải thích theo quy tắc", "Using the rule-based explanation"),
+STATE_LABELS = {   # (label, longer description) - English UI since 2026-10-28 (author request)
+    "not_analysed": ("Not Analysed by AI", "Muse Spark has not analysed the current evidence yet"),
+    "running": ("AI Analysis Running", "Muse Spark is analysing the evidence"),
+    "done": ("AI Analysis Complete", "Muse Spark analysed the current evidence"),
+    "failed": ("AI Analysis Failed", "The last Muse Spark analysis failed; the rule-based explanation is shown"),
+    "fallback": ("Rule-Based Explanation", "The explanation comes from the rule set, not from AI"),
 }
 RETRY_AFTER = timedelta(minutes=15)
 MAX_AUTO_RETRIES = 1

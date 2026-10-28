@@ -110,18 +110,19 @@ the zone's fire-risk alerts: a video shows the situation when it was recorded, n
 Settings: `FIRERISK_DRIVE_VIDEOS` (`1`), `FIRERISK_AUTO_VIDEO_AI` (`1`), `FIRERISK_VIDEO_AI_DAILY_LIMIT` (`8`).
 
 ## Dashboard
-* **Overview** — two separate sections: fire-risk alerts (counts by level, alerts that need checking, zone panel,
-  Muse Spark status) and building equipment alerts (counts by level, critical equipment with open faults, top items).
-* **Fire-risk alerts** — list with level / zone / AI-status filters; detail in 10 sections: risk and location · real
-  evidence · trend and timeline · Muse Spark analysis · possible scenarios · evidence for and against · missing data
-  and not verified · actions · related alerts and records (incl. survey videos) · handling history.
-* **Equipment alerts** — list with level / type / zone / critical filters and search; detail with the skill's fields.
-* **Event history, Data sources, Photos & video** (survey-video upload and review).
-Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **AI** (Muse Spark; *AI · video* for video observations) or **TEST**.
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow and source status.
+* **Overview** — building summary; **Building Risk Map** (front view, click or keyboard-select a floor); floor panel
+  with the most important risk in plain English and expandable risk cards; urgent actions; equipment-alert summary;
+  recent records and analysed survey videos.
+* **Fire Safety Risks** — one card per risk with filters; detail in six sections (What Was Detected, Why This Matters,
+  Supporting Evidence, AI Analysis, Recommended Actions, History).
+* **Equipment Alerts**, **Event History**, **Data Sources**, **Photos & Videos** (gallery with filters).
+* All text is English. Vietnamese source records keep their original text; English display text comes from a glossary
+  or a Muse Spark translation (marked), and untranslated text is marked "translation pending".
+Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **AI** (Muse Spark; *AI · video* for video
+observations) or **TEST**.
 
 ## Tests
-`python -m pytest -q` — 99 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
+`python -m pytest -q` — 108 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
 on **test fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals), API, offline AI tests
 (fake HTTP transport, clearly not the real API), Google Drive sync against a local mock of the Apps Script web app
 (redirect, wrong token, web page instead of data, invalid or missing file), the two alert systems and automatic AI

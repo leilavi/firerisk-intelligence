@@ -9,6 +9,8 @@ to verify; a candidate is marked "supported" only when a source record literally
 
 from __future__ import annotations
 
+from .ai.translate import SHEET_EN
+
 import re
 from datetime import datetime
 
@@ -29,7 +31,7 @@ PATHWAY_KB: dict[str, dict] = {
         "chain": ["Water enters the electrical room", "Moisture reaches cables, busbars or switchgear",
                   "Insulation degrades or a short circuit / arc occurs", "Fire in the electrical room or power loss"],
         "trigger": "Next heavy rain while the ingress path is not sealed.",
-        "actions": ["Inspect MBA/MSB rooms for water, damp marks and cable-trench water (qualified electrician)",
+        "actions": ["Have a qualified electrician inspect the transformer (MBA) and main switchboard (MSB) rooms for water, damp marks and water in cable trenches",
                     "Keep water away from live equipment; do not dry energised equipment",
                     "Verify the sealing work and re-inspect after the next heavy rain, with photos"],
         "closure": "Signed inspection record showing the rooms dry after heavy rain, and the incident closed with the "
@@ -133,6 +135,26 @@ PATHWAY_KB: dict[str, dict] = {
     },
 }
 
+# Plain-English "why it matters" per pathway, for managers and security staff (NEW, preliminary, cautious wording:
+# a possibility, never a statement that a fault or fire has happened).
+PLAIN_WHY = {
+    "water_electrical": "Water in an electrical room can reach live equipment. Depending on where it reaches, this may "
+                        "cause electrical faults, a power cut, or a higher risk of an electrical fire.",
+    "detection_impairment": "If fire detectors or their monitoring modules are faulty, a fire in that area could be "
+                            "detected late or not at all.",
+    "motor_overheat": "A jammed or overloaded motor can overheat, and an overheating motor is a possible ignition source.",
+    "backup_power": "If standby power is not ready, fire-safety equipment that relies on it may not work during a "
+                    "power cut.",
+    "fire_water": "A fault in the fire water tank or fire pumps can reduce the water available for fire fighting.",
+    "smoke_control": "If smoke exhaust fans do not run when needed, smoke can spread and make evacuation harder.",
+    "pa_system": "If the public-address system fails, people may not hear evacuation announcements.",
+    "fire_event": "The records describe fire or smoke. Follow the building's approved emergency procedure.",
+    "electrical_anomaly": "An unusual electricity pattern can point to equipment working abnormally. On its own it is "
+                          "not a fire risk.",
+    "consumption_anomaly": "An unusual consumption pattern can point to equipment working abnormally. On its own it is "
+                           "not a fire risk.",
+}
+
 URGENCY = {  # PORTED wording from skill §7 / §8 field 9 and 11; deadlines are preliminary rule parameters
     "emergency": ("Act immediately", "immediately", "possible immediate danger to people or a critical system"),
     "high": ("Act within the day", "within 24 hours", "serious consequence and an unresolved item"),
@@ -175,7 +197,8 @@ def _evidence_line(e) -> dict:
     src = e.source
     return {"evidence_id": e.evidence_id, "time": e.timestamp.isoformat() if e.timestamp else None, "kind": e.kind,
             "title": e.title, "status": e.status, "unresolved": e.is_open, "measure": measure,
-            "source": f"{src.source_title} › {src.sheet}" + (f" › row {src.row}" if src and src.row else "") if src else None,
+            "source": f"{src.source_title} › {SHEET_EN.get(src.sheet, src.sheet)}" + (f" › row {src.row}" if src and src.row else "") if src else None,
+            "sheet": src.sheet if src else None,
             "record_id": src.record_id if src else None, "flags": e.flags}
 
 
@@ -202,7 +225,7 @@ def signal_fields(sig, index: dict, now: datetime) -> dict:
         "evidence": [_evidence_line(e) for e in sorted(items, key=lambda e: e.timestamp or now)],
         "comparison": comparison,
         "possible_causes": causes,
-        "cause_status": "Cause not verified (Nguyên nhân chưa được xác minh)",
+        "cause_status": "Cause not verified",
         "consequence": kb["consequence"],
         "risk_chain": kb["chain"],
         "trigger_condition": kb["trigger"],
@@ -250,10 +273,33 @@ def assessment_class(alert, signals) -> tuple[str, str]:
     hazard = [s for s in signals if s.pathway not in SUPPORTING_PATHWAYS]
     confs = [s.fields["confidence"]["level"] for s in signals if getattr(s, "fields", None)]
     if hazard and confs and all(c == "Insufficient data" for c in confs):
-        return "insufficient_evidence", "Not enough evidence to confirm (Chưa đủ dữ liệu để xác nhận)"
+        return "insufficient_evidence", "Not enough evidence to confirm"
     if hazard:
         return "risk_indicator", "Risk indicator from recorded faults; not confirmed on site"
     return "data_anomaly", "Data anomaly only (meter pattern); not a fire-risk finding by itself"
+
+
+SEV_RANK = {"normal": 0, "watch": 1, "warning": 2, "high": 3, "emergency": 4}
+
+
+def signal_card(sig, index: dict, zone_label: str) -> dict:
+    """Level-1 summary of one risk (rule signal): where, what, why it matters, urgency, next action."""
+    recs = [index[i] for i in sig.evidence_ids if i in index and "derived" not in index[i].flags]
+    unresolved = sum(1 for e in recs if e.is_open)
+    rooms = [x["name"] for x in sig.fields["affected_assets"] if x.get("name")][:2]
+    return {
+        "signal_id": sig.signal_id, "rule_id": sig.rule_id, "severity": sig.severity, "risk_type": sig.pathway,
+        "risk": re.sub(r",\s*(\d+ not fixed|all marked fixed)\s*$", "", re.sub(r"\s*\(\d.*\)\s*$", "", sig.fields["short"])),
+        "location": zone_label + (" · " + ", ".join(rooms) if rooms else ""),
+        "why_it_matters": PLAIN_WHY.get(sig.pathway, sig.fields["consequence"]),
+        "action": (sig.fields["preventive_actions"] or ["Ask a qualified person to inspect"])[0],
+        "evidence": f"{len(recs)} record{'s' if len(recs) != 1 else ''}"
+                    + (f" · {unresolved} unresolved" if unresolved else " · all marked fixed" if recs else ""),
+        "records": len(recs), "unresolved": unresolved, "open": bool(sig.is_open),
+        "first_seen": sig.first_seen.isoformat() if sig.first_seen else None,
+        "last_seen": sig.last_seen.isoformat() if sig.last_seen else None,
+        "evidence_ids": list(sig.evidence_ids), "origin": sig.origin,
+    }
 
 
 def enrich_alerts(alerts, signals, index: dict, source_status: list[dict], now: datetime) -> None:
@@ -299,3 +345,7 @@ def enrich_alerts(alerts, signals, index: dict, source_status: list[dict], now: 
                         + [f"Source unavailable: {d}" for d in down] + [f"Source not updated: {d}" for d in stale],
             "confidence": top.fields["confidence"],
         }
+        cards = [signal_card(x, index, a.zone_label) for x in sigs]
+        cards.sort(key=lambda c: (-SEV_RANK[c["severity"]], -c["unresolved"]))
+        a.fields["risks"] = cards                     # one card per rule signal (the map counts these)
+        a.fields["card"] = next(c for c in cards if c["signal_id"] == headline_sig.signal_id)

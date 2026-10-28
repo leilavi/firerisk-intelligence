@@ -104,3 +104,18 @@ analyses attached to the zone. Same fingerprint → no new automatic call.
 | Use in alerts | Zone match → "Survey videos of this zone" in the fire-risk alert (section 9) and `survey_video_observations` in the Muse package, with recording date and "recording-time only" | TEST |
 Open questions for the first real run: maximum duration, frame-sampling behaviour (`fps` field exists), accuracy of
 the model's timestamps, and whether `text.format` strict schema is accepted on `/v1/responses`.
+
+## Building Risk Map (0.7)
+`GET /api/building` builds one entry per floor (Roof, F4, F3, F2, F1, B1 — the floors used by the asset register
+and the zone mapping) plus "Building" for whole-building risks. A floor's state is the highest severity among the
+risks (rule signals) of its active fire-risk alerts (alerts marked Resolved / False alarm are excluded). Without
+risks: "No Active Fire-Risk Alert" if source records for the floor were evaluated, otherwise "Not Assessed". No floor
+is ever shown as normal/green. Building status = highest severity over all active risks. Urgent actions = open
+risks at High Risk or Emergency. No numeric risk score is computed.
+
+## English display layer (0.7)
+`ai/translate.py`: glossary for fixed vocabularies (statuses, tab names, generator reasons); Muse Spark batch
+translation for free text, pseudonymised, cached in SQLite `translations`, background after each analysis
+(`FIRERISK_AUTO_TRANSLATE`, default on). The API adds `<field>_en` and `<field>_en_origin`
+(`source` | `glossary` | `ai_translation`; null = pending) next to the original; the UI marks AI translations and
+shows pending ones in the original with a "translation pending" tag.

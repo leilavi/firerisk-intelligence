@@ -29,6 +29,7 @@ from . import __version__
 from .ai.auto import STATE_LABELS, AutoAnalyst
 from .ai.investigation import investigate
 from .ai.muse import MuseClient, MuseConfig
+from .ai.translate import SHEET_EN, Translator, display_strings
 from .config import ASSETS, BUILDING_NAME, LOCAL_TZ, METERS, METER_FEEDS, SEVERITY_LABEL, SEVERITY_ORDER, ZONE_LABELS
 from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
@@ -57,6 +58,7 @@ class State:
         self.ai = AutoAnalyst(self.store, self.get)
         self.videos = VideoStore(DB_PATH)
         self.drive_videos = DriveVideoSync(self.videos, INBOX_DIR)
+        self.translator = Translator(DB_PATH)
 
     def analyse(self) -> AnalysisResult:
         with self.lock:
@@ -72,7 +74,15 @@ class State:
             self.result = res
         # Alerts are available now; Muse Spark runs afterwards in the background (never blocks the alert).
         self.ai.schedule(res)
+        self.start_translation(res)
         return res
+
+    def start_translation(self, res) -> bool:
+        """English display text for Vietnamese records (Muse Spark, background, cached). Source data unchanged."""
+        from .env import load_env
+        if load_env().get("FIRERISK_AUTO_TRANSLATE", "1") == "0" or not MuseConfig.load().configured:
+            return False
+        return self.translator.start(self.ai.client_factory, display_strings(res))
 
     def get(self) -> AnalysisResult:
         return self.result or self.analyse()
@@ -194,14 +204,42 @@ def _asset_name(a: str | None) -> str | None:
     name = (ASSETS.get(a) or METERS.get(a) or {}).get("name")
     if not name and state.result is not None:        # fall back to the asset register (Asset tab)
         name = (state.result.asset_register.get(a) or {}).get("name")
+        if name:
+            name = _en(name)[0] or name
     return name
+
+
+def _en(text):
+    """(english or None, origin) for display; never changes the source value."""
+    return state.translator.en(text)
+
+
+def _tx(d: dict, keys=("title", "text", "status")) -> dict:
+    """Add <key>_en and <key>_en_origin next to each Vietnamese source field (originals kept)."""
+    for k in keys:
+        v = d.get(k)
+        if isinstance(v, str) and v:
+            en, origin = _en(v)
+            d[f"{k}_en"], d[f"{k}_en_origin"] = en, origin
+    return d
 
 
 def _ev(e) -> dict:
     d = e.to_dict()
     d["asset_name"] = _asset_name(e.asset_id)
     d["origin"] = "derived" if "derived" in e.flags else "source"
-    return d
+    if e.source:
+        d["source"]["sheet_en"] = SHEET_EN.get(e.source.sheet, e.source.sheet)
+    return _tx(d)
+
+
+def _tx_fields(fields: dict) -> dict:
+    """Translate record titles inside rule fields (evidence lines) for display."""
+    out = dict(fields)
+    for key in ("evidence", "context_evidence"):
+        if isinstance(out.get(key), list):
+            out[key] = [_tx(dict(x), ("title", "status")) for x in out[key]]
+    return out
 
 
 def _ai_mode(base_url: str) -> str:
@@ -257,7 +295,9 @@ def _alert_summary(a, res=None) -> dict:
     res = res or state.get()
     inv = state.store.latest_investigation(a.alert_id, only_ok=True)
     f = a.fields
+    st = (state.store.current_status(a.alert_id) or {}).get("status", "new")
     return {"alert_id": a.alert_id, "kind": "fire", "ai_status": state.ai.status(a, res),
+            "status": st, "status_label": STATUS_LABEL.get(st, st), "risks": f.get("risks", []), "card": f.get("card"),
             "related_equipment": len(a.related_equipment), "zone": a.zone, "zone_label": a.zone_label, "severity": a.severity,
             "severity_label": SEVERITY_LABEL[a.severity], "headline": f.get("headline"),
             "why": (f.get("why_short") or [""])[0], "why_all": f.get("why_short", []),
@@ -272,9 +312,15 @@ def _alert_summary(a, res=None) -> dict:
                     "mode": _investigation_view(inv)["api_mode"]} if inv else None)}
 
 
+STATUS_LABEL = {"new": "Open", "acknowledged": "Acknowledged", "investigating": "Investigating",
+                "confirmed": "Confirmed on Site", "resolved": "Resolved", "false_alarm": "False Alarm"}
+
+
 def _eq_summary(ea) -> dict:
     f = ea.fields
-    return {"alert_id": ea.alert_id, "kind": "equipment", "asset_id": ea.asset_id, "asset_name": ea.asset_name,
+    st = (state.store.current_status(ea.alert_id) or {}).get("status", "new")
+    return {"status": st, "status_label": STATUS_LABEL.get(st, st),
+            "headline_en": _en(ea.title)[0], "asset_name_en": _en(ea.asset_name)[0],"alert_id": ea.alert_id, "kind": "equipment", "asset_id": ea.asset_id, "asset_name": ea.asset_name,
             "zone": ea.zone, "zone_label": ea.zone_label, "critical": ea.critical, "severity": ea.severity,
             "severity_label": SEVERITY_LABEL[ea.severity], "headline": ea.title,
             "why": (f.get("why_short") or [""])[0], "why_all": f.get("why_short", []), "type": f.get("kind"),
@@ -347,7 +393,7 @@ def equipment_alert_detail(alert_id: str):
                       if ea.asset_id and e.asset_id == ea.asset_id and e.kind in ("asset_service", "incident", "inspection_check")),
                      key=lambda d: d["timestamp"] or "", reverse=True)
     fire = {a.alert_id: a for a in res.alerts}
-    return {"alert": ea.to_dict(), "summary": _eq_summary(ea), "fields": ea.fields, "evidence": evidence,
+    return {"alert": ea.to_dict(), "summary": _eq_summary(ea), "fields": _tx_fields(ea.fields), "evidence": evidence,
             "trends": trends, "meter": {"meta": METERS.get(meter), "calendar": res.meter_calendars.get(meter, [])[-90:]} if meter else None,
             "maintenance_history": history,
             "fire_alerts": [{"alert_id": l["fire_alert_id"], "reasons": l["reasons"],
@@ -357,7 +403,97 @@ def equipment_alert_detail(alert_id: str):
                             for l in ea.fire_links if l["fire_alert_id"] in fire],
             "verification": state.store.current_status(alert_id), "status_log": state.store.status_log(alert_id),
             "history": state.store.alert_history(alert_id),
-            "data_quality": [q for q in res.data_quality if q.get("evidence_id") in set(ea.evidence_ids)]}
+            "data_quality": [_tx(dict(q), ("title",)) for q in res.data_quality if q.get("evidence_id") in set(ea.evidence_ids)]}
+
+
+# Floors of the building, top to bottom. Verified against the real data on 2026-10-28: the asset register (Asset tab)
+# uses the floors B1, F1, F2, F3, F4 and Rooftop (plus two lift entries), and the zone mapping of the records uses the
+# same set. "Building" holds alerts that concern the whole building.
+FLOORS = ["Roof", "F4", "F3", "F2", "F1", "B1"]
+FLOOR_STATE_LABEL = {"emergency": "Emergency", "high": "High Risk", "warning": "Warning", "watch": "Watch",
+                     "no_active_alert": "No Active Fire-Risk Alert", "not_assessed": "Not Assessed"}
+ASSESSED_KINDS = ("incident", "construction", "asset_service", "inspection_check", "generator_run", "meter_episode")
+COVERAGE_NOTE = ("Assessed from maintenance, incident and checklist records, meter readings and survey videos. The data "
+                 "has no smoke, heat or gas sensor readings, so \"no active alert\" does not mean a floor is confirmed safe.")
+
+
+def _floor_state(risks: list[dict], records: int) -> str:
+    """Highest severity among the floor's active risks; without risks: assessed-without-alert, or not assessed.
+    Never "normal"/green: the rules can raise risks but none of them confirms that a floor is safe."""
+    if risks:
+        return max((r["severity"] for r in risks), key=_rank)
+    return "no_active_alert" if records else "not_assessed"
+
+
+@app.get("/api/building")
+def building():
+    """Building Risk Map: one entry per floor plus whole-building risks, and the building summary.
+    All values come from active fire-risk alerts (rule results) and record counts; nothing is estimated."""
+    res = state.get()
+    active = [a for a in res.alerts if _is_active(a.alert_id)]
+    eq_active = [a for a in res.equipment_alerts if _is_active(a.alert_id)]
+    records = Counter(e.zone for e in res.evidence.values() if e.kind in ASSESSED_KINDS and e.zone)
+    reg = Counter((r.get("zone") or "") for r in res.asset_register.values())
+    vids = state.videos.list()
+    floors = []
+    for z in FLOORS + ["Building"]:
+        alerts = [a for a in active if a.zone == z]
+        risks = [{**c, "alert_id": a.alert_id} for a in alerts for c in a.fields.get("risks", [])]
+        risks.sort(key=lambda c: (-_rank(c["severity"]), not c["open"]))
+        st = _floor_state(risks, records.get(z, 0))
+        zv = [v for v in vids if v.get("zone") == z]
+        floors.append({
+            "zone": z, "label": ZONE_LABELS.get(z, z), "state": st, "state_label": FLOOR_STATE_LABEL[st],
+            "risk_count": len(risks), "open_risks": sum(1 for r in risks if r["open"]),
+            "by_level": dict(Counter(r["severity"] for r in risks)), "alert_ids": [a.alert_id for a in alerts],
+            "top_risk": risks[0] if risks else None, "risks": risks,
+            "needs_attention": any(_rank(r["severity"]) >= _rank("warning") or r["open"] for r in risks),
+            "records_checked": records.get(z, 0), "register_items": reg.get(z, 0),
+            "equipment_alerts": [_eq_summary(e) for e in eq_active if e.zone == z],
+            "videos": len(zv), "videos_analysed": sum(1 for v in zv if v["analysis_status"] == "ok"),
+        })
+    all_risks = [r for f in floors for r in f["risks"]]
+    overall = max((r["severity"] for r in all_risks), key=_rank) if all_risks else (
+        "no_active_alert" if sum(records.values()) else "not_assessed")
+    urgent = [r for r in all_risks if _rank(r["severity"]) >= _rank("high") and r["open"]]
+    syncs = [r for r in state.store.sync_runs(limit=50) if r.get("ok")]
+    return {
+        "generated_at": res.generated_at.isoformat(), "floors": floors,
+        "summary": {
+            "overall": overall, "overall_label": FLOOR_STATE_LABEL.get(overall, SEVERITY_LABEL.get(overall, overall)),
+            "overall_rule": "Highest severity among the active fire-risk alerts' risks (rule results).",
+            "risks_by_level": dict(Counter(r["severity"] for r in all_risks)), "risk_count": len(all_risks),
+            "alerts_active": len(active),
+            "floors_affected": sum(1 for f in floors if f["risk_count"] and f["zone"] != "Building"),
+            "building_wide_risks": next((f["risk_count"] for f in floors if f["zone"] == "Building"), 0),
+            "urgent_actions": len(urgent),
+            "urgent_rule": "Open risks at High Risk or Emergency (rule deadline: within 24 hours or immediately).",
+            "equipment_active": len(eq_active), "equipment_by_level": dict(Counter(a.severity for a in eq_active)),
+            "last_analysis": res.generated_at.isoformat(),
+            "last_drive_sync_ok": syncs[0]["started_at"] if syncs else None,
+            "coverage_note": COVERAGE_NOTE,
+            "sources_down": [x for x in res.source_status if x.get("error")],
+        },
+        "urgent": urgent,
+        "recent": _recent(res),
+    }
+
+
+def _recent(res, n: int = 8) -> dict:
+    """Latest fire-relevant source records and latest survey-video analyses (real data only)."""
+    tagged = [e for e in res.evidence.values() if e.kind in ("incident", "construction", "asset_service", "inspection_check")
+              and e.timestamp and {t["tag"] for t in e.tags} - {"checklist_pass"}]
+    tagged.sort(key=lambda e: e.timestamp, reverse=True)
+    vids = []
+    for v in state.videos.list():
+        a = state.videos.latest_analysis(v["video_id"], only_ok=True)
+        if a:
+            vids.append({"video_id": v["video_id"], "filename": v["filename"], "zone": v.get("zone"),
+                         "zone_label": v["zone_label"], "recorded_at": v.get("recorded_at"),
+                         "analysed_at": a["created_at"], "observations": len(a.get("observations", [])),
+                         "summary": a.get("summary")})
+    vids.sort(key=lambda x: x["analysed_at"] or "", reverse=True)
+    return {"records": [_ev(e) for e in tagged[:n]], "videos": vids[:6]}
 
 
 @app.get("/api/overview")
@@ -443,7 +579,11 @@ def alert_detail(alert_id: str):
                          "context_evidence": s["fields"].get("context_evidence", []),
                          "origin": "rule"} for s in sigs]
     latest_ok = state.store.latest_investigation(alert_id, only_ok=True)
-    return {"alert": a.to_dict(), "summary": _alert_summary(a, res), "fields": a.fields, "signals": sigs,
+    for sg in sigs:
+        sg["fields"] = _tx_fields(sg["fields"])
+    for rx in rule_explanation:
+        rx["context_evidence"] = [_tx(dict(x), ("title", "status")) for x in rx.get("context_evidence") or []]
+    return {"alert": a.to_dict(), "summary": _alert_summary(a, res), "fields": _tx_fields(a.fields), "signals": sigs,
             "ai_status": state.ai.status(a, res), "related_equipment": related, "rule_explanation": rule_explanation,
             "evidence": evidence, "timeline": timeline, "trends": trends,
             "meters": {m: {"meta": METERS.get(m), "calendar": res.meter_calendars.get(m, [])[-90:]} for m in meters},
@@ -454,10 +594,10 @@ def alert_detail(alert_id: str):
             "last_attempt": _investigation_view(state.store.latest_investigation(alert_id)),
             "investigations": state.store.investigations(alert_id),
             "media": [m for m in media_inventory(res)["items"] if m["evidence_id"] in ev_ids],
-            "survey_videos": state.videos.for_zone(a.zone),
+            "survey_videos": [_tx_video(v) for v in state.videos.for_zone(a.zone)],
             "survey_video_refs": [r for r in state.videos.reference_status(res.video_refs)
                                   if r.get("zone") == a.zone and not r["on_this_computer"]],
-            "data_quality": [q for q in res.data_quality if q.get("evidence_id") in ev_ids]}
+            "data_quality": [_tx(dict(q), ("title",)) for q in res.data_quality if q.get("evidence_id") in ev_ids]}
 
 
 @app.post("/api/alerts/{alert_id}/investigate")
@@ -616,7 +756,7 @@ def meter(meter_id: str):
 @app.get("/api/quality")
 def quality():
     res = state.get()
-    return {"sources": res.source_status, "issues": res.data_quality}
+    return {"sources": res.source_status, "issues": [_tx(dict(i), ("title",)) for i in res.data_quality]}
 
 
 @app.get("/api/media")
@@ -655,6 +795,19 @@ async def upload_video(request: Request, filename: str, zone: str | None = None,
     return v
 
 
+def _tx_video(v: dict) -> dict:
+    v = dict(v)
+    for k in ("room", "area", "floor", "note"):
+        if isinstance(v.get(k), str):
+            en, origin = _en(v[k])
+            if en is None and v[k].startswith("Linked in the asset register to: "):   # translate the names inside
+                parts = [_en(x)[0] or x for x in v[k][len("Linked in the asset register to: "):].split("; ")]
+                en, origin = "Linked in the asset register to: " + "; ".join(parts), "composed"
+            v[f"{k}_en"], v[f"{k}_en_origin"] = en, origin
+    v["equipment"] = [dict(e, name_en=_en(e.get("name"))[0], name_en_origin=_en(e.get("name"))[1]) for e in v.get("equipment") or []]
+    return v
+
+
 @app.get("/api/videos")
 def list_videos():
     res = state.get()
@@ -670,7 +823,9 @@ def list_videos():
                       "zone_source": ref.get("zone_source") if ref else "not linked in the asset register",
                       "video_id": (v or {}).get("video_id"), "on_this_computer": bool(v),
                       "analysis_status": (v or {}).get("analysis_status")})
-    return {"videos": state.videos.list(), "old_after_days": OLD_VIDEO_DAYS, "zones": ZONE_LABELS,
+    for d_ in drive:
+        d_["equipment"] = [dict(e, name_en=_en(e.get("name"))[0]) for e in d_["equipment"]]
+    return {"videos": [_tx_video(v) for v in state.videos.list()], "old_after_days": OLD_VIDEO_DAYS, "zones": ZONE_LABELS,
             "ai_configured": MuseConfig.load().configured, "inbox": str(INBOX_DIR), "drive": drive,
             "referenced": state.videos.reference_status(res.video_refs),
             "drive_sync": {"configured": SyncConfig.load().configured, **video_settings(),
@@ -707,7 +862,7 @@ def video_detail(video_id: str):
     res = state.get()
     fire = [{"alert_id": a.alert_id, "severity": a.severity, "headline": a.fields.get("headline")}
             for a in res.alerts if v.get("zone") and a.zone == v["zone"]]
-    return {"video": v, "analysis": state.videos.latest_analysis(video_id), "fire_alerts_in_zone": fire}
+    return {"video": _tx_video(v), "analysis": state.videos.latest_analysis(video_id), "fire_alerts_in_zone": fire}
 
 
 class VideoMetaIn(BaseModel):

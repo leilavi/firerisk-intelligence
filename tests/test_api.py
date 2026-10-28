@@ -58,7 +58,7 @@ def test_investigation_without_key_fails_cleanly(client):
     d = client.get(f"/api/alerts/{a}").json()
     assert d["alert"]["severity"] == "high"      # rule result unaffected by the AI failure
     assert d["ai_status"]["code"] == "failed" and d["ai_status"]["fallback"]
-    assert d["ai_status"]["label"] == "Phân tích AI thất bại"
+    assert d["ai_status"]["label"] == "AI Analysis Failed"
 
 
 def test_evidence_endpoint_traces_to_source_row(client):
