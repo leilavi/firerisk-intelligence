@@ -1,0 +1,49 @@
+{
+  "check": "sam_3_1_connection",
+  "run_at_utc": "2026-10-28T13:23:00+00:00",
+  "endpoint": "https://api.meta.ai/v1/responses",
+  "model_requested": "sam-3.1",
+  "phrase": "electrical panel",
+  "request_metadata": {
+    "include_confidence": "true",
+    "mask_encoding": "one_bit"
+  },
+  "video": "VID-20261028-114134-4fa5.mp4",
+  "video_duration_s": 15.7,
+  "frame_time_s": 7.85,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "frame_bytes": 51578,
+  "http_status": 200,
+  "request_seconds": 1.99,
+  "model_returned": "sam-3.1",
+  "response_status": "completed",
+  "usage": {
+    "input_tokens": 0,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 0,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 0,
+    "images_processed": 1
+  },
+  "output_items": [
+    {
+      "type": "message",
+      "content_types": [
+        "output_text"
+      ]
+    }
+  ],
+  "output_text_chars": 0,
+  "output_text_lines": 0,
+  "output_text_masks_removed": "",
+  "frame_size_in_answer": [],
+  "objects": [],
+  "result": "NO_MATCH"
+}

@@ -1,0 +1,208 @@
+{
+  "check": "sam_3_1_connection",
+  "run_at_utc": "2026-10-28T13:26:15+00:00",
+  "endpoint": "https://api.meta.ai/v1/responses",
+  "model_requested": "sam-3.1",
+  "phrase": "push button",
+  "request_metadata": {
+    "include_confidence": "true",
+    "mask_encoding": "one_bit"
+  },
+  "video": "VID-20261028-114134-4fa5.mp4",
+  "video_duration_s": 15.7,
+  "frame_time_s": 7.85,
+  "frame_size": [
+    1280,
+    720
+  ],
+  "frame_bytes": 51578,
+  "http_status": 200,
+  "request_seconds": 2.32,
+  "model_returned": "sam-3.1",
+  "response_status": "completed",
+  "usage": {
+    "input_tokens": 0,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 0,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 0,
+    "images_processed": 1
+  },
+  "output_items": [
+    {
+      "type": "message",
+      "content_types": [
+        "output_text"
+      ]
+    }
+  ],
+  "output_text_chars": 2042,
+  "output_text_lines": 1,
+  "output_text_masks_removed": "<0f>0<|box;x1=1045;y1=124;x2=1202;y2=264;w=1280;h=720;c=0.6521739363670349|><|mask;x=0;y=0;c=0.6521739363670349;data=141,158,!<125 chars>|>,1<|box;x1=394;y1=483;x2=541;y2=630;w=1280;h=720;c=0.6404494643211365|><|mask;x=0;y=0;c=0.6404494643211365;data=148,148,!<128 chars>|>,2<|box;x1=1058;y1=500;x2=1220;y2=639;w=1280;h=720;c=0.6332378387451172|><|mask;x=0;y=0;c=0.6332378387451172;data=140,163,!<124 chars>|>,3<|box;x1=33;y1=478;x2=194;y2=671;w=1280;h=720;c=0.5661016702651978|><|mask;x=0;y=0;c=0.5661016702651978;data=194,162,!<153 chars>|>,4<|box;x1=64;y1=89;x2=215;y2=249;w=1280;h=720;c=0.6213017702102661|><|mask;x=0;y=0;c=0.6213017702102661;data=161,152,!<134 chars>|>,5<|box;x1=410;y1=89;x2=549;y2=251;w=1280;h=720;c=0.6363636255264282|><|mask;x=0;y=0;c=0.6363636255264282;data=163,140,!<132 chars>|>,6<|box;x1=736;y1=487;x2=884;y2=631;w=1280;h=720;c=0.6332378387451172|><|mask;x=0;y=0;c=0.6332378387451172;data=145,149,!<128 chars>|>,7<|box;x1=738;y1=105;x2=883;y2=254;w=1280;h=720;c=0.6289855241775513|><|mask;x=0;y=0;c=0.6289855241775513;data=150,146,!<130 chars>|>\n",
+  "frame_size_in_answer": [
+    [
+      1280,
+      720
+    ]
+  ],
+  "parser": "meta-sam-parser 0.0.6",
+  "parse_info": {
+    "records": 16,
+    "text_records": 0,
+    "diagnostics": []
+  },
+  "format_matches_docs": true,
+  "frame_size_matches_sent_frame": true,
+  "objects": [
+    {
+      "object_id": "0",
+      "box": {
+        "x1": 1045,
+        "y1": 124,
+        "x2": 1203,
+        "y2": 265,
+        "w": 158,
+        "h": 141
+      },
+      "confidence": 0.6521739363670349,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        158,
+        141
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "1",
+      "box": {
+        "x1": 394,
+        "y1": 483,
+        "x2": 542,
+        "y2": 631,
+        "w": 148,
+        "h": 148
+      },
+      "confidence": 0.6404494643211365,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        148,
+        148
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "2",
+      "box": {
+        "x1": 1058,
+        "y1": 500,
+        "x2": 1221,
+        "y2": 640,
+        "w": 163,
+        "h": 140
+      },
+      "confidence": 0.6332378387451172,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        163,
+        140
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "3",
+      "box": {
+        "x1": 33,
+        "y1": 478,
+        "x2": 195,
+        "y2": 672,
+        "w": 162,
+        "h": 194
+      },
+      "confidence": 0.5661016702651978,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        162,
+        194
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "4",
+      "box": {
+        "x1": 64,
+        "y1": 89,
+        "x2": 216,
+        "y2": 250,
+        "w": 152,
+        "h": 161
+      },
+      "confidence": 0.6213017702102661,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        152,
+        161
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "5",
+      "box": {
+        "x1": 410,
+        "y1": 89,
+        "x2": 550,
+        "y2": 252,
+        "w": 140,
+        "h": 163
+      },
+      "confidence": 0.6363636255264282,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        140,
+        163
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "6",
+      "box": {
+        "x1": 736,
+        "y1": 487,
+        "x2": 885,
+        "y2": 632,
+        "w": 149,
+        "h": 145
+      },
+      "confidence": 0.6332378387451172,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        149,
+        145
+      ],
+      "mask_decoded": true
+    },
+    {
+      "object_id": "7",
+      "box": {
+        "x1": 738,
+        "y1": 105,
+        "x2": 884,
+        "y2": 255,
+        "w": 146,
+        "h": 150
+      },
+      "confidence": 0.6289855241775513,
+      "mask_encoding": "one_bit",
+      "mask_raster": [
+        146,
+        150
+      ],
+      "mask_decoded": true
+    }
+  ],
+  "overlay_preview": "data/private/sam_check/sam_check_20261028_202611.html (private, git-ignored)",
+  "result": "LOCATED"
+}

@@ -247,3 +247,16 @@ API). Display rename only: no change to model ID, endpoint or payload.
 
 **Tests:** 125 passed. Playwright on a copy of the PC's current data and database: 0 Vietnamese strings, no page
 errors, alert list and analyses collapsed by default.
+
+## 2026-10-28 20:22–20:26 — SAM 3.1 Phase 1: real connection check on the author's PC
+`scripts/check_sam.py` (one frame of the B1 electrical-panel video, `VID-20261028-114134-4fa5.mp4` at 7.85 s, 1280x720,
+rotation applied by ffmpeg), sent to `sam-3.1` on `POST /v1/responses` with the existing `MODEL_API_KEY`.
+* `evidence/sam_check_20261028_202256.json` — phrase "electrical panel": HTTP 200, 1.99 s, `images_processed: 1`,
+  empty `output_text` = valid NO-MATCH (the frame is a close-up of FAF-2 start/stop/trip controls, not a whole panel).
+* `evidence/sam_check_20261028_202611.json` — phrase "push button", same frame: HTTP 200, 2.32 s, 1 line, 8 objects
+  (ids 0-7), confidence 0.57-0.65 on every box and mask, `one_bit` masks all decoded, frame size in the answer
+  (1280x720) equals the frame sent, 0 parser diagnostics. Overlay inspected visually: every box and mask sits on one of
+  the 8 controls (2 selector switches, 2 start, 2 stop, 2 trip lamps). Format matches the docs and meta-sam-parser 0.0.6.
+* Finding: the response echoes `"store": true`. Production client should send `store: false` (as the Muse video client
+  does) if the SAM endpoint accepts it — to verify in Phase 2.
+* Usage reports `images_processed`, tokens all 0. Private raw answers and the overlay stay in data/private/sam_check/.
