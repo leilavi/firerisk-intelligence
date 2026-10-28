@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1 — 2026-10-28
+- The AI Risk Briefing now shows the stored real Muse Spark result directly, also when it was made with an earlier
+  prompt (v3/v4): observed facts, scenario and suggested check are taken only from the parts of that result that cite
+  this risk's own records; the zone situation, AI priority, hypotheses and checks are shown in a "Muse Spark analysis"
+  pane. Status "AI Analysis Complete · Update Pending" while the new v5 analysis is due.
+- Survey-video findings are back on the Overview: a "Survey video findings · Muse Spark" panel with every analysed video
+  (summary + main observations, links to the clip), and in the briefing the videos of the same equipment (asset
+  register), the same room name, or else the same floor. The risk drawer lists each video's observations.
+- 117 tests.
+
 ## 0.8.0 — 2026-10-28
 - Dark building-intelligence design (navy panels, cyan interaction, purple = AI content; risk colours only for levels).
 - One unified building view: fire-safety risks **and** equipment alerts are placed on their own floor, each keeping its

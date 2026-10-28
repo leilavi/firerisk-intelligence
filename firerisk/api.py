@@ -13,6 +13,7 @@ Every payload states where its content comes from, so the dashboard can label it
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from collections import Counter, defaultdict
@@ -579,22 +580,77 @@ def _ai_text(t):
 
 
 AI_BRIEF_LABEL = {
-    "complete": "AI Analysis Complete", "complete_older": "AI Analysis Complete (older evidence)",
+    "complete": "AI Analysis Complete", "complete_older": "AI Analysis Complete · Update Pending",
     "pending": "AI Analysis Pending", "failed": "AI Analysis Failed", "insufficient_evidence": "Insufficient Evidence",
     "unavailable": "AI Analysis Unavailable", "not_applicable": "Rule-Based Summary",
 }
 
 
+# Survey-video categories that matter for each fire-risk pathway (used only to pick which AI video observations to
+# show first; they never change a level).
+VIDEO_CATS = {
+    "water_electrical": {"water_or_moisture", "electrical_equipment"},
+    "motor_overheat": {"electrical_equipment", "storage_or_combustibles", "housekeeping", "obstruction"},
+    "detection_impairment": {"fire_detection_or_alarm"},
+    "backup_power": {"electrical_equipment", "storage_or_combustibles", "housekeeping"},
+    "fire_water": {"fire_equipment", "water_or_moisture"},
+    "pa_system": {"fire_detection_or_alarm", "signage_or_emergency_lighting"},
+    "smoke_control": {"fire_equipment", "obstruction", "corridor_or_walkway"},
+}
+
+
+def _video_findings(zone, pathway=None, asset_ids=(), place: str = "", limit_videos=3, limit_obs=3) -> list[dict]:
+    """Muse Spark survey-video observations of the zone (AI · video, recording-time only), most relevant first."""
+    cats = VIDEO_CATS.get(pathway or "", set())
+    out = []
+    words = {w for w in re.findall(r"[a-z]{5,}", (place or "").lower()) if w not in ("panel", "room", "rooms", "basement")}
+    for v in state.videos.list():
+        linked = bool({e.get("equipment_id") for e in v.get("equipment") or []} & set(asset_ids))
+        text = f"{v.get('filename', '')} {v.get('room') or ''} {v.get('area') or ''}".lower()
+        named = bool(words and any(w in text for w in words))      # e.g. "Wastewater ..." risk -> "Wastewater Treatment Room.mp4"
+        if not ((zone and v.get("zone") == zone) or linked or named):  # same floor, linked in the register, or same room name
+            continue
+        ana = state.videos.latest_analysis(v["video_id"], only_ok=True) or {}
+        v = {**v, "observations": ana.get("observations", []), "analysis_created_at": ana.get("created_at"),
+             "analysis_model": ana.get("model")}
+        if not v["observations"]:
+            continue
+        obs = sorted(v["observations"], key=lambda o: (o["category"] not in cats, o["visible_certainty"] != "clearly_visible",
+                                                       o["category"] in ("other", "signage_or_emergency_lighting")))
+        hits = sum(1 for o in v["observations"] if o["category"] in cats)
+        out.append({"video_id": v["video_id"], "filename": v["filename"], "recorded_at": v.get("recorded_at"),
+                    "match": "equipment" if linked else "room_name" if named else "same_floor",
+                    "analysed_at": v.get("analysis_created_at"), "model": v.get("analysis_model"),
+                    "summary": _ai_text(ana.get("summary")), "observation_count": len(v["observations"]),
+                    "linked_to_this_equipment": linked, "relevant_count": hits,
+                    "observations": [{k: o.get(k) for k in ("time_start_s", "category", "observation", "visible_certainty",
+                                                            "fire_safety_relevance")} for o in obs[:limit_obs]
+                                     if _ai_text(o.get("observation"))],
+                    "recording_note": v.get("recording_note")})
+    out.sort(key=lambda x: (["equipment", "room_name", "same_floor"].index(x["match"]), -x["relevant_count"], x["recorded_at"] or ""))
+    if any(x["match"] != "same_floor" for x in out):         # a video of this very equipment/room exists: show only those
+        out = [x for x in out if x["match"] != "same_floor"]
+    return out[:limit_videos]
+
+
 def _brief_fire(issue: dict, res, a, sig) -> dict:
     st = state.ai.status(a, res)
     inv = state.store.latest_investigation(a.alert_id, only_ok=True)
-    rb = next((b for b in ((inv or {}).get("result") or {}).get("risk_briefings", [])
-               if b.get("signal_id") == issue["signal_id"]), None)
+    r = (inv or {}).get("result") or {}
+    rb = next((b for b in r.get("risk_briefings", []) if b.get("signal_id") == issue["signal_id"]), None)
     f = sig.fields if sig else {}
     card = next((c for c in a.fields.get("risks", []) if c["signal_id"] == issue["signal_id"]), {})
+    ev = set(card.get("evidence_ids", []))
+    # Older analyses (prompt v3/v4) have no per-risk briefing: use the parts of the real Muse Spark result that cite
+    # this risk's own records (facts, actions, hypotheses). Nothing is written for the model.
+    cites = lambda x, k="evidence_ids": bool(ev & set(x.get(k) or []))
+    facts = [x["statement"] for x in r.get("observed_facts", []) if cites(x) and _ai_text(x.get("statement"))]
+    acts = [x for x in r.get("recommended_actions", []) if cites(x) and _ai_text(x.get("action"))]
+    hyps = [x for x in r.get("hypotheses", []) if cites(x, "supporting_evidence_ids") and _ai_text(x.get("cause"))]
+    scen = [x for x in r.get("scenarios", []) if cites(x, "supporting_evidence_ids") and _ai_text(x.get("how_it_could_develop"))]
     if rb and rb.get("certainty") == "insufficient_evidence":
         code = "insufficient_evidence"
-    elif rb:
+    elif inv:
         code = "complete" if st["result_is_current"] else "complete_older"
     elif st["code"] == "running":
         code = "pending"
@@ -605,25 +661,39 @@ def _brief_fire(issue: dict, res, a, sig) -> dict:
     else:
         code = "pending" if st["code"] == "not_analysed" and not st.get("not_queued_reason") else "unavailable"
 
-    def field(ai_key, rule_text):
-        t = _ai_text(rb.get(ai_key)) if rb else None
+    def field(ai_key, ai_alt, rule_text):
+        t = (_ai_text(rb.get(ai_key)) if rb else None) or _ai_text(ai_alt)
         if t:
             return {"text": t, "origin": "ai"}
         return {"text": rule_text, "origin": "rule"} if rule_text and not translate_needs(rule_text) else None
     actions = f.get("preventive_actions") or []
+    sig_assets = {res.evidence[i].asset_id for i in (sig.evidence_ids if sig else []) if i in res.evidence and res.evidence[i].asset_id}
     return {**issue,
-            "observed": field("observed", None),
-            "why_it_matters": field("why_it_matters", card.get("why_it_matters")),
-            "potential_consequence": field("potential_consequence", f.get("consequence")),
-            "uncertainty": field("uncertainty", None),
-            "first_action": field("first_action", card.get("action") or (actions[0] if actions else None)),
+            "observed": field("observed", " ".join(facts[:2]) or None, None),
+            "why_it_matters": field("why_it_matters", None, card.get("why_it_matters")),
+            "potential_consequence": field("potential_consequence", scen[0]["how_it_could_develop"] if scen else None,
+                                           f.get("consequence")),
+            "uncertainty": field("uncertainty", None, None),
+            "first_action": field("first_action", acts[0]["action"] if acts else None,
+                                  card.get("action") or (actions[0] if actions else None)),
             "certainty": rb.get("certainty") if rb else None,
             "evidence_text": card.get("evidence"), "evidence_ids": card.get("evidence_ids", []),
+            "zone_ai": ({"situation": _ai_text(r.get("situation") or r.get("summary")),
+                         "ai_priority": (r.get("risk_assessment") or {}).get("ai_priority"),
+                         "agrees_with_rule": (r.get("risk_assessment") or {}).get("agrees_with_rule_severity"),
+                         "rationale": _ai_text((r.get("risk_assessment") or {}).get("rationale")),
+                         "possible_causes": [{"cause": h["cause"], "plausibility": h.get("plausibility"),
+                                              "how_to_verify": _ai_text(h.get("how_to_verify"))} for h in hyps[:3]],
+                         "actions": [{"action": x["action"], "urgency": x.get("urgency"),
+                                      "role": _ai_text(x.get("responsible_role"))} for x in acts[:3]],
+                         "uncertainty": _ai_text(r.get("uncertainty")),
+                         "prompt_version": inv.get("prompt_version")} if inv else None),
+            "videos": _video_findings(a.zone, sig.pathway if sig else None, sig_assets, issue.get("place") or ""),
             "ai": {"code": code, "label": AI_BRIEF_LABEL[code], "running": st["code"] == "running",
-                   "analysed_at": inv["created_at"] if inv and rb else None,
-                   "model": inv.get("model") if inv and rb else None,
-                   "api_mode": _investigation_view(inv)["api_mode"] if inv and rb else None,
-                   "is_current": bool(rb and st["result_is_current"]),
+                   "analysed_at": inv["created_at"] if inv else None,
+                   "model": inv.get("model") if inv else None,
+                   "api_mode": _investigation_view(inv)["api_mode"] if inv else None,
+                   "is_current": bool(inv and st["result_is_current"]), "per_risk": bool(rb),
                    "error": st.get("error"), "has_full_analysis": bool(inv)}}
 
 
@@ -638,6 +708,7 @@ def _brief_eq(issue: dict, ea) -> dict:
             "uncertainty": {"text": ok(f.get("cause_status")), "origin": "rule"} if ok(f.get("cause_status")) else None,
             "first_action": {"text": ok(acts[0]), "origin": "rule"} if acts and ok(acts[0]) else None,
             "certainty": None, "evidence_text": issue["count_text"], "evidence_ids": list(ea.evidence_ids)[:20],
+            "zone_ai": None, "videos": _video_findings(ea.zone, None, {ea.asset_id} if ea.asset_id else set(), issue.get("place") or ""),
             "ai": {"code": "not_applicable", "label": AI_BRIEF_LABEL["not_applicable"], "running": False,
                    "analysed_at": None, "model": None, "api_mode": None, "is_current": False, "error": None,
                    "has_full_analysis": False,
@@ -675,12 +746,16 @@ def _recent(res, n: int = 8) -> dict:
     for v in state.videos.list():
         a = state.videos.latest_analysis(v["video_id"], only_ok=True)
         if a:
+            obs = sorted(a.get("observations", []), key=lambda o: (o["category"] in ("other", "signage_or_emergency_lighting"),
+                                                                  o["visible_certainty"] != "clearly_visible"))
             vids.append({"video_id": v["video_id"], "filename": v["filename"], "zone": v.get("zone"),
                          "zone_label": v["zone_label"], "recorded_at": v.get("recorded_at"),
                          "analysed_at": a["created_at"], "observations": len(a.get("observations", [])),
-                         "summary": a.get("summary")})
+                         "summary": _ai_text(a.get("summary")), "model": a.get("model"),
+                         "top": [{k: o.get(k) for k in ("time_start_s", "category", "observation", "visible_certainty")}
+                                 for o in obs[:3] if _ai_text(o.get("observation"))]})
     vids.sort(key=lambda x: x["analysed_at"] or "", reverse=True)
-    return {"records": [_ev(e) for e in tagged[:n]], "videos": vids[:6]}
+    return {"records": [_ev(e) for e in tagged[:n]], "videos": vids}
 
 
 @app.get("/api/overview")

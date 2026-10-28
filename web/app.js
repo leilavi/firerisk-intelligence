@@ -186,6 +186,9 @@ async function viewOverview() {
         <p class="coverage">${esc(sm.coverage_note)}</p></section>
       <section class="panel ctxpanel" id="ctx" aria-live="polite"></section>
     </div>
+    <section class="panel" style="margin-top:16px"><div class="ph"><h2>Survey video findings · Muse Spark</h2><a href="#/media">Photos &amp; Videos →</a></div>
+      <p class="tiny muted" style="margin:-4px 0 10px">${org("ai_vision")}Observations made by Muse Spark from the real survey videos. A video shows what was visible when it was recorded, not the current state, and never changes a rule level.</p>
+      ${videoPanel(B.recent.videos)}</section>
     <div class="supgrid">
       <section class="panel"><div class="ph"><h2>System health</h2><a href="#/equipment">Equipment &amp; Systems →</a></div>${healthPanel(sm)}</section>
       <section class="panel"><div class="ph"><h2>Recent events</h2><a href="#/events">Event History →</a></div>${recentPanel(B.recent)}</section>
@@ -206,7 +209,7 @@ async function refreshBrief() {
 
 const AI_NOTE = {
   complete: (a) => `Muse Spark analysis completed ${dt(a.analysed_at)}${a.api_mode === "test" ? " (TEST endpoint)" : ""}.`,
-  complete_older: (a) => `Muse Spark analysed an earlier version of this evidence (${dt(a.analysed_at)}). A new analysis runs automatically.`,
+  complete_older: (a) => `Real Muse Spark analysis from ${dt(a.analysed_at)}${a.api_mode === "test" ? " (TEST endpoint)" : ""}. The evidence or the analysis version has changed since; a new analysis runs automatically and replaces it.`,
   pending: () => "Muse Spark analysis is pending. The rule-based explanation is shown until it completes.",
   failed: (a) => `Muse Spark analysis failed${a.error?.kind ? ` (${a.error.kind})` : ""}. The rule-based explanation is shown.`,
   insufficient_evidence: (a) => `Muse Spark found the evidence insufficient (${dt(a.analysed_at)}).`,
@@ -251,6 +254,7 @@ function renderBrief() {
           <button class="btn" data-issue="${esc(it.issue_id)}">View Details →</button>
           <button class="btn quiet" id="br-loc">Show on building</button></div>
       </div></div>
+    ${briefAi(it)}
     <div id="br-full" class="br-more" hidden></div>
     ${others.length ? `<div class="br-more"><button class="btn quiet" id="br-others" aria-expanded="false">${moreHigh > 0 ? `${moreHigh} additional high-priority issue${moreHigh > 1 ? "s" : ""}` : "Other active issues"} · ${others.length} more ▾</button>
       <div class="br-others" id="br-list" hidden>${BR.items.map((x, i) => `<button class="br-other sv-${esc(x.severity)}${i === briefIdx ? " cur" : ""}" data-bi="${i}"><b>${esc(x.kind === "fire_risk" ? x.title : `${issueName(x)}: ${issueDesc(x)}`)}</b><span class="muted">${esc(LABEL[x.severity])} · ${esc(zshort(x.zone))} · ${esc(x.kind_label)}</span></button>`).join("")}</div></div>` : ""}`;
@@ -267,6 +271,31 @@ function renderBrief() {
     try { const d = await alertDetail(it.alert_id); box.innerHTML = aiFull(d, it.signal_id); box.hidden = false; ab.textContent = "Hide AI Analysis"; ab.setAttribute("aria-expanded", "true"); bindEvidence(); }
     catch (e) { box.innerHTML = `<div class="errbox">Could not load the analysis: ${esc(e.message)}</div>`; box.hidden = false; ab.textContent = "View AI Analysis"; }
   };
+}
+
+/* Real Muse Spark content shown directly in the briefing: the zone analysis and the survey-video observations. */
+const URG = { immediate: "Immediately", within_24h: "Within 24 h", within_7_days: "Within 7 days", routine: "Routine" };
+function briefAi(it) {
+  const z = it.zone_ai, vids = it.videos || [];
+  if (!z && !vids.length) return "";
+  const zoneBox = z ? `<div class="aipane"><div class="aph">${org("ai")}<b>Muse Spark analysis · ${esc(zshort(it.zone))}</b><span class="tiny muted">${esc(it.ai.model || "")} · ${dt(it.ai.analysed_at)}</span></div>
+      ${z.situation ? `<p class="small">${aiT(z.situation)}</p>` : ""}
+      ${z.ai_priority ? `<p class="tiny muted">AI priority ${esc(LABEL[z.ai_priority] || z.ai_priority)} · rule level ${esc(LABEL[it.severity])}: ${z.agrees_with_rule ? "agrees" : "differs; the rule level stays official"}</p>` : ""}
+      ${z.possible_causes.length ? `<div class="kicker" style="margin-top:6px">Possible causes for this risk (hypotheses)</div><ul class="small tight">${z.possible_causes.map((h) => `<li><span class="plaus">${esc(h.plausibility)}</span> ${aiT(h.cause)}</li>`).join("")}</ul>` : ""}
+      ${z.actions.length ? `<div class="kicker" style="margin-top:6px">Checks suggested by Muse Spark</div><ul class="small tight">${z.actions.map((x) => `<li><b>${esc(URG[x.urgency] || x.urgency || "")}</b> · ${aiT(x.action)}${x.role ? ` <span class="muted">(${aiT(x.role)})</span>` : ""}</li>`).join("")}</ul>` : ""}
+    </div>` : "";
+  const vidBox = vids.length ? `<div class="aipane"><div class="aph">${org("ai_vision")}<b>Survey video findings · ${esc(zshort(it.zone))}</b><span class="tiny muted">what was visible when recorded</span></div>
+      ${vids.map((v) => `<div class="vfind"><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="tiny muted">recorded ${v.recorded_at ? dt(v.recorded_at) : "date unknown"} · ${v.observation_count} observations${v.match === "equipment" ? " · linked to this equipment in the asset register" : v.match === "room_name" ? " · same room name" : " · same floor"}</span>
+        <ul class="small tight">${v.observations.map((o) => `<li><a href="#/video/${esc(v.video_id)}?t=${o.time_start_s}">${fmtTime(o.time_start_s)}</a> ${aiT(o.observation)}${o.visible_certainty === "possibly_visible" ? ' <span class="muted">(possibly visible)</span>' : ""}</li>`).join("")}</ul></div>`).join("")}
+    </div>` : "";
+  return `<div class="br-ai">${zoneBox}${vidBox}</div>`;
+}
+function videoPanel(vs) {
+  if (!vs.length) return '<div class="empty">Evidence Unavailable: no survey video has been analysed yet.</div>';
+  return `<div class="vgrid">${vs.map((v) => `<a class="vcard" href="#/video/${esc(v.video_id)}">
+    <div class="vh"><b>${esc(v.filename)}</b><span class="tiny muted">${esc(zshort(v.zone || ""))} · recorded ${v.recorded_at ? dt(v.recorded_at) : "date unknown"} · ${v.observations} observations</span></div>
+    ${v.summary ? `<p class="small vsum">${aiT(v.summary)}</p>` : ""}
+    <ul class="small tight">${v.top.map((o) => `<li><span class="when">${fmtTime(o.time_start_s)}</span> ${aiT(o.observation)}</li>`).join("")}</ul></a>`).join("")}</div>`;
 }
 
 const CERT = { supported: "Supported by the records", partly_supported: "Partly supported by the records", insufficient_evidence: "Insufficient evidence" };
@@ -416,7 +445,7 @@ function healthPanel(sm) {
 function recentPanel(rec) {
   const rows = rec.records.slice(0, 6).map((e) => `<li><span class="when">${day(e.timestamp)} · ${esc(zshort(e.zone || "Building"))}</span>${tr(e, "title")} ${chip(e.evidence_id)}</li>`).join("");
   return `${rows ? `<ol class="tlc">${rows}</ol>` : '<div class="empty">No Data Available</div>'}
-    <p class="small muted" style="margin:8px 0 0">${rec.videos.length ? `${rec.videos.length} survey video(s) analysed by Muse Spark, latest ${dt(rec.videos[0].analysed_at)}. <a href="#/media">View</a>` : "No survey video analysed yet."}</p>`;
+    <p class="small muted" style="margin:8px 0 0">${rec.videos.length ? `${rec.videos.length} survey video(s) analysed by Muse Spark, latest ${dt(rec.videos[0].analysed_at)}.` : "No survey video analysed yet."}</p>`;
 }
 function sourcesPanel() {
   const rows = S.sources.map((s) => `<div class="srcrow"><span class="dotst ${s.error ? "bad" : s.stale ? "bad" : ""}"></span><span>${esc(s.sheet_en || SRCNAME[s.source] || s.source)}<div class="tiny muted">${s.error ? "Not readable" : s.stale ? `Older than expected (${s.age_days} d)` : "Current"}</div></span><span class="tiny muted">${s.latest_record ? day(s.latest_record) : "—"}</span></div>`).join("");
@@ -462,7 +491,7 @@ function riskDetailInline(d, signalId) {
     <h5>Recommended actions</h5><ul class="actions">${s.fields.preventive_actions.map((a, n) => `<li><span class="box" aria-hidden="true"></span><span>${n === 0 ? "<b>First:</b> " : ""}${esc(a)}</span></li>`).join("")}</ul>
     <p class="small"><b>Close when:</b> ${esc(s.fields.closure_condition || "—")}</p>
     ${d.related_equipment.length ? `<h5>Related equipment alerts</h5>${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span>${esc(nm(x.asset_name, x.asset_name_en, x.asset_id || "Equipment"))}<br><span class="small muted">Why linked: ${x.reasons.map((r) => esc(roman(r))).join("; ")}</span></span></a>`).join("")}` : ""}
-    ${d.survey_videos.length ? `<h5>Survey videos of this zone</h5>${d.survey_videos.map((v) => `<a class="mini" href="#/video/${esc(v.video_id)}"><span>${esc(v.filename)}<br><span class="small muted">${esc(v.recording_note)}</span></span></a>`).join("")}` : ""}
+    ${d.survey_videos.length ? `<h5>Survey videos of this zone · Muse Spark observations</h5>${videoContext(d.survey_videos, true)}` : ""}
     <h5>AI analysis</h5>${aiFull(d, s.signal_id)}`;
 }
 function eqDetailInline(d) {
@@ -641,11 +670,11 @@ async function viewFire(id, focusRisk) {
   }, 5000);
 }
 
-function videoContext(vs) {
+function videoContext(vs, open) {
   if (!vs.length) return '<p class="muted small">Evidence Unavailable: no survey video of this zone on this computer.</p>';
   return vs.map((v) => `<div class="vctx"><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="muted small">${esc([plain(v, "floor"), plain(v, "area"), plain(v, "room")].filter(Boolean).join(" / "))}</span>
     <div class="small muted" style="margin:4px 0">${esc(v.recording_note)}</div>
-    ${v.observations.length ? `<details><summary class="small">${org("ai_vision")}${v.observations.length} observations by Muse Spark (${dt(v.analysis_created_at)})</summary><p class="small muted" style="margin:4px 0">Approximate times — check the clip.</p><ul class="small">${v.observations.map((o) => `<li><a href="#/video/${esc(v.video_id)}?t=${o.time_start_s}">${fmtTime(o.time_start_s)}</a> ${esc(o.category.replace(/_/g, " "))}: ${aiT(o.observation)} <span class="muted">(${esc(o.visible_certainty.replace(/_/g, " "))})</span></li>`).join("")}</ul></details>`
+    ${v.observations.length ? `<details${open ? " open" : ""}><summary class="small">${org("ai_vision")}${v.observations.length} observations by Muse Spark (${dt(v.analysis_created_at)})</summary><p class="small muted" style="margin:4px 0">Approximate times — check the clip.</p><ul class="small">${v.observations.map((o) => `<li><a href="#/video/${esc(v.video_id)}?t=${o.time_start_s}">${fmtTime(o.time_start_s)}</a> ${esc(o.category.replace(/_/g, " "))}: ${aiT(o.observation)} <span class="muted">(${esc(o.visible_certainty.replace(/_/g, " "))})</span></li>`).join("")}</ul></details>`
       : `<p class="small muted" style="margin:0">Not analysed by Muse Spark yet.</p>`}</div>`).join("");
 }
 

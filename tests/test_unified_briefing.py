@@ -166,7 +166,11 @@ def test_rendered_pages_are_english_only(client):
             for h in ["#/", "#/fire", "#/fire/ZONE-B1", "#/equipment", "#/events", "#/data", "#/media"]:
                 page.goto(base + h); page.wait_for_load_state("networkidle"); page.wait_for_timeout(300)
                 if h == "#/":
-                    page.click(".mk"); page.click("#ctx [data-issue]"); page.wait_for_timeout(500)
+                    page.focus(".mk"); page.keyboard.press("Enter")       # marker by keyboard (its ring is animated)
+                    assert page.is_visible("#ctx .ctxhead") and "selected floor" in page.inner_text("#ctx").lower()
+                    page.eval_on_selector("#ctx [data-issue]", "e => e.scrollIntoView({block: 'center'})")
+                    page.click("#ctx [data-issue]")
+                    page.wait_for_timeout(500)
                     assert page.is_visible("#drawer")                                  # View Details really opens
                     page.keyboard.press("Escape")
                 r = page.evaluate(js)
@@ -176,3 +180,27 @@ def test_rendered_pages_are_english_only(client):
     finally:
         server.should_exit = True
         th.join(timeout=5)
+
+
+def test_briefing_shows_real_older_muse_result_using_only_parts_that_cite_this_risk(client):
+    api, c = client
+    top = c.get("/api/briefing").json()["items"][0]
+    mine, other = top["evidence_ids"][0], "some-other-record"
+    res = api.state.get()
+    api.state.store.save_investigation({
+        "alert_id": top["alert_id"], "created_at": datetime.now().isoformat(), "status": "ok", "model": "TEST-FAKE",
+        "fingerprint": "older", "prompt_version": "investigation-v3", "base_url": "http://127.0.0.1:1/v1",
+        "result": {"summary": "TEST", "situation": "TEST zone situation",
+                   "observed_facts": [{"statement": "TEST fact about this risk", "evidence_ids": [mine]},
+                                      {"statement": "TEST fact about another risk", "evidence_ids": [other]}],
+                   "recommended_actions": [{"action": "TEST action for another risk", "urgency": "routine", "evidence_ids": [other]},
+                                           {"action": "TEST action for this risk", "urgency": "immediate", "evidence_ids": [mine]}],
+                   "hypotheses": [], "scenarios": [],
+                   "risk_assessment": {"ai_priority": "high", "agrees_with_rule_severity": True, "rationale": "TEST"}}})
+    t = next(i for i in c.get("/api/briefing").json()["items"] if i["issue_id"] == top["issue_id"])
+    assert t["ai"]["code"] == "complete_older" and t["ai"]["model"] == "TEST-FAKE"
+    assert t["observed"] == {"text": "TEST fact about this risk", "origin": "ai"}
+    assert t["first_action"] == {"text": "TEST action for this risk", "origin": "ai"}
+    assert t["zone_ai"]["situation"] == "TEST zone situation"
+    assert [a["action"] for a in t["zone_ai"]["actions"]] == ["TEST action for this risk"]
+    assert t["videos"] == []                                                              # fixture has no video

@@ -223,3 +223,10 @@ UPS without location. Muse Spark could not be called from Claude's workspace, so
 explanation with "AI Analysis Unavailable"; on the PC prompt v5 re-analyses the 2 fire-risk alerts once.
 
 **Tests:** 116 passed.
+
+## 2026-10-28 15:12–15:40 — Show Muse results and video findings directly (0.8.1)
+**Author:** "why not show Muse's analysis directly, and where did the video analysis go?" Correct: 0.8.0 used only the
+new per-risk v5 briefing, so the eight real v3 analyses of B1 stayed behind a button, and the Overview had lost the
+video panel. Now the real stored result is shown in the briefing (only the parts citing the risk's own records), and
+all 8 analysed videos (64 observations) are on the Overview. Checked on the real-data copy: 0 Vietnamese strings, no
+page errors. Note for the demo video: one transformer-room observation quotes a nameplate with the building name.

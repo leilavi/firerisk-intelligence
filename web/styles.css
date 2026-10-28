@@ -324,3 +324,18 @@ a.rrow:hover{background:var(--line-2);text-decoration:none}
   .evi{grid-template-columns:1fr}.evi .val{text-align:left}.kv,.dsum{grid-template-columns:1fr}.vform{grid-template-columns:1fr}.vform .wide{grid-column:auto}.obs .ob{grid-template-columns:1fr}
   .aihead .btn{margin-left:0}.filters select,.filters input{width:100%}.icards.grid{grid-template-columns:1fr}.brief{padding:14px}}
 @media (max-width:720px){.topbar{position:static}}
+
+/* 0.8.1: real Muse Spark content shown directly */
+.br-ai{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:12px}
+.aipane{border:1px dashed rgba(168,85,247,.45);background:rgba(168,85,247,.06);border-radius:var(--r-md);padding:10px 12px}
+.aph{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.aph .tiny{margin-left:auto}
+ul.tight{margin:4px 0 0;padding-left:18px} ul.tight li{margin:2px 0}
+.vfind{padding:6px 0;border-top:1px solid rgba(168,85,247,.2)} .vfind:first-of-type{border-top:0}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+.vcard{display:block;background:var(--panel-2);border:1px solid var(--line);border-left:3px solid var(--purple);border-radius:var(--r-md);padding:10px 12px;color:var(--ink)}
+.vcard:hover{border-color:rgba(168,85,247,.7);text-decoration:none}
+.vcard .vh{display:flex;flex-direction:column;gap:1px}
+.vsum{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink-2);margin:6px 0 2px}
+.vcard .when{display:inline-block;min-width:34px}
+@media (max-width:1180px){.br-ai{grid-template-columns:1fr}}
