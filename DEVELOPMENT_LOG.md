@@ -245,5 +245,5 @@ above the 1 GiB Files API limit, so 0.9 sends a smaller copy.
 which prompt v6 addresses; v6 and video review v2 have NOT been run live yet (Claude's workspace cannot reach the Meta
 API). Display rename only: no change to model ID, endpoint or payload.
 
-**Tests:** 126 passed. Playwright on a copy of the PC's current data and database: 0 Vietnamese strings, no page
+**Tests:** 125 passed. Playwright on a copy of the PC's current data and database: 0 Vietnamese strings, no page
 errors, alert list and analyses collapsed by default.

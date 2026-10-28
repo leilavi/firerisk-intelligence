@@ -28,7 +28,7 @@
 - Videos over 1 GiB (Files API limit) are downloaded and sent as a smaller 720p/540p/360p copy without audio
   (ffmpeg via the new `imageio-ffmpeg` requirement; also enables still frames on Windows). Drive renames are
   followed. `run_dashboard.bat` installs new requirements quietly.
-- 126 tests.
+- 125 tests.
 
 ## 0.8.1 — 2026-10-28
 - The AI Risk Briefing now shows the stored real Muse Spark result directly, also when it was made with an earlier
