@@ -17,6 +17,7 @@ The token is kept in memory for the run only; it is never written to disk, the d
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 import urllib.error
@@ -34,6 +35,7 @@ DRIVE_FILES = "https://www.googleapis.com/drive/v3/files"
 TOKENINFO = "https://oauth2.googleapis.com/tokeninfo"
 WRITE_SCOPES = {"https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/drive.file"}
 READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+log = logging.getLogger("firerisk.drive_videos")
 
 
 def video_settings() -> dict:
@@ -123,20 +125,31 @@ class DriveVideoSync:
                     p["skipped"].append({"title": it["title"], "reason": "larger than 1 GiB (Meta Files API limit)"})
                 else:
                     todo.append(it)
+            if analyse_hook:                     # videos already here but not analysed yet (e.g. after a restart)
+                p["analysed"].extend(analyse_hook() or [])
             if todo:
                 token = get_token(cfg, self.opener)
                 check_scope(token, self.opener)
                 for it in todo:
+                    log.info("downloading %s (%s bytes)", it["title"], it.get("size"))
                     try:
-                        v = self._download(it, token)
+                        try:
+                            v = self._download(it, token)
+                        except PermissionError:      # token expired (about 1 hour): get a new one, resume
+                            token = get_token(cfg, self.opener)
+                            check_scope(token, self.opener)
+                            v = self._download(it, token)
                         p["downloaded"].append({"title": it["title"], "video_id": v["video_id"], "zone": v.get("zone")})
+                        log.info("downloaded %s -> %s", it["title"], v["video_id"])
                     except Exception as exc:
                         p["errors"].append({"title": it["title"], "error": _safe(exc)})
+                        log.warning("download failed for %s: %s", it["title"], _safe(exc))
+                        continue
                     finally:
                         p["current"] = None
+                    if analyse_hook:                 # analyse each video as soon as it is here
+                        p["analysed"].extend(analyse_hook() or [])
                 del token
-            if analyse_hook:
-                p["analysed"] = analyse_hook() or []
         except Exception as exc:
             p["errors"].append({"title": None, "error": _safe(exc)})
         finally:
@@ -146,29 +159,47 @@ class DriveVideoSync:
         return p
 
     def _download(self, it: dict, token: str) -> dict:
+        """Download to a .part file; an earlier partial download is resumed with an HTTP Range request."""
         self.inbox.mkdir(parents=True, exist_ok=True)
         url = f"{DRIVE_FILES}/{urllib.parse.quote(it['drive_file_id'])}?alt=media&supportsAllDrives=true"
         tmp = self.inbox / f"drive-{it['drive_file_id']}.part"
-        cur = self.progress["current"] = {"title": it["title"], "size": it.get("size"), "bytes_done": 0,
+        have = tmp.stat().st_size if tmp.exists() else 0
+        if it.get("size") and have >= it["size"]:
+            have = 0
+        headers = {"Authorization": f"Bearer {token}"}
+        if have:
+            headers["Range"] = f"bytes={have}-"
+        cur = self.progress["current"] = {"title": it["title"], "size": it.get("size"), "bytes_done": have,
                                           "started_at": datetime.now(LOCAL_TZ).isoformat(timespec="seconds")}
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        req = urllib.request.Request(url, headers=headers)
         try:
-            with self.opener(req, timeout=120) as r, open(tmp, "wb") as f:
-                while chunk := r.read(1 << 20):
-                    f.write(chunk)
-                    cur["bytes_done"] += len(chunk)
-                    if cur["bytes_done"] > MAX_UPLOAD_BYTES:
-                        raise ValueError("larger than 1 GiB")
-            if it.get("size") and tmp.stat().st_size != it["size"]:
-                raise ValueError(f"download incomplete ({tmp.stat().st_size} of {it['size']} bytes)")
-            meta = meta_from_ref(it.get("ref"), it.get("folder"))
-            meta["drive_file_id"], meta["imported_from"] = it["drive_file_id"], "google_drive"
-            return self.videos.add_file(tmp, it["title"], meta)
+            with self.opener(req, timeout=120) as r:
+                resumed = have and getattr(r, "status", 200) == 206
+                if have and not resumed:
+                    cur["bytes_done"] = 0
+                with open(tmp, "ab" if resumed else "wb") as f:
+                    while chunk := r.read(1 << 20):
+                        f.write(chunk)
+                        cur["bytes_done"] += len(chunk)
+                        if cur["bytes_done"] > MAX_UPLOAD_BYTES:
+                            raise ValueError("larger than 1 GiB")
         except urllib.error.HTTPError as exc:
+            if exc.code == 401:
+                raise PermissionError("token expired") from None
+            if exc.code == 416:                      # range not satisfiable: start again next time
+                tmp.unlink(missing_ok=True)
             raise RuntimeError(f"Google Drive returned HTTP {exc.code}") from None
+        size = tmp.stat().st_size
+        if it.get("size") and size != it["size"]:
+            if size > it["size"]:
+                tmp.unlink(missing_ok=True)
+            raise ValueError(f"download incomplete ({size} of {it['size']} bytes); it resumes on the next run")
+        meta = meta_from_ref(it.get("ref"), it.get("folder"))
+        meta["drive_file_id"], meta["imported_from"] = it["drive_file_id"], "google_drive"
+        try:
+            return self.videos.add_file(tmp, it["title"], meta)
         finally:
-            if tmp.exists():
-                tmp.unlink()
+            tmp.unlink(missing_ok=True)
 
 
 def _safe(exc: Exception) -> str:

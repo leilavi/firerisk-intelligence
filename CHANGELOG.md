@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 — 2026-10-28
+- First real run on the author's PC (11:40): Drive sync OK (9 files, 8 videos), automatic Muse Spark analysis of
+  ZONE-B1 and ZONE-Building with prompt v3 (27 s, 22 s, both valid), 2 videos downloaded with MP4 recording times.
+  The dashboard process stopped at 11:41:46 during the third download (cause unknown: no log file existed).
+- Fixes: log file `data/private/logs/firerisk.log` (+ `crash.log` for Python crashes, thread errors logged), console
+  shows warnings only; partial downloads resume with HTTP Range; an expired Drive token is renewed once; each video is
+  analysed right after its download (and videos already downloaded are analysed first).
+- 102 tests.
+
 ## 0.6.0 — 2026-10-28
 - Everything is read from Google Drive: the Apps Script web app also returns a listing of the data folder (incl.
   sub-folders such as "Video Uploaded") and, on request, a short-lived read-only Drive token.

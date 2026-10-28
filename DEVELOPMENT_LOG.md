@@ -175,3 +175,12 @@ write scopes are refused. Automatic Muse video review with a daily limit. Folder
 
 **Tests:** 99 passed (fake web app, tokeninfo, Drive and Muse transports; TEST bytes). **Not verified:** the real
 Apps Script deployment, a real Drive download and a real Muse video analysis — they need the author's one-time setup.
+
+## 2026-10-28 11:35–11:50 — First real Drive + automatic Muse run on the author's PC
+Author deployed the Apps Script (read-only manifest) and started the dashboard. Read from the PC database:
+sync 11:40:18 ok (ops sheet updated, listing 9 files / 8 videos); ai_investigations 4 (ZONE-B1, auto, prompt v3,
+26.99 s, ok) and 5 (ZONE-Building, auto, v3, 21.7 s, ok); 2 videos downloaded and registered
+(`VID_20261027_153559_757.mp4` recorded 27 Oct 15:35 per MP4 header, 13.5 s; `Electrical Panel - B1.mp4` 15:36,
+15.7 s; neither has a zone in the register). The process stopped during the third download (.part left at 36.7 MB,
+browser "Failed to fetch"); no video analysed yet because analysis waited for all downloads. Fixed in 0.6.1 (see
+CHANGELOG). Compliance R-02: automatic analysis now also verified live.

@@ -30,7 +30,24 @@ class FakeGoogle:
             fid = url.split("/files/")[1].split("?")[0]
             if fid not in CONTENT:
                 raise urllib.error.HTTPError(url, 404, "nf", {}, io.BytesIO(b""))
+            if getattr(self, "expire_once", False):
+                self.expire_once = False
+                raise urllib.error.HTTPError(url, 401, "expired", {}, io.BytesIO(b""))
             out = CONTENT[fid][:-3] if self.truncate else CONTENT[fid]
+            rng = dict(req.header_items()).get("Range")
+            if rng:
+                start = int(rng.split("=")[1].rstrip("-"))
+                body = out[start:]
+
+                class P(io.BytesIO):
+                    status = 206
+
+                    def __enter__(self):
+                        return self
+
+                    def __exit__(self, *a):
+                        return False
+                return P(body)
         else:
             raise AssertionError(url)
 
@@ -145,3 +162,41 @@ def test_not_set_up_does_nothing(env, monkeypatch):
     monkeypatch.setenv("FIRERISK_DRIVE_EXPORT_URL", "")
     assert api.state.start_drive_videos() is False
     assert c.post("/api/videos/drive-sync").status_code == 400
+
+
+def test_partial_download_is_resumed_with_range(env):
+    api, c, g, _ = env
+    inbox = api.state.drive_videos.inbox
+    inbox.mkdir(parents=True, exist_ok=True)
+    (inbox / "drive-TESTVID00000000000000002.part").write_bytes(CONTENT["TESTVID00000000000000002"][:7])   # earlier run stopped
+    p = run(api)
+    assert not p["errors"], p["errors"]
+    req = next(x for x in g.log if "TESTVID00000000000000002" in x["url"])
+    assert req["headers"]["Range"] == "bytes=7-"
+    v = next(v for v in api.state.videos.list() if v["filename"] == "TEST Pump Room.mp4")
+    assert api.state.videos.path(v["video_id"]).read_bytes() == CONTENT["TESTVID00000000000000002"]
+    assert not list(inbox.glob("*.part"))
+
+
+def test_expired_token_is_renewed_once(env):
+    api, c, g, _ = env
+    g.expire_once = True
+    p = run(api)
+    assert not p["errors"] and len(p["downloaded"]) == 2
+    assert sum(1 for x in g.log if "script.google" in x["url"]) == 2
+
+
+def test_each_video_is_analysed_right_after_its_download(env):
+    api, c, g, meta = env
+    order = []
+    orig = api.state.videos.analyse
+    def spy(video_id, *a, **k):
+        order.append(("analyse", video_id)); return orig(video_id, *a, **k)
+    api.state.videos.analyse = spy
+    orig_dl = api.state.drive_videos._download
+    def dl(it, token):
+        v = orig_dl(it, token); order.append(("download", v["video_id"])); return v
+    api.state.drive_videos._download = dl
+    run(api)
+    kinds = [k for k, _ in order]
+    assert kinds == ["download", "analyse", "download", "analyse"]
