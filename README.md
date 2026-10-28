@@ -107,9 +107,11 @@ read-only token (a token that could modify Drive is refused), registered with zo
 (no zone is guessed), and reviewed by Muse Spark automatically through the Meta video API (Files API + Responses API
 `input_video`; uploaded copy expires after 1 hour and is deleted after the call). Observations are dated context for
 the zone's fire-risk alerts: a video shows the situation when it was recorded, never the current state.
-Settings: `FIRERISK_DRIVE_VIDEOS` (`1`), `FIRERISK_AUTO_VIDEO_AI` (`1`), `FIRERISK_VIDEO_AI_DAILY_LIMIT` (`8`).
+Settings: `FIRERISK_DRIVE_VIDEOS` (`1`), `FIRERISK_AUTO_VIDEO_AI` (`1`), `FIRERISK_VIDEO_AI_DAILY_LIMIT` (`20`).
 
 ## Dashboard
+The AI analyst is shown in the dashboard as **Muse Captain**; it is Meta Muse Spark (`muse-spark-1.3`) called through the Meta Model API.
+
 * **Overview** — **AI Risk Briefing** (highest-priority issue: location, consequence, first action, analysis status);
   building summary; **Building Risk Map** with a marker per floor (fire-safety risks and equipment alerts together,
   each keeping its own classification); context panel; system health, recent events, data sources.

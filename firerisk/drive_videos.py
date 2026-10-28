@@ -10,7 +10,7 @@ Flow (runs in the background on the author's computer):
      A video in the folder that no register row links keeps zone "not assigned" (nothing is guessed).
   4. When automatic video analysis is on (FIRERISK_AUTO_VIDEO_AI, default on), each new video is reviewed by
      Muse Spark (video.analyse_video: Files API + Responses API), one at a time, at most
-     FIRERISK_VIDEO_AI_DAILY_LIMIT (default 8) automatic analyses per day, one automatic attempt per video.
+     FIRERISK_VIDEO_AI_DAILY_LIMIT (default 20) automatic analyses per day, one automatic attempt per video.
 The token is kept in memory for the run only; it is never written to disk, the database, logs or API output.
 """
 
@@ -29,7 +29,7 @@ from pathlib import Path
 from .config import LOCAL_TZ
 from .env import load_env
 from .sources.drive_sync import SyncConfig, SyncError
-from .video import MAX_UPLOAD_BYTES, meta_from_ref
+from .video import MAX_STORE_BYTES, meta_from_ref
 
 DRIVE_FILES = "https://www.googleapis.com/drive/v3/files"
 TOKENINFO = "https://oauth2.googleapis.com/tokeninfo"
@@ -41,9 +41,9 @@ log = logging.getLogger("firerisk.drive_videos")
 def video_settings() -> dict:
     env = load_env()
     try:
-        limit = max(0, int(env.get("FIRERISK_VIDEO_AI_DAILY_LIMIT", "8")))
+        limit = max(0, int(env.get("FIRERISK_VIDEO_AI_DAILY_LIMIT", "20")))
     except ValueError:
-        limit = 8
+        limit = 20
     return {"auto_analyse": env.get("FIRERISK_AUTO_VIDEO_AI", "1") != "0", "daily_limit": limit,
             "download": env.get("FIRERISK_DRIVE_VIDEOS", "1") != "0"}
 
@@ -120,9 +120,12 @@ class DriveVideoSync:
             for it in sorted(items, key=lambda x: x.get("size") or 0):
                 v = have.get(it["drive_file_id"])
                 if v and (not it.get("size") or v["size"] == it["size"]):
+                    if it.get("title") and v["filename"] != it["title"]:      # renamed on Drive: follow the new name
+                        self.videos.rename(v["video_id"], it["title"])
+                        p.setdefault("renamed", []).append({"from": v["filename"], "to": it["title"]})
                     p["skipped"].append({"title": it["title"], "reason": "already on this computer"})
-                elif (it.get("size") or 0) > MAX_UPLOAD_BYTES:
-                    p["skipped"].append({"title": it["title"], "reason": "larger than 1 GiB (Meta Files API limit)"})
+                elif (it.get("size") or 0) > MAX_STORE_BYTES:
+                    p["skipped"].append({"title": it["title"], "reason": "larger than 8 GiB"})
                 else:
                     todo.append(it)
             if analyse_hook:                     # videos already here but not analysed yet (e.g. after a restart)
@@ -181,8 +184,8 @@ class DriveVideoSync:
                     while chunk := r.read(1 << 20):
                         f.write(chunk)
                         cur["bytes_done"] += len(chunk)
-                        if cur["bytes_done"] > MAX_UPLOAD_BYTES:
-                            raise ValueError("larger than 1 GiB")
+                        if cur["bytes_done"] > MAX_STORE_BYTES:
+                            raise ValueError("larger than 8 GiB")
         except urllib.error.HTTPError as exc:
             if exc.code == 401:
                 raise PermissionError("token expired") from None

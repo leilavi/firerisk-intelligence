@@ -6,4 +6,4 @@ Module origin markers used in docstrings:
   ORIGIN: NEW     - capability that did not exist in the pre-existing skill.
 """
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"

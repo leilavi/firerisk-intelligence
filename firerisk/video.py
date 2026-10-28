@@ -44,10 +44,12 @@ from .config import LOCAL_TZ, ZONE_LABELS
 ROOT = Path(__file__).resolve().parent.parent
 VIDEO_DIR = Path(os.environ.get("FIRERISK_VIDEO_DIR", ROOT / "data" / "private" / "media" / "videos"))
 MAX_UPLOAD_BYTES = 1_073_741_824            # Files API limit (docs/file-handling)
+UPLOAD_SAFE_BYTES = 1_000_000_000          # above this, a smaller copy is made for the upload (margin for multipart)
+MAX_STORE_BYTES = 8 * 1_073_741_824        # largest video kept on this computer
 ANALYSABLE_MIME = {"video/mp4"}            # docs/video-understanding: supported video format
 ACCEPTED_EXT = {".mp4": "video/mp4", ".mov": "video/quicktime", ".m4v": "video/mp4"}
 FILE_EXPIRY_SECONDS = 3600                 # uploaded copy at Meta expires after 1 h (minimum allowed)
-VIDEO_PROMPT_VERSION = "survey-video-v1"
+VIDEO_PROMPT_VERSION = "survey-video-v2"   # v2: full fire-safety review (A-G), area assessments, findings, coverage
 OLD_VIDEO_DAYS = 30                        # display hint only: "recorded more than 30 days ago"
 VIDEO_TIMEOUT_S = 900                      # per network wait during video upload / analysis
 INBOX_DIR = Path(os.environ.get("FIRERISK_VIDEO_INBOX", ROOT / "data" / "private" / "media" / "survey_inbox"))
@@ -66,10 +68,51 @@ CATEGORIES = ["exit_or_escape_route", "corridor_or_walkway", "fire_equipment", "
               "electrical_equipment", "obstruction", "storage_or_combustibles", "water_or_moisture",
               "heat_or_burn_marks", "signage_or_emergency_lighting", "housekeeping", "other"]
 
+FINDING_CATS = ["ignition_source", "combustibles_housekeeping", "egress_access", "extinguishers_first_aid",
+                "detection_alarm", "suppression_smoke_control", "water_moisture_electrical"]
+FINDING_CAT_LABEL = {"ignition_source": "Possible ignition source", "combustibles_housekeeping": "Combustibles & housekeeping",
+                     "egress_access": "Escape routes & access", "extinguishers_first_aid": "Extinguishers & first-aid equipment",
+                     "detection_alarm": "Fire detection & alarm", "suppression_smoke_control": "Suppression & smoke control",
+                     "water_moisture_electrical": "Water or moisture near electrical equipment"}
+EXT_STATUS = ["visible_accessible", "visible_access_may_be_obstructed", "not_visible_in_footage", "needs_on_site_verification"]
+SEEN = ["visible", "not_visible_in_footage", "needs_on_site_verification"]
+_T = {"type": "number"}
+_S = {"type": "string"}
+_SL = {"type": "array", "items": {"type": "string"}}
+
 VIDEO_SCHEMA = {
     "type": "object", "additionalProperties": False,
-    "required": ["summary", "observations", "not_determinable", "limitations"],
+    "required": ["summary", "observations", "not_determinable", "limitations", "areas", "findings", "coverage"],
     "properties": {
+        "areas": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["area_label", "label_basis", "time_start_s", "time_end_s", "extinguishers",
+                         "extinguishers_visible_count", "detection_devices", "other_fire_equipment", "notes"],
+            "properties": {
+                "area_label": _S, "label_basis": {"type": "string", "enum": ["sign_or_label_visible", "not_verified"]},
+                "time_start_s": _T, "time_end_s": _T,
+                "extinguishers": {"type": "string", "enum": EXT_STATUS},
+                "extinguishers_visible_count": {"type": "integer"},
+                "detection_devices": {"type": "string", "enum": SEEN},
+                "other_fire_equipment": _S, "notes": _S}}},
+        "findings": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["title", "category", "time_start_s", "time_end_s", "area_label", "what_is_visible",
+                         "fire_safety_link", "potential_consequence_if_confirmed", "certainty", "recommended_check",
+                         "records_to_collect"],
+            "properties": {
+                "title": _S, "category": {"type": "string", "enum": FINDING_CATS}, "time_start_s": _T, "time_end_s": _T,
+                "area_label": _S, "what_is_visible": _S, "fire_safety_link": _S,
+                "potential_consequence_if_confirmed": _S,
+                "certainty": {"type": "string", "enum": ["clearly_visible", "possibly_visible"]},
+                "recommended_check": _S, "records_to_collect": _S}}},
+        "coverage": {
+            "type": "object", "additionalProperties": False,
+            "required": ["categories_assessed", "categories_not_assessable", "needs_more_footage", "image_limitations"],
+            "properties": {
+                "categories_assessed": {"type": "array", "items": {"type": "string", "enum": FINDING_CATS}},
+                "categories_not_assessable": {"type": "array", "items": {"type": "string", "enum": FINDING_CATS}},
+                "needs_more_footage": _SL, "image_limitations": _S}},
         "summary": {"type": "string"},
         "observations": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
@@ -91,6 +134,33 @@ VIDEO_INSTRUCTIONS = """You review a building survey video for fire-safety inspe
 Report only what is VISIBLE in the video: exits and escape routes, corridors, fire equipment (extinguishers, hose
 reels, alarm panels, detectors, signage, emergency lighting), electrical rooms and panels, obstructions, stored
 combustible material, water or moisture, heat or burn marks, housekeeping.
+
+Review every part of the video for these fire-safety groups (the area may have no alert yet):
+A ignition_source: exposed or damaged cables, unsafe connections, visibly damaged electrical or mechanical equipment,
+  burn/smoke/heat marks. Never say equipment is overheating from an ordinary image.
+B combustibles_housekeeping: cardboard, paper, packaging, cloth, insulation, stored goods or debris, especially near
+  panels, motors, chargers or heat sources. Seeing combustibles is not the same as a code violation.
+C egress_access: walkways, corridors, doors, exit signs and lighting when in frame, obstructions, blocked exit doors,
+  access to technical rooms and to fire equipment. A visible EXIT sign does not prove a compliant exit.
+D extinguishers_first_aid: extinguishers (seen or not, placement, obstruction, visible damage, count only if clearly
+  countable), hose reels and cabinets, hydrants, fire pumps.
+E detection_alarm: smoke/heat detectors, alarm panels and modules, damage, covers, loose wiring. Lit indicator
+  lights do not prove the system works.
+F suppression_smoke_control: pumps, pipes, valves, gauges, controllers, sprinklers, smoke exhaust/pressurisation fans,
+  leaks, corrosion, storage around them. Do not confirm pressure, water supply or readiness.
+G water_moisture_electrical: stains, standing water, leaks, corrosion near electrical plant, pipes over panels.
+  Distinguish old staining from active water.
+areas: one entry per distinct area the camera shows. area_label = the name on a visible sign or label (label_basis
+  "sign_or_label_visible"), otherwise a short neutral description with label_basis "not_verified" - never guess a
+  room name. extinguishers: visible_accessible / visible_access_may_be_obstructed / not_visible_in_footage /
+  needs_on_site_verification; extinguishers_visible_count = number clearly countable in frame, or -1 if not
+  countable. Never conclude that extinguishers are sufficient, missing or compliant.
+findings: notable items worth checking on site, each with exact times from the video, what is visible, why it
+  matters for fire safety, the possible consequence IF confirmed (conditional wording), certainty, the recommended
+  check and the records to collect (e.g. maintenance record, test report, floor plan). Do not invent rooms, counts,
+  readings or times. No findings is a valid answer.
+coverage: which groups the footage allowed you to assess, which it did not, what more footage is needed, and image
+  limitations (blur, angle, lighting, speed).
 Rules: (1) Do not guess what is outside the frame or what happened before or after the recording.
 (2) Do not say equipment works or does not work unless it is visibly obvious; a visible extinguisher does not
 prove it is charged. (3) Do not identify people, do not describe faces, and do not transcribe speech.
@@ -137,8 +207,8 @@ class VideoStore:
             with open(tmp, "wb") as f:
                 for chunk in chunks:
                     size += len(chunk)
-                    if size > MAX_UPLOAD_BYTES:
-                        raise ValueError("file larger than 1 GiB (Meta Files API limit)")
+                    if size > MAX_STORE_BYTES:
+                        raise ValueError("file larger than 8 GiB")
                     f.write(chunk)
             return self.add_file(tmp, filename, meta)
         finally:
@@ -152,8 +222,8 @@ class VideoStore:
         size = src.stat().st_size
         if size == 0:
             raise ValueError("empty file")
-        if size > MAX_UPLOAD_BYTES:
-            raise ValueError("file larger than 1 GiB (Meta Files API limit)")
+        if size > MAX_STORE_BYTES:
+            raise ValueError("file larger than 8 GiB")
         h = hashlib.sha256()
         with open(src, "rb") as f:
             while chunk := f.read(1 << 20):
@@ -218,7 +288,7 @@ class VideoStore:
         r["zone_label"] = ZONE_LABELS.get(r.get("zone") or "", r.get("zone") or "Not assigned")
         r["analysable"] = r["mime"] in ANALYSABLE_MIME
         if not r["analysable"]:
-            r["analysable_reason"] = "Muse Spark accepts video/mp4 only (official docs); convert this file to .mp4"
+            r["analysable_reason"] = "The video model accepts video/mp4 only (official Meta docs); convert this file to .mp4"
         r["age_days"] = _age_days(r.get("recorded_at"))
         r["recording_note"] = recording_note(r)
         latest = self.latest_analysis(r["video_id"])
@@ -249,7 +319,7 @@ class VideoStore:
         for v in self.list():
             if zone and v.get("zone") == zone:
                 ana = self.latest_analysis(v["video_id"], only_ok=True)
-                out.append({**v, "observations": (ana or {}).get("observations", []),
+                out.append({**v, "observations": (ana or {}).get("observations", []), "findings": (ana or {}).get("findings", []),
                             "analysis_created_at": (ana or {}).get("created_at"), "analysis_model": (ana or {}).get("model"),
                             "origin": "ai_vision" if ana else None})
         return out
@@ -263,7 +333,9 @@ class VideoStore:
                             "recorded_at": v.get("recorded_at"), "age_days": v.get("age_days"),
                             "place": " / ".join(x for x in (v.get("floor"), v.get("area"), v.get("room")) if x) or None,
                             "observations": [{k: o[k] for k in ("time_start_s", "category", "observation", "visible_certainty")}
-                                             for o in v["observations"]][:30]})
+                                             for o in v["observations"]][:30],
+                            "findings": [{k: f.get(k) for k in ("time_start_s", "category", "title", "what_is_visible", "certainty")}
+                                         for f in v.get("findings", [])][:15]})
         return out
 
     # --- analysis ----------------------------------------------------------------------------------------
@@ -361,9 +433,23 @@ class VideoStore:
         return sum(1 for r in rows if json.loads(r["record"]).get("trigger") == "auto")
 
     def pending_auto(self) -> list[dict]:
-        """Analysable videos with no analysis attempt yet (one automatic attempt per video), smallest first."""
-        out = [v for v in self.list() if v["analysable"] and v["analysis_status"] == "not_analysed"]
+        """Analysable videos with no attempt for the CURRENT prompt version (one automatic attempt per video and
+        version, so a new review prompt re-analyses every video once), smallest first."""
+        out = []
+        for v in self.list():
+            if not v["analysable"] or v["video_id"] in self.running:
+                continue
+            with self._conn() as c:
+                versions = {json.loads(r["record"]).get("prompt_version")
+                            for r in c.execute("SELECT record FROM video_analyses WHERE video_id=?", (v["video_id"],))}
+            if VIDEO_PROMPT_VERSION not in versions:
+                out.append(v)
         return sorted(out, key=lambda v: v["size"])
+
+    def rename(self, video_id: str, filename: str) -> None:
+        """Keep the name shown in the dashboard in line with the current Drive file name."""
+        with self._conn() as c:
+            c.execute("UPDATE survey_videos SET filename=? WHERE video_id=?", (filename[:200], video_id))
 
 
 def meta_from_ref(ref: dict | None, folder: str | None = None) -> dict:
@@ -444,7 +530,12 @@ def analyse_video(client, path: Path, context: str, duration_s: float | None) ->
     # Large uploads and video processing take minutes; the timeout applies to each network wait.
     client = MuseClient(replace(client.config, timeout_s=max(client.config.timeout_s, VIDEO_TIMEOUT_S)), opener=client._open)
     t0 = time.monotonic()
-    file_id = upload_file(client, path)
+    upload_path, method = prepare_upload(path)
+    try:
+        file_id = upload_file(client, upload_path)
+    finally:
+        if upload_path != path:
+            upload_path.unlink(missing_ok=True)
     deleted = False
     try:
         payload = {
@@ -471,10 +562,35 @@ def analyse_video(client, path: Path, context: str, duration_s: float | None) ->
     except (json.JSONDecodeError, TypeError):
         raise MuseBadResponse(f"model output is not valid JSON: {text[:200]}") from None
     obs, rejected = validate_observations(data.get("observations") or [], duration_s)
+    findings, rej_f = validate_findings(data.get("findings") or [], duration_s)
+    areas = [a for a in (data.get("areas") or []) if isinstance(a, dict) and a.get("extinguishers") in EXT_STATUS]
+    cov = data.get("coverage") or {}
     return {"model": body.get("model"), "usage": body.get("usage"), "seconds": round(time.monotonic() - t0, 1),
+            "findings": findings, "rejected_findings": rej_f, "areas": areas,
+            "coverage": {k: cov.get(k) for k in ("categories_assessed", "categories_not_assessable", "needs_more_footage",
+                                                  "image_limitations")},
+            "method": method,
             "summary": data.get("summary"), "observations": obs, "rejected_observations": rejected,
             "not_determinable": data.get("not_determinable") or [], "limitations": data.get("limitations"),
             "remote_file_deleted": deleted, "timestamps_verified": False}
+
+
+def validate_findings(items: list[dict], duration_s: float | None) -> tuple[list[dict], list[dict]]:
+    """Findings need a valid time range inside the video and a known group; others are set aside with the reason."""
+    ok, bad = [], []
+    for f in items:
+        try:
+            a, b = float(f.get("time_start_s")), float(f.get("time_end_s"))
+        except (TypeError, ValueError):
+            bad.append({**f, "reason": "no usable time"}); continue
+        if a < 0 or b < a:
+            bad.append({**f, "reason": "time range invalid"}); continue
+        if duration_s and a > duration_s + 1:
+            bad.append({**f, "reason": f"time {a:g}s is after the end of the video ({duration_s:g}s)"}); continue
+        if f.get("category") not in FINDING_CATS or not (f.get("title") or "").strip():
+            bad.append({**f, "reason": "unknown group or no title"}); continue
+        ok.append({**f, "time_start_s": a, "time_end_s": b, "origin": "ai_vision"})
+    return ok, bad
 
 
 def validate_observations(items: list[dict], duration_s: float | None) -> tuple[list[dict], list[dict]]:
@@ -496,9 +612,49 @@ def validate_observations(items: list[dict], duration_s: float | None) -> tuple[
     return ok, bad
 
 
+def ffmpeg_path() -> str | None:
+    """ffmpeg from PATH, or the binary shipped with the optional `imageio-ffmpeg` package (requirements.txt)."""
+    p = shutil.which("ffmpeg")
+    if p:
+        return p
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+
+
+class VideoTooLarge(Exception):
+    kind = "too_large"
+
+
+def prepare_upload(path: Path) -> tuple[Path, dict]:
+    """The Files API accepts at most 1 GiB. Larger videos are sent as a smaller copy (720p, H.264, no audio; the
+    model is not asked to use speech). Returns (file to upload, description of what was sent)."""
+    size = path.stat().st_size
+    base = {"sent": "full video file", "via": "Meta Files API upload + Responses API input_video (frame sampling is "
+            "done by Meta's service and is not documented)", "original_bytes": size}
+    if size <= UPLOAD_SAFE_BYTES:
+        return path, {**base, "uploaded_bytes": size, "transcoded": False}
+    ff = ffmpeg_path()
+    if not ff:
+        raise VideoTooLarge(f"video is {size / 1e9:.2f} GB; the Files API limit is 1 GiB and ffmpeg is not available "
+                            "to make a smaller copy (install imageio-ffmpeg: run install.bat again)")
+    for height, crf in ((720, 28), (540, 32), (360, 34)):
+        out = path.with_name(path.stem + f".upload{height}.mp4")
+        subprocess.run([ff, "-hide_banner", "-loglevel", "error", "-y", "-i", str(path), "-vf", f"scale=-2:{height}",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-an", "-movflags", "+faststart",
+                        str(out)], check=True, timeout=3600)
+        if out.stat().st_size <= UPLOAD_SAFE_BYTES:
+            return out, {**base, "sent": f"smaller copy of the full video ({height}p, H.264, no audio)",
+                         "uploaded_bytes": out.stat().st_size, "transcoded": True}
+        out.unlink(missing_ok=True)
+    raise VideoTooLarge("even a 360p copy is larger than 1 GiB; split the video and upload the parts")
+
+
 def extract_frame(video: Path, at_s: float, out: Path) -> Path | None:
     """One still frame for display (needs ffmpeg). Returns None when ffmpeg is not installed."""
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = ffmpeg_path()
     if not ffmpeg:
         return None
     out.parent.mkdir(parents=True, exist_ok=True)

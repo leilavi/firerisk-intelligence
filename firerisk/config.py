@@ -101,6 +101,10 @@ INSPECTION_CHECKLISTS: dict[str, str] = {
     "C-ES4": "Escalator 4", "C-ES5": "Escalator 5", "C-ES6": "Escalator 6",
 }
 
+# Name of the AI analyst shown in the dashboard (display only). The model actually called is Meta's
+# Muse Spark, MODEL_ID below / MODEL_NAME in .env (default muse-spark-1.3); nothing about the API call changes.
+AI_DISPLAY_NAME = "Muse Captain"
+
 ZONE_LABELS: dict[str, str] = {
     "B1": "Basement B1 (technical rooms)", "F1": "Floor 1", "F2": "Floor 2", "F3": "Floor 3",
     "F4": "Floor 4", "Roof": "Roof", "Building": "Whole building",

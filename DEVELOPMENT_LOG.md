@@ -230,3 +230,20 @@ new per-risk v5 briefing, so the eight real v3 analyses of B1 stayed behind a bu
 video panel. Now the real stored result is shown in the briefing (only the parts citing the risk's own records), and
 all 8 analysed videos (64 observations) are on the Overview. Checked on the real-data copy: 0 Vietnamese strings, no
 page errors. Note for the demo video: one transformer-room observation quotes a nameplate with the building name.
+
+## 2026-10-28 15:46–16:40 — Overview clean-up, Muse Captain name, prompt v6, video fire-safety review v2 (0.9)
+**Author:** two attachments (Overview changes 1-8; section 9-10: whole-building fire-safety review from all survey
+videos).
+
+**Checked first on the author's PC:** prompt v5 ran live at 15:06 (ZONE-B1 5 per-risk briefings, ZONE-Building 1);
+231 translations stored. Drive (connector, 16:00): 11 videos in "Video Uploaded" - 3 new (VID_20261028_144806_762
+0.57 GB, VID_20261028_145025_763 0.96 GB, VID_20261028_145705_765 1.69 GB, uploaded 15:41-15:46) and 2 renamed
+("Electrical Panel 1 - B1", "Electricial Panel - B1"). The PC's last listing (15:25) still had 8. The 1.69 GB file is
+above the 1 GiB Files API limit, so 0.9 sends a smaller copy.
+
+**Built:** see CHANGELOG 0.9.0. The real v5 output was short and generic (e.g. "Seized or burnt motors can overheat"),
+which prompt v6 addresses; v6 and video review v2 have NOT been run live yet (Claude's workspace cannot reach the Meta
+API). Display rename only: no change to model ID, endpoint or payload.
+
+**Tests:** 126 passed. Playwright on a copy of the PC's current data and database: 0 Vietnamese strings, no page
+errors, alert list and analyses collapsed by default.

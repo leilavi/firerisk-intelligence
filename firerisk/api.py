@@ -37,7 +37,7 @@ from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
 from .drive_videos import DriveVideoSync, drive_video_items, video_settings
-from .video import INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
+from .video import VIDEO_PROMPT_VERSION, INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
 from .sources.drive_sync import SyncConfig, SyncError, sync_from_drive
 from .store import VERIFICATION_STATES, Store
 
@@ -633,6 +633,17 @@ def _video_findings(zone, pathway=None, asset_ids=(), place: str = "", limit_vid
     return out[:limit_videos]
 
 
+def _brief_detail(rb: dict) -> dict:
+    """Structured per-risk analysis (prompt v6) for the expandable part of the briefing; English text only."""
+    lst = lambda k: [x for x in (rb.get(k) or []) if _ai_text(x)]
+    return {"history_link": _ai_text(rb.get("history_link")), "consequence_chain": lst("consequence_chain"),
+            "not_established": lst("not_established"), "actions_immediate": lst("actions_immediate"),
+            "actions_follow_up": lst("actions_follow_up"), "closure_criteria": lst("closure_criteria"),
+            "claims": [{"statement": c["statement"], "basis": c.get("basis"), "evidence_ids": c.get("evidence_ids", []),
+                        "downgraded": bool(c.get("downgraded"))}
+                       for c in rb.get("claims") or [] if _ai_text(c.get("statement"))]}
+
+
 def _brief_fire(issue: dict, res, a, sig) -> dict:
     st = state.ai.status(a, res)
     inv = state.store.latest_investigation(a.alert_id, only_ok=True)
@@ -673,15 +684,17 @@ def _brief_fire(issue: dict, res, a, sig) -> dict:
             "why_it_matters": field("why_it_matters", None, card.get("why_it_matters")),
             "potential_consequence": field("potential_consequence", scen[0]["how_it_could_develop"] if scen else None,
                                            f.get("consequence")),
-            "uncertainty": field("uncertainty", None, None),
+            "uncertainty": field("uncertainty", (rb or {}).get("not_established", [None])[0] if rb and rb.get("not_established") else None, None),
             "first_action": field("first_action", acts[0]["action"] if acts else None,
                                   card.get("action") or (actions[0] if actions else None)),
             "certainty": rb.get("certainty") if rb else None,
+            "detail": _brief_detail(rb) if rb else None,
             "evidence_text": card.get("evidence"), "evidence_ids": card.get("evidence_ids", []),
             "zone_ai": ({"situation": _ai_text(r.get("situation") or r.get("summary")),
                          "ai_priority": (r.get("risk_assessment") or {}).get("ai_priority"),
                          "agrees_with_rule": (r.get("risk_assessment") or {}).get("agrees_with_rule_severity"),
                          "rationale": _ai_text((r.get("risk_assessment") or {}).get("rationale")),
+                         "differs": (r.get("risk_assessment") or {}).get("ai_priority") not in (None, a.severity),
                          "possible_causes": [{"cause": h["cause"], "plausibility": h.get("plausibility"),
                                               "how_to_verify": _ai_text(h.get("how_to_verify"))} for h in hyps[:3]],
                          "actions": [{"action": x["action"], "urgency": x.get("urgency"),
@@ -712,7 +725,7 @@ def _brief_eq(issue: dict, ea) -> dict:
             "ai": {"code": "not_applicable", "label": AI_BRIEF_LABEL["not_applicable"], "running": False,
                    "analysed_at": None, "model": None, "api_mode": None, "is_current": False, "error": None,
                    "has_full_analysis": False,
-                   "note": "Muse Spark analyses fire-safety risks; equipment alerts are explained by the rule set."}}
+                   "note": "Muse Captain analyses fire-safety risks; equipment alerts are explained by the rule set."}}
 
 
 @app.get("/api/briefing")
@@ -1189,10 +1202,37 @@ def analyse_video_endpoint(video_id: str):
     if not v["analysable"]:
         raise HTTPException(400, v["analysable_reason"])
     if not MuseConfig.load().configured:
-        raise HTTPException(400, "Muse Spark is not configured (no MODEL_API_KEY)")
+        raise HTTPException(400, "Muse Captain is not configured (no MODEL_API_KEY)")
     started = state.videos.analyse_in_background(video_id, state.ai.client_factory,
                                                  state.video_context_text(v, state.get()), on_done=state.on_video_analysed)
     return {"started": started, "video": state.videos.get(video_id)}
+
+
+@app.get("/api/video-findings")
+def video_findings():
+    """AI video findings (Muse Captain survey-video review v2), separate from rule-based alerts, plus coverage."""
+    from .video_findings import collect
+    out = collect(state.videos, state.get(), state.store, _is_active)
+    for f in out["findings"]:
+        for k in ("title", "what_is_visible", "fire_safety_link", "potential_consequence_if_confirmed",
+                  "recommended_check", "records_to_collect", "area_label"):
+            f[k] = _ai_text(f.get(k)) or (None if f.get(k) else f.get(k))
+    out["top"] = [f for f in out["findings"] if f["finding_id"] in {t["finding_id"] for t in out["top"]}][:3]
+    out["prompt_version"] = VIDEO_PROMPT_VERSION
+    out["drive_sync"] = state.drive_videos.progress
+    return out
+
+
+@app.post("/api/video-findings/{finding_id}/status")
+def video_finding_status(finding_id: str, body: StatusIn):
+    """Only a person sets the status of a video finding. It never changes a rule level."""
+    if not finding_id.startswith("VF-"):
+        raise HTTPException(404, "unknown finding")
+    try:
+        state.store.set_status(finding_id, body.status, body.note, body.by)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return state.store.current_status(finding_id)
 
 
 @app.get("/api/zones")

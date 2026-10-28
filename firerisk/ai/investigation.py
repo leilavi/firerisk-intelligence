@@ -17,7 +17,7 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v5"  # v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
+PROMPT_VERSION = "investigation-v6"  # v6: structured, record-specific briefing (dates, mechanism, chain, 3 action groups, claim basis); v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
                                      #     related equipment alerts in the package
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building
@@ -44,21 +44,43 @@ Rules you must follow:
 10. Survey video observations (if any) were produced by an AI model from a video recorded on the stated date.
    They show what was visible THEN, not the current state; they do not prove equipment works and do not confirm
    a hazard. Mention them by their video alias (V01...) in text only; never put them in evidence_ids.
-11. risk_briefings: one entry per signal (use the signal alias S01, S02 ... exactly as given), written for a building
-   operator who is not a fire engineer. observed = only what the records state. why_it_matters = why this kind of
-   condition is a fire-safety concern. potential_consequence = what COULD happen if it stays unresolved, in
-   conditional wording ("may", "could"); never say a fire, short circuit or failure has happened unless a record
-   says so. certainty: "supported" if the records clearly show the condition, "partly_supported" if they show it only
-   in part or it may already be fixed, "insufficient_evidence" if the records cannot support a consequence - then set
-   potential_consequence to "Insufficient evidence to determine the potential consequence. Further inspection is
-   required." uncertainty = what the records do not establish. first_action = the single first check or action.
-   Each text field: one or two short sentences.
+11. risk_briefings: one entry per signal (use the signal alias S01, S02 ... exactly as given), for a building
+   operator who is not a fire engineer. Be specific to THIS equipment or room and THESE records; generic sentences
+   ("the equipment may be dangerous") are not acceptable.
+   - observed: what the records state now - equipment/room, dates, status, key details, and the type of source
+     (incident report, repair record, checklist, meter analysis, survey video). Say which issue is CURRENT (open) and
+     which is PAST (closed). An old record is not proof of the present condition.
+   - history_link: how earlier records of the same equipment or room relate to the current one (repeat fault, same
+     cause area, repair that did not hold), or "" if there is no relevant history.
+   - why_it_matters: the specific hazard mechanism for the recorded fault (e.g. a seized air-end makes the motor work
+     against a locked load: overcurrent and winding overheating if it is run again).
+   - consequence_chain: 2-5 short steps of a technically plausible escalation (e.g. ["mechanical seizure", "motor
+     overload", "winding overheating", "smoke or fire at the motor"]); it is a possibility, not a prediction.
+   - potential_consequence: one sentence naming the most important possible consequence, in conditional wording.
+   - not_established: the most decision-relevant facts the records do NOT establish (isolation status, current
+     readings, post-repair test, whether water reached live parts, current state vs. video date). Never fill in
+     values that are not in the package.
+   - actions_immediate / actions_follow_up / closure_criteria: specific to the equipment or room. Immediate = check
+     or make safe now; follow-up = maintenance or operations work; closure_criteria = the condition AND the evidence
+     needed to close the alert (e.g. "repair record closed with test run result and current reading").
+   - first_action: the single first action (normally actions_immediate[0]).
+   - claims: 2-6 key statements, each with basis "supported_by_records", "observed_in_video" (only what a survey
+     video showed at recording time), "hypothesis" (needs verification) or "not_established", and evidence IDs
+     (records only; never video aliases).
+   - certainty: "supported", "partly_supported" or "insufficient_evidence"; with insufficient evidence set
+     potential_consequence to "Insufficient evidence to determine the potential consequence. Further inspection is
+     required."
+   - uncertainty: the single most important item of not_established.
+   Do not repeat the same idea across observed, why_it_matters and potential_consequence. If several records are
+   related, say how they are related instead of listing them.
+12. If your AI priority differs from the rule level, explain the specific reason in risk_assessment.rationale.
 Be concise: short sentences, no repetition between fields.
 Write in clear, plain English only (the dashboard is English). Translate Vietnamese record wording; keep equipment
 codes as written."""
 
 _ID_LIST = {"type": "array", "items": {"type": "string"}}
 CERTAINTY = ["supported", "partly_supported", "insufficient_evidence"]
+CLAIM_BASIS = ["supported_by_records", "observed_in_video", "hypothesis", "not_established"]
 INSUFFICIENT_TEXT = "Insufficient evidence to determine the potential consequence. Further inspection is required."
 
 
@@ -78,10 +100,20 @@ SCHEMA = {
         "properties": {
             "risk_briefings": {"type": "array", "items": {
                 "type": "object", "additionalProperties": False,
-                "required": ["signal", "observed", "why_it_matters", "potential_consequence", "certainty",
-                             "uncertainty", "first_action", "evidence_ids"],
+                "required": ["signal", "observed", "history_link", "why_it_matters", "consequence_chain",
+                             "potential_consequence", "not_established", "actions_immediate", "actions_follow_up",
+                             "closure_criteria", "claims", "certainty", "uncertainty", "first_action", "evidence_ids"],
                 "properties": {
-                    "signal": {"type": "string"}, "observed": {"type": "string"},
+                    "signal": {"type": "string"}, "observed": {"type": "string"}, "history_link": {"type": "string"},
+                    "consequence_chain": {"type": "array", "items": {"type": "string"}},
+                    "not_established": {"type": "array", "items": {"type": "string"}},
+                    "actions_immediate": {"type": "array", "items": {"type": "string"}},
+                    "actions_follow_up": {"type": "array", "items": {"type": "string"}},
+                    "closure_criteria": {"type": "array", "items": {"type": "string"}},
+                    "claims": {"type": "array", "items": {
+                        "type": "object", "additionalProperties": False, "required": ["statement", "basis", "evidence_ids"],
+                        "properties": {"statement": {"type": "string"}, "basis": {"type": "string", "enum": CLAIM_BASIS},
+                                       "evidence_ids": _ID_LIST}}},
                     "why_it_matters": {"type": "string"}, "potential_consequence": {"type": "string"},
                     "certainty": {"type": "string", "enum": CERTAINTY},
                     "uncertainty": {"type": "string"}, "first_action": {"type": "string"},
@@ -251,6 +283,8 @@ def map_back(result: dict, alias_to_real: dict, signal_map: dict | None = None) 
         sc["weakening_evidence_ids"] = m(sc.get("weakening_evidence_ids"))
     for b in result.get("risk_briefings", []):
         b["evidence_ids"] = m(b.get("evidence_ids"))
+        for c in b.get("claims") or []:
+            c["evidence_ids"] = m(c.get("evidence_ids"))
         b["signal_id"] = (signal_map or {}).get(b.get("signal"))      # None: the model named an unknown signal
     return result
 
@@ -282,6 +316,11 @@ def validate(result: dict, valid_ids) -> dict:
     briefs, unknown_signals = [], []
     for b in result.get("risk_briefings", []):
         b["evidence_ids"] = clean(b.get("evidence_ids"))
+        for c in b.get("claims") or []:
+            c["evidence_ids"] = clean(c.get("evidence_ids"))
+            if c.get("basis") == "supported_by_records" and not c["evidence_ids"]:
+                c["basis"] = "hypothesis"                  # no valid record cited: not shown as record-supported
+                c["downgraded"] = True
         if not b.get("signal_id"):
             unknown_signals.append(b.get("signal"))
             continue

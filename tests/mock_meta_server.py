@@ -35,7 +35,11 @@ class H(BaseHTTPRequestHandler):
                                 "reasoning": "mock", "supporting_evidence_ids": ids[:1],
                                 "contradicting_evidence_ids": ids[2:3], "how_to_verify": "mock"}],
                 "escalation_pathway": [{"step": "MOCK step", "condition": "mock", "evidence_ids": ids[:1]}],
-                "risk_briefings": [{"signal": sig, "observed": "MOCK observed", "why_it_matters": "MOCK why",
+                "risk_briefings": [{"signal": sig, "observed": "MOCK observed", "history_link": "", "why_it_matters": "MOCK why",
+                                    "consequence_chain": ["MOCK step 1", "MOCK step 2"], "not_established": ["MOCK gap"],
+                                    "actions_immediate": ["MOCK now"], "actions_follow_up": ["MOCK later"],
+                                    "closure_criteria": ["MOCK close"], "claims": [{"statement": "MOCK claim",
+                                    "basis": "hypothesis", "evidence_ids": []}],
                                     "potential_consequence": "MOCK consequence", "certainty": "partly_supported",
                                     "uncertainty": "MOCK uncertainty", "first_action": "MOCK first action",
                                     "evidence_ids": ids[:1]}

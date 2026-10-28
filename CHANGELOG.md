@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.9.0 — 2026-10-28
+- Overview: GROUND LEVEL removed from the Building Risk Map (geometry, line, label and gap); floors, markers, colours
+  and selection unchanged; issues without location stay under "Location not recorded".
+- Display name of the AI analyst: **Muse Captain** (UI only). The model called is unchanged: Meta Muse Spark,
+  `muse-spark-1.3`, same endpoint, payloads and key; a "powered by" line names it in the header tooltip, Data & sources
+  panel and footer.
+- Investigation prompt v6: per-risk briefing specific to the records (dates, current vs past, history link, hazard
+  mechanism, 2-5 step escalation chain, not-established list, Immediate / Follow-up / Closure criteria, key
+  statements with basis Supported by records / Observed in video / Hypothesis / Not established; a "supported by
+  records" statement without a valid record is downgraded to hypothesis). AI priority that differs from the rule
+  level is shown with its reason; the rule level stays official.
+- Progressive disclosure with one mechanism (`<details class="acc">`): AI analysis and related video findings in the
+  briefing are closed by default; other alerts: open High Risk / Emergency stay visible, the rest behind "Show N more
+  alerts" (count from data). Fixed: elements with the `hidden` attribute were still shown (CSS display override).
+- Survey-video fire-safety review v2 (Muse Captain via the Meta video API): groups A-G (ignition sources,
+  combustibles & housekeeping, escape routes & access, extinguishers, detection & alarm, suppression & smoke
+  control, water near electrical plant), area-by-area extinguisher status (Visible and accessible / Visible but
+  access may be obstructed / Not visible in the surveyed footage / Needs on-site verification), findings with
+  timestamps, coverage. Every video is reviewed once more with the new prompt (one automatic attempt per prompt
+  version; daily limit default 20).
+- AI video findings (`GET /api/video-findings`, `POST /api/video-findings/{id}/status`): separate from rule-based
+  alerts, no official level, status set only by a person (New finding / Needs verification / Confirmed / Resolved /
+  Not confirmed on site), linked to an existing alert only for a stated reason (same equipment in the asset register,
+  or same floor and matching group). Survey coverage report (videos on Drive / here / reviewed / failed / waiting,
+  floors without video, locations not verified, possible overlaps, groups assessed or not, footage needed).
+- Videos over 1 GiB (Files API limit) are downloaded and sent as a smaller 720p/540p/360p copy without audio
+  (ffmpeg via the new `imageio-ffmpeg` requirement; also enables still frames on Windows). Drive renames are
+  followed. `run_dashboard.bat` installs new requirements quietly.
+- 126 tests.
+
 ## 0.8.1 — 2026-10-28
 - The AI Risk Briefing now shows the stored real Muse Spark result directly, also when it was made with an earlier
   prompt (v3/v4): observed facts, scenario and suggested check are taken only from the parts of that result that cite

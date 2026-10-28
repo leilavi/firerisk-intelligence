@@ -166,6 +166,15 @@ def test_rendered_pages_are_english_only(client):
             for h in ["#/", "#/fire", "#/fire/ZONE-B1", "#/equipment", "#/events", "#/data", "#/media"]:
                 page.goto(base + h); page.wait_for_load_state("networkidle"); page.wait_for_timeout(300)
                 if h == "#/":
+                    # collapsed by default; the button count comes from the data
+                    assert not page.is_visible("#br-list")
+                    btn = page.inner_text("#br-others")
+                    n = int(re.search(r"Show (\d+) more alert", btn).group(1))
+                    assert n == page.eval_on_selector_all("#br-list [data-bi]", "l => l.length")
+                    page.click("#br-others"); assert page.is_visible("#br-list") and page.inner_text("#br-others").startswith("Hide")
+                    page.click("#br-others"); assert not page.is_visible("#br-list")
+                    assert page.eval_on_selector_all("details.acc[open]", "l => l.length") == 0       # long analysis closed
+                    assert "GROUND LEVEL" not in page.inner_text("#bmap")
                     page.focus(".mk"); page.keyboard.press("Enter")       # marker by keyboard (its ring is animated)
                     assert page.is_visible("#ctx .ctxhead") and "selected floor" in page.inner_text("#ctx").lower()
                     page.eval_on_selector("#ctx [data-issue]", "e => e.scrollIntoView({block: 'center'})")
