@@ -1,5 +1,5 @@
 /* FireRisk Intelligence 0.8 — dark building-intelligence console.
-   Colour rules: cyan = interaction / selection; purple = AI (Muse Spark) content;
+   Colour rules: cyan = interaction / selection; purple = Meta Muse Spark content;
    red / orange / yellow / blue = risk levels only (always with a word). No green: nothing here confirms "safe". */
 :root{
   --bg:#0B1020; --bg-2:#0E1428; --panel:#151D32; --panel-2:#1B2640; --panel-3:#22304F;
@@ -86,10 +86,10 @@ main{max-width:1440px;margin:0 auto;padding:20px 24px}
 /* origin tags */
 .org{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:4px;margin-right:6px;white-space:nowrap;font-family:var(--mono);letter-spacing:.04em;vertical-align:1px}
 .org.source{background:rgba(59,130,246,.16);color:#93C5FD} .org.derived{background:rgba(148,163,184,.16);color:#CBD5E1}
-.org.rule{background:var(--cyan-soft);color:#67E8F9} .org.ai{background:var(--purple-soft);color:#D8B4FE;border:1px dashed rgba(168,85,247,.55)}
+.org.rule{background:var(--cyan-soft);color:#67E8F9} .org.sam{background:var(--cyan-soft);color:#22D3EE;border:1px dashed rgba(34,211,238,.55)} .org.ai{background:var(--purple-soft);color:#D8B4FE;border:1px dashed rgba(168,85,247,.55)}
 .org.test{background:rgba(148,163,184,.12);color:#CBD5E1;border:1px dashed #94A3B8}
 
-/* ---------- AI Risk Briefing ---------- */
+/* ---------- Risk Briefing ---------- */
 .brief{position:relative;overflow:hidden;border-radius:var(--r-lg);border:1px solid rgba(168,85,247,.35);
   background:linear-gradient(110deg,rgba(168,85,247,.14),rgba(34,211,238,.05) 45%,rgba(21,29,50,.95) 70%),var(--panel);
   padding:16px 20px;margin-bottom:16px;box-shadow:0 0 0 1px rgba(168,85,247,.08),0 18px 40px -24px rgba(168,85,247,.55)}

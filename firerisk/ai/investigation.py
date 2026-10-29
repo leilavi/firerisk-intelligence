@@ -247,7 +247,7 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
         "survey_video_observations": [
             {"video": f"V{n + 1:02d}", "recorded_at": (v.get("recorded_at") or "unknown")[:10],
              "age_days": v.get("age_days"), "place": red.text(v.get("place") or ""),
-             "origin": "AI vision model, recording-time only",
+             "origin": "Meta Muse Spark video review, recording-time only",
              "observations": [{**o, "observation": red.text(o["observation"])} for o in v["observations"]]}
             for n, v in enumerate(getattr(alert, "video_context", []) or [])],
         "links": [{"a": alias(l["a"]), "b": alias(l["b"]), "types": l["types"], "reasons": l["reasons"]}

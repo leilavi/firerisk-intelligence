@@ -135,7 +135,7 @@ def test_auto_analysis_runs_once_validates_citations_and_cannot_change_level(tmp
     assert api.state.ai.wait_idle(20)
     assert fake.calls == calls_after_first
     d = c.get("/api/alerts/ZONE-B1").json()
-    assert d["ai_status"]["code"] == "done" and d["ai_status"]["label"] == "AI Analysis Complete"
+    assert d["ai_status"]["code"] == "done" and d["ai_status"]["label"] == "Meta Muse Spark Analysis Complete"
     assert not d["ai_status"]["fallback"]
     inv = d["investigation"]
     assert inv["trigger"] == "auto" and inv["api_mode"] == "test"

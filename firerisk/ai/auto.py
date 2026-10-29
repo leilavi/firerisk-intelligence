@@ -28,11 +28,11 @@ from .investigation import fingerprint, investigate
 from .muse import MuseClient, MuseConfig
 
 STATE_LABELS = {   # (label, longer description) - English UI since 2026-10-28 (author request)
-    "not_analysed": ("Not Analysed by AI", "Muse Captain has not analysed the current evidence yet"),
-    "running": ("AI Analysis Running", "Muse Captain is analysing the evidence"),
-    "done": ("AI Analysis Complete", "Muse Captain analysed the current evidence"),
-    "failed": ("AI Analysis Failed", "The last Muse Captain analysis failed; the rule-based explanation is shown"),
-    "fallback": ("Rule-Based Explanation", "The explanation comes from the rule set, not from AI"),
+    "not_analysed": ("Not Analysed by Meta Muse Spark", "Meta Muse Spark has not analysed the current evidence yet"),
+    "running": ("Meta Muse Spark Analysis Running", "Meta Muse Spark is analysing the evidence"),
+    "done": ("Meta Muse Spark Analysis Complete", "Meta Muse Spark analysed the current evidence"),
+    "failed": ("Meta Muse Spark Analysis Failed", "The last Meta Muse Spark analysis failed; the rule-based explanation is shown"),
+    "fallback": ("Rule-Based Explanation", "The explanation comes from the rule set, not from Meta Muse Spark"),
 }
 RETRY_AFTER = timedelta(minutes=15)
 MAX_AUTO_RETRIES = 1
@@ -69,9 +69,9 @@ class AutoAnalyst:
     def _decide(self, alert, fp: str, now: datetime, cfg: dict) -> str | None:
         """Returns None when the alert should be queued, otherwise the reason it is not."""
         if not cfg["enabled"]:
-            return "automatic AI analysis is switched off (FIRERISK_AUTO_AI=0)"
+            return "automatic Meta Muse Spark analysis is switched off (FIRERISK_AUTO_AI=0)"
         if not MuseConfig.load().configured:
-            return "Muse Captain is not configured (no MODEL_API_KEY)"
+            return "Meta Muse Spark is not configured (no MODEL_API_KEY)"
         if _rank(alert.severity) < _rank(cfg["min_level"]):
             return f"level below FIRERISK_AI_MIN_LEVEL ({cfg['min_level']})"
         attempts = self.store.ai_attempts(alert.alert_id, fp)
@@ -112,7 +112,7 @@ class AutoAnalyst:
     def request(self, alert_id: str, trigger: str = "button") -> dict:
         """User asked for (re-)analysis: queued even if this evidence was analysed before."""
         if not MuseConfig.load().configured:
-            return {"queued": False, "reason": "Muse Captain is not configured (no MODEL_API_KEY)"}
+            return {"queued": False, "reason": "Meta Muse Spark is not configured (no MODEL_API_KEY)"}
         with self.cv:
             if alert_id not in self.pending:
                 self._enqueue(alert_id, trigger, datetime.now(LOCAL_TZ))
