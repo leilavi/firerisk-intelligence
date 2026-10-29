@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Survey Video Findings (Overview): survey-scan illustration added inside this section only (author's request
+  2026-10-29). Isometric floor slabs drawn from the building's floor list and `/api/video-findings`: floors covered by
+  a reviewed video (cyan schematic camera route), amber count of findings that still need verification per floor
+  (opens that floor in "View video findings"), numbered top findings with their video timestamp, and a separate chip
+  for videos without a verified floor. No room positions (none exist in the data); a scan line appears only while a
+  review is actually running. Top findings now show their real SAM 3.1 frame (blurred copy in demo mode) when one is
+  stored. Scoped `.vs-*` CSS appended; Building Risk Map, other sections, API and rules unchanged.
 - Naming (author's decision 2026-10-29 19:50): the generic "AI" label and the display name "Muse Captain" are
   removed from the dashboard. Every model-made part is named after the Meta model that made it: "Meta Muse Spark"
   (analysis, video review, translations; tag META MUSE SPARK) and "Meta SAM 3.1" (object outlines; tag META SAM 3.1).
