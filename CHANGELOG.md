@@ -41,6 +41,11 @@
   the most relevant group and a located frame come first, and the reason is printed. Same-floor-only findings are
   mentioned in one line without a picture. Follow-up (08:36): an equipment link counts only for the risk it belongs
   to (a zone alert holds several risks; the MSB video is linked to the water-in-electrical-rooms risk, not AB-01A).
+- Fix (found 2026-10-29 08:45 while checking the author's report that the dashboard still showed 28 Oct): the
+  ZONE-B1 Muse Spark investigation (prompt v6) failed 7 times in a row since 28 Oct 16:38 with "model output is not
+  valid JSON" - the answer was cut off at max_completion_tokens 8,000, which also counts reasoning tokens, and B1 has
+  9 per-risk briefings. The dashboard therefore kept showing the last good analysis (28 Oct 15:06). Budget raised to
+  32,000 for investigations; a cut-off answer (finish_reason "length") is now reported as error kind `truncated`.
 - Fix: the "Source not updated / unavailable" lines now use the English tab name (a Vietnamese tab name reached the
   page once the data was more than 2 days old).
 
