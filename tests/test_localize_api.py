@@ -152,3 +152,53 @@ def test_evidence_overlay_renders_aligned_and_english_only(app_env, monkeypatch,
     finally:
         server.should_exit = True
         t.join(timeout=5)
+
+
+def test_drawer_evidence_uses_only_same_room_or_equipment_videos(app_env):
+    """A frame from another room on the same floor must not illustrate a risk (author's report 2026-10-29: the
+    wastewater blower risk showed a cable frame from the MSB room)."""
+    pw = pytest.importorskip("playwright.sync_api")
+    import socket
+    import threading as th
+    import uvicorn
+    api, c, _ = app_env
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+    server = uvicorn.Server(uvicorn.Config(api.app, host="127.0.0.1", port=port, log_level="error"))
+    t = th.Thread(target=server.run, daemon=True); t.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    floor = {"alert_id": "ZONE-B1", "reason": "Same floor (asset register) and the finding group matches this risk"}
+    findings = [
+        {"finding_id": "VF-msb", "filename": "MSB Room.mp4", "area_label": "MSB Room", "category": "ignition_source",
+         "links": [floor], "localization": {"status": "located"}, "title": "TEST cable on floor"},
+        {"finding_id": "VF-ww-ladder", "filename": "Wastewater Treatment Room.mp4", "area_label": "", "category": "egress_access",
+         "links": [], "localization": {"status": "located"}, "title": "TEST ladder"},
+        {"finding_id": "VF-ww-motor", "filename": "Wastewater Treatment Room.mp4", "area_label": "", "category": "ignition_source",
+         "links": [], "localization": {"status": "located"}, "title": "TEST open motor terminal box"},
+        {"finding_id": "VF-eq", "filename": "Some video.mp4", "area_label": "", "category": "ignition_source",
+         "links": [{"alert_id": "EQ-1", "reason": "The video is linked to this equipment in the asset register"}],
+         "localization": {"status": "not_located"}, "title": "TEST equipment"}]
+    try:
+        with pw.sync_playwright() as p:
+            try:
+                b = p.chromium.launch()
+            except Exception as exc:
+                pytest.skip(f"chromium not available: {exc}")
+            page = b.new_page()
+            page.goto(f"http://127.0.0.1:{port}/"); page.wait_for_load_state("networkidle")
+            res = page.evaluate("""(F) => { VF = { findings: F }; const ids = (i) => evidenceMatches(i).map((m) => m.f.finding_id);
+              return {
+                ww: ids({ kind: "fire_risk", alert_id: "ZONE-B1", risk_type: "motor_overheat", place: "Wastewater air blower AB-01A (XLNT)" }),
+                msb: ids({ kind: "fire_risk", alert_id: "ZONE-B1", risk_type: "water_electrical", place: "MSB room, transformer (MBA) room" }),
+                other: ids({ kind: "fire_risk", alert_id: "ZONE-B1", risk_type: "pa_system", place: "Public address system" }),
+                eq: ids({ kind: "equipment", alert_id: "EQ-1", title: "Generator", place: "Generator" }) }; }""", findings)
+            b.close()
+    finally:
+        server.should_exit = True
+        t.join(timeout=5)
+    assert res["ww"][0] == "VF-ww-motor" and "VF-msb" not in res["ww"]      # same room, relevant group first
+    assert res["msb"] == ["VF-msb"]
+    assert res["other"] == []                                               # same floor only -> no picture
+    assert res["eq"] == ["VF-eq"]
