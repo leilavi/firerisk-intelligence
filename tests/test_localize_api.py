@@ -179,7 +179,11 @@ def test_drawer_evidence_uses_only_same_room_or_equipment_videos(app_env):
          "links": [], "localization": {"status": "located"}, "title": "TEST open motor terminal box"},
         {"finding_id": "VF-eq", "filename": "Some video.mp4", "area_label": "", "category": "ignition_source",
          "links": [{"alert_id": "EQ-1", "reason": "The video is linked to this equipment in the asset register"}],
-         "localization": {"status": "not_located"}, "title": "TEST equipment"}]
+         "localization": {"status": "not_located"}, "title": "TEST equipment"},
+        # author's report 2026-10-29 08:36: MSB video linked by equipment to ANOTHER risk of the same zone alert
+        {"finding_id": "VF-msb-eq-other-risk", "filename": "MSB Room.mp4", "area_label": "", "category": "ignition_source",
+         "links": [{"alert_id": "ZONE-B1", "signal_id": "R1_WATER", "reason": "The video is linked to the same equipment in the asset register"}],
+         "localization": {"status": "located"}, "title": "TEST other risk"}]
     try:
         with pw.sync_playwright() as p:
             try:
@@ -190,15 +194,18 @@ def test_drawer_evidence_uses_only_same_room_or_equipment_videos(app_env):
             page.goto(f"http://127.0.0.1:{port}/"); page.wait_for_load_state("networkidle")
             res = page.evaluate("""(F) => { VF = { findings: F }; const ids = (i) => evidenceMatches(i).map((m) => m.f.finding_id);
               return {
-                ww: ids({ kind: "fire_risk", alert_id: "ZONE-B1", risk_type: "motor_overheat", place: "Wastewater air blower AB-01A (XLNT)" }),
+                ww: ids({ kind: "fire_risk", alert_id: "ZONE-B1", signal_id: "R3_MOTOR", risk_type: "motor_overheat", place: "Wastewater air blower AB-01A (XLNT)" }),
+                msbRisk: ids({ kind: "fire_risk", alert_id: "ZONE-B1", signal_id: "R1_WATER", risk_type: "water_electrical", place: "Basement" }),
                 msb: ids({ kind: "fire_risk", alert_id: "ZONE-B1", risk_type: "water_electrical", place: "MSB room, transformer (MBA) room" }),
-                other: ids({ kind: "fire_risk", alert_id: "ZONE-B1", risk_type: "pa_system", place: "Public address system" }),
+                other: ids({ kind: "fire_risk", alert_id: "ZONE-B1", signal_id: "R7_PA", risk_type: "pa_system", place: "Public address system" }),
                 eq: ids({ kind: "equipment", alert_id: "EQ-1", title: "Generator", place: "Generator" }) }; }""", findings)
             b.close()
     finally:
         server.should_exit = True
         t.join(timeout=5)
     assert res["ww"][0] == "VF-ww-motor" and "VF-msb" not in res["ww"]      # same room, relevant group first
-    assert res["msb"] == ["VF-msb"]
+    assert "VF-msb-eq-other-risk" not in res["ww"]                          # equipment link of another risk ignored
+    assert res["msbRisk"] == ["VF-msb-eq-other-risk"]                        # ... but used for its own risk
+    assert set(res["msb"]) == {"VF-msb", "VF-msb-eq-other-risk"}             # both MSB videos, by room name
     assert res["other"] == []                                               # same floor only -> no picture
     assert res["eq"] == ["VF-eq"]
