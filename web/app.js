@@ -346,7 +346,7 @@ function videoFindingsPanel(vf) {
 function findingRow(f) {
   FIND[f.finding_id] = f;
   return `<button class="icard vf" data-finding="${esc(f.finding_id)}" aria-label="${esc(`${f.title}. View finding`)}">
-    <span class="ic-t">${esc(f.zone ? zshort(f.zone) : "Location not verified")} · ${aiT(f.title)}</span>
+    <span class="ic-t">${esc(vfPlace(f))} · ${aiT(f.title)}</span>
     <span class="ic-d">${esc(f.category_label)} · ${esc(f.filename)} at ${fmtTime(f.time_start_s)}</span>
     <span class="ic-m"><span class="kindtag vfk">Meta Muse Spark video finding</span><span>${esc(f.status_label)}</span>${f.linked ? `<span>· linked to ${f.links.length} alert(s)</span>` : ""}${f.certainty === "possibly_visible" ? "<span>· possibly visible</span>" : ""}</span>
     <span class="ic-go" aria-hidden="true">View →</span></button>`;
@@ -354,6 +354,13 @@ function findingRow(f) {
 /* Survey scan illustration (Survey Video Findings only). Drawn ONLY from /api/video-findings and the building's floor
    list: which floors have a reviewed video, how many findings per floor still need verification, where the top
    findings were filmed (floor level only - no room positions exist in the data). Static unless a review is running. */
+/* Place shown for a video finding: the floor when the asset register gives one; otherwise the room or area the video is
+   linked to in the asset register, marked "floor not recorded" (the floor is never guessed). */
+function vfPlace(f) {
+  if (f.zone) return zshort(f.zone);
+  const room = (VF?.videos || []).find((v) => v.video_id === f.video_id)?.room;
+  return room && !VI_RE.test(room) ? `${room} · floor not recorded` : "Floor not recorded";
+}
 const VS_NEEDS = (f) => ["new", "acknowledged", "investigating"].includes(f.status);
 function vfScanSvg(vf) {
   const order = ["Roof", "F4", "F3", "F2", "F1", "B1"].filter((z) => !B || B.floors.some((f) => f.zone === z));
@@ -396,7 +403,7 @@ function vfScanSvg(vf) {
   };
   const cols = [[X0, 0], [X0 + SW, 0], [X0 + SW + DX, -DY], [X0 + DX, -DY]].map(([x, d]) => `<line x1="${x}" y1="${yOf(0) + d}" x2="${x}" y2="${yOf(order.length - 1) + d}" stroke="rgba(148,163,184,.14)" stroke-dasharray="2 4"/>`).join("");
   // videos without a verified floor, and whole-building videos: shown beside the building, never placed on a floor
-  const tray = [["", "Location not verified"], ["Building", "Whole building"]].map(([z, label]) => {
+  const tray = [["", "Floor not recorded"], ["Building", "Whole building"]].map(([z, label]) => {
     const vids = vf.videos.filter((v) => (v.zone || "") === z); if (!vids.length) return "";
     const fs = vf.findings.filter((f) => (f.zone || "") === z), ver = fs.filter(VS_NEEDS).length;
     const nums = fs.filter((f) => topIdx[f.finding_id]).map((f) => topIdx[f.finding_id]);
@@ -423,7 +430,7 @@ function vfTopRow(f, i) {
   const th = fr ? `<img src="/api/frames/${esc(fr.frame_file)}" alt="" loading="lazy" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : "";
   return `<button class="icard vf vs-row" data-finding="${esc(f.finding_id)}" aria-label="${esc(`Top finding ${i + 1}: ${f.title}. View finding`)}">
     <span class="vs-th" aria-hidden="true" style="position:relative;display:flex;overflow:hidden;width:104px;aspect-ratio:16/10">${th}<span class="vs-thn">No frame</span><b>${i + 1}</b>${fr ? `<em>${fmtTime(fr.frame_time_s)}</em>` : ""}</span>
-    <span class="ic-t">${esc(f.zone ? zshort(f.zone) : "Location not verified")} · ${aiT(f.title)}</span>
+    <span class="ic-t">${esc(vfPlace(f))} · ${aiT(f.title)}</span>
     <span class="ic-d">${esc(f.category_label)} · ${esc(f.filename)} at ${fmtTime(f.time_start_s)}</span>
     <span class="ic-m"><span class="kindtag vfk">Meta Muse Spark video finding</span><span>${esc(f.status_label)}</span>${f.linked ? `<span>· linked to ${f.links.length} alert(s)</span>` : ""}${f.certainty === "possibly_visible" ? "<span>· possibly visible</span>" : ""}</span>
     <span class="ic-go" aria-hidden="true">View →</span></button>`;
@@ -446,7 +453,7 @@ function renderVideoFindings() {
   vf.videos.forEach((v) => (byFloor[v.zone || ""] = byFloor[v.zone || ""] || []).push(v));
   const order = ["Roof", "F4", "F3", "F2", "F1", "B1", "Building", ""].filter((z) => byFloor[z]);
   const obsOf = Object.fromEntries((B?.recent?.videos || []).map((v) => [v.video_id, v]));
-  body.innerHTML = order.map((z) => `<h5 data-vfz="${esc(z)}">${esc(z ? zshort(z) : "Location not verified")}</h5>${byFloor[z].map((v) => {
+  body.innerHTML = order.map((z) => `<h5 data-vfz="${esc(z)}">${esc(z ? zshort(z) : "Floor not recorded in the asset register")}</h5>${byFloor[z].map((v) => {
       const fs = vf.findings.filter((f) => f.video_id === v.video_id);
       const old = obsOf[v.video_id];
       return `<div class="vf-video"><div><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="tiny muted">${v.recorded_at ? `recorded ${dt(v.recorded_at)}` : "recording date unknown"} · ${esc(VSTATE[v.state] || v.state)}${v.state === "failed" ? `: ${esc(v.error_kind || "")} ${esc((v.error || "").slice(0, 160))}` : ""}${v.method?.transcoded ? " · a smaller copy was analysed" : ""}</span></div>
@@ -481,7 +488,7 @@ async function openFinding(f) {
     <h3 style="margin:8px 0 2px;font-size:18px">${aiT(st.title)}</h3>
     <p class="small muted">${org("ai_vision")}Seen by Meta Muse Spark in <a href="#/video/${esc(st.video_id)}?t=${st.time_start_s}">${esc(st.filename)} at ${fmtTime(st.time_start_s)}</a>, recorded ${st.recorded_at ? dt(st.recorded_at) : "on an unknown date"}. Not an official alert and no risk level: it shows what was visible when the video was recorded.</p>
     ${evidenceFor(st)}
-    <dl class="dsum"><dt>Location</dt><dd>${esc(st.zone_label)}${st.area_label ? ` · ${aiT(st.area_label)}` : ""}</dd>
+    <dl class="dsum"><dt>Location</dt><dd>${esc(st.zone ? st.zone_label : vfPlace(st))}${st.area_label ? ` · ${aiT(st.area_label)}` : ""}</dd>
       <dt>What is visible</dt><dd>${aiT(st.what_is_visible)}</dd><dt>Why it matters</dt><dd>${aiT(st.fire_safety_link)}</dd>
       <dt>If confirmed</dt><dd>${aiT(st.potential_consequence_if_confirmed)}</dd><dt>Certainty</dt><dd>${st.certainty === "clearly_visible" ? "Clearly visible in the video" : "Possibly visible; check on site"}</dd>
       <dt>Recommended check</dt><dd>${aiT(st.recommended_check)}</dd><dt>Records to collect</dt><dd>${aiT(st.records_to_collect)}</dd></dl>
