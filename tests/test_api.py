@@ -72,3 +72,18 @@ def test_trends_assets_quality_media(client):
     q = client.get("/api/quality").json()
     assert any(i["type"] == "invalid_reading" for i in q["issues"])
     assert client.get("/api/media").json()["summary"]["available"] == 0
+
+
+def test_ui_files_are_versioned_and_revalidated(tmp_path, monkeypatch):
+    import importlib
+    from fastapi.testclient import TestClient
+    from fixtures import build_snapshot
+    monkeypatch.setenv("FIRERISK_SNAPSHOT_DIR", str(build_snapshot(tmp_path / "snap")))
+    monkeypatch.setenv("FIRERISK_DB", str(tmp_path / "t.db"))
+    import firerisk.api as api
+    api = importlib.reload(api)
+    c = TestClient(api.app)
+    r = c.get("/")
+    assert r.headers["cache-control"] == "no-cache"
+    assert "/static/app.js?v=" in r.text and "/static/styles.css?v=" in r.text
+    assert c.get("/static/app.js").headers["cache-control"] == "no-cache"
