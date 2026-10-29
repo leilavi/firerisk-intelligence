@@ -27,6 +27,15 @@
   applicable / No Supporting Frame Available). Confidence tooltip states it is not a fire-risk probability.
   Photos & Videos: "Visual evidence for video findings" gallery. Playwright tests at 1440 and 390 px check
   alignment, no horizontal scroll, English only.
+- Demo privacy (optional task, 2026-10-29): `scripts/mask_labels_for_demo.py` — SAM 3.1 finds "sign" and "label"
+  objects in every evidence frame; ffmpeg blurs the padded boxes into copies under data/private/media/frames_demo/
+  (originals never touched; manifest.json; `--dry-run`, `--max-requests`, `--add-box` for regions SAM missed,
+  `--review` contact sheet, `--mark-reviewed`). Demo mode (`run_dashboard_demo.bat`, FIRERISK_DEMO_MODE=1): header
+  "Demo building", building-name text masked on the page (patterns built from the private site_config.json, accent-
+  and case-insensitive, both word orders, branch prefix, initials form, optional `extra_names`), frames served only as
+  blurred copies, original videos and on-request frames not served. Not called anonymized until reviewed.
+- Fix: the "Source not updated / unavailable" lines now use the English tab name (a Vietnamese tab name reached the
+  page once the data was more than 2 days old).
 
 ## 0.9.0 — 2026-10-28
 - Overview: GROUND LEVEL removed from the Building Risk Map (geometry, line, label and gap); floors, markers, colours
