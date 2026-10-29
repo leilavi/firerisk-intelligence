@@ -374,27 +374,27 @@ function vfScanSvg(vf) {
     const div = [0.34, 0.67].map((k) => `<line x1="${X0 + SW * k}" y1="${y}" x2="${X0 + SW * k + DX}" y2="${y - DY}"/>`).join("")
       + `<line x1="${X0 + DX / 2}" y1="${y - DY / 2}" x2="${X0 + SW + DX / 2}" y2="${y - DY / 2}"/>`;
     // camera route: a schematic zig-zag across the slab, only on floors that a reviewed video covers
-    const route = reviewed ? `<polyline class="vs-route" points="${[[0.06, 0.25], [0.3, 0.75], [0.55, 0.25], [0.8, 0.75], [0.94, 0.4]].map(([a, b]) => p(X0 + SW * a + DX * b, y - DY * b)).join(" ")}"/>
-      <g class="vs-cam" transform="translate(${X0 + SW * 0.06 + DX * 0.25 - 7},${y - DY * 0.25 - 4})"><rect width="9" height="7" rx="1.5"/><path d="M9 3.5 L13 1 L13 6 Z"/></g>` : "";
+    const route = reviewed ? `<polyline class="vs-route" fill="none" stroke="#22D3EE" stroke-width="1.4" stroke-dasharray="4 3" stroke-opacity=".85" points="${[[0.06, 0.25], [0.3, 0.75], [0.55, 0.25], [0.8, 0.75], [0.94, 0.4]].map(([a, b]) => p(X0 + SW * a + DX * b, y - DY * b)).join(" ")}"/>
+      <g class="vs-cam" fill="#22D3EE" transform="translate(${X0 + SW * 0.06 + DX * 0.25 - 7},${y - DY * 0.25 - 4})"><rect width="9" height="7" rx="1.5"/><path d="M9 3.5 L13 1 L13 6 Z"/></g>` : "";
     const cx = X0 + SW * 0.5 + DX * 0.5, cy = y - DY * 0.5;
     const mk = ver ? `<g class="vs-ver" data-vffloor="${esc(z)}" role="button" tabindex="0" aria-label="${esc(`${zshort(z)}: ${ver} video finding(s) need on-site verification. Show this floor's findings`)}"><title>${esc(`${ver} finding(s) to verify on ${zshort(z)}`)}</title>
-      <path d="M${cx} ${cy - 11} L${cx + 11} ${cy} L${cx} ${cy + 11} L${cx - 11} ${cy} Z"/><text x="${cx}" y="${cy + 4}" text-anchor="middle">${ver}</text></g>` : "";
+      <path d="M${cx} ${cy - 11} L${cx + 11} ${cy} L${cx} ${cy + 11} L${cx - 11} ${cy} Z" fill="rgba(250,204,21,.16)" stroke="#FACC15" stroke-width="1.4"/><text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#FACC15">${ver}</text></g>` : "";
     const tops = fs.filter((f) => topIdx[f.finding_id]).map((f, k) => {
       const bx = cx + (narrow ? 22 : 30) + k * 20, by = cy + 2, n = topIdx[f.finding_id], lx = W - 14, ly = cy - 2 + k * 13;
       return `<g class="vs-num" data-finding="${esc(f.finding_id)}" role="button" tabindex="0" aria-label="${esc(`Top finding ${n}: ${f.title}`)}">
-        ${narrow ? "" : `<polyline class="vs-lead" points="${bx + 7.5},${by} ${lx - 52},${ly}"/><text class="vs-tag" x="${lx}" y="${ly + 3}" text-anchor="end">${n} · ${fmtTime(f.time_start_s)}</text>`}
-        <circle cx="${bx}" cy="${by}" r="7.5"/><text x="${bx}" y="${by + 3.5}" text-anchor="middle">${n}</text></g>`;
+        ${narrow ? "" : `<polyline class="vs-lead" fill="none" stroke="rgba(168,85,247,.55)" points="${bx + 7.5},${by} ${lx - 52},${ly}"/><text class="vs-tag" x="${lx}" y="${ly + 3}" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="#D8B4FE">${n} · ${fmtTime(f.time_start_s)}</text>`}
+        <circle cx="${bx}" cy="${by}" r="7.5" fill="#2A1F45" stroke="#A855F7" stroke-width="1.3"/><text x="${bx}" y="${by + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="#D8B4FE">${n}</text></g>`;
     }).join("");
     const sub = vids.length ? `${vids.length} video${vids.length > 1 ? "s" : ""} · ${fs.length} finding${fs.length === 1 ? "" : "s"}` : "No survey video";
     const base = `<g class="vs-floor${reviewed ? " on" : vids.length ? " part" : ""}">
-      <polygon class="vs-edge" points="${edge}"/><polygon class="vs-side" points="${side}"/><polygon class="vs-face" points="${face}"/>
-      <g class="vs-div">${div}</g>${route}
-      <line class="vs-tick" x1="${X0 - 66}" x2="${X0 - 6}" y1="${y + 1}" y2="${y + 1}"/>
-      <text class="vs-fl" x="${X0 - 12}" y="${y - 4}" text-anchor="end">${esc(zshort(z).toUpperCase())}</text>
-      <text class="vs-sub" x="${X0 - 12}" y="${y + 13}" text-anchor="end">${esc(sub)}</text></g>`;
+      <polygon class="vs-edge" points="${edge}" fill="#142038" stroke="rgba(148,163,184,.2)"/><polygon class="vs-side" points="${side}" fill="#0F1830" stroke="rgba(148,163,184,.18)"/><polygon class="vs-face" points="${face}" fill="${reviewed ? "rgba(34,211,238,.07)" : "rgba(148,163,184,.025)"}" stroke="${reviewed ? "rgba(34,211,238,.55)" : vids.length ? "rgba(34,211,238,.3)" : "rgba(148,163,184,.24)"}" ${reviewed ? "" : 'stroke-dasharray="5 4"'}/>
+      <g class="vs-div" stroke="${reviewed ? "rgba(34,211,238,.16)" : "rgba(148,163,184,.10)"}">${div}</g>${route}
+      <line class="vs-tick" stroke="rgba(148,163,184,.3)" stroke-dasharray="2 4" x1="${X0 - 66}" x2="${X0 - 6}" y1="${y + 1}" y2="${y + 1}"/>
+      <text class="vs-fl" x="${X0 - 12}" y="${y - 4}" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="11.5" font-weight="700" letter-spacing="1.5" fill="${vids.length ? "#F8FAFC" : "#7C89A1"}">${esc(zshort(z).toUpperCase())}</text>
+      <text class="vs-sub" x="${X0 - 12}" y="${y + 13}" text-anchor="end" font-size="10.5" fill="${vids.length ? "#A8B3C7" : "#7C89A1"}">${esc(sub)}</text></g>`;
     return [base, `<g class="vs-pins">${mk}${tops}</g>`];
   };
-  const cols = [[X0, 0], [X0 + SW, 0], [X0 + SW + DX, -DY], [X0 + DX, -DY]].map(([x, d]) => `<line x1="${x}" y1="${yOf(0) + d}" x2="${x}" y2="${yOf(order.length - 1) + d}"/>`).join("");
+  const cols = [[X0, 0], [X0 + SW, 0], [X0 + SW + DX, -DY], [X0 + DX, -DY]].map(([x, d]) => `<line x1="${x}" y1="${yOf(0) + d}" x2="${x}" y2="${yOf(order.length - 1) + d}" stroke="rgba(148,163,184,.14)" stroke-dasharray="2 4"/>`).join("");
   // videos without a verified floor, and whole-building videos: shown beside the building, never placed on a floor
   const tray = [["", "Location not verified"], ["Building", "Whole building"]].map(([z, label]) => {
     const vids = vf.videos.filter((v) => (v.zone || "") === z); if (!vids.length) return "";
@@ -404,15 +404,15 @@ function vfScanSvg(vf) {
   }).filter(Boolean);
   const ty = yOf(order.length - 1) + T + 34;
   const trayG = tray.map((t, k) => { const x = X0 - (narrow ? 90 : 110), yk = ty + k * 30, tw = SW + DX + (narrow ? 90 : 110);
-    return `<g class="vs-tray" data-vffloor="${esc(t.z)}" role="button" tabindex="0" aria-label="${esc(t.txt)}. Show these findings"><rect x="${x}" y="${yk - 14}" width="${tw}" height="24" rx="6"/>
-      <text x="${x + 10}" y="${yk + 2}">${esc(t.txt)}</text>${t.nums.map((n, j) => `<g class="vs-num"><circle cx="${x + tw - 14 - j * 18}" cy="${yk - 2}" r="7"/><text x="${x + tw - 14 - j * 18}" y="${yk + 1.5}" text-anchor="middle">${n}</text></g>`).join("")}</g>`; }).join("");
+    return `<g class="vs-tray" data-vffloor="${esc(t.z)}" role="button" tabindex="0" aria-label="${esc(t.txt)}. Show these findings"><rect x="${x}" y="${yk - 14}" width="${tw}" height="24" rx="6" fill="rgba(27,38,64,.8)" stroke="rgba(148,163,184,.28)" stroke-dasharray="4 3"/>
+      <text x="${x + 10}" y="${yk + 2}" font-size="10.5" fill="#A8B3C7">${esc(t.txt)}</text>${t.nums.map((n, j) => `<g class="vs-num"><circle cx="${x + tw - 14 - j * 18}" cy="${yk - 2}" r="7" fill="#2A1F45" stroke="#A855F7" stroke-width="1.3"/><text x="${x + tw - 14 - j * 18}" y="${yk + 1.5}" text-anchor="middle" font-size="10" font-weight="700" fill="#D8B4FE">${n}</text></g>`).join("")}</g>`; }).join("");
   const slabs = order.map(slab);
   const y0 = yOf(0) - DY - 10, y1 = yOf(order.length - 1) + T + 4;
-  return `<svg class="vs-svg" viewBox="0 0 ${W} ${H}" role="group" aria-label="Survey video coverage by floor: which floors were filmed, and where findings need verification.">
-    <text class="vs-cap" x="14" y="20">VIDEO SURVEY · ${vf.coverage.reviewed} OF ${vf.coverage.drive_videos || vf.coverage.on_this_computer} REVIEWED</text>
-    ${running ? `<text class="vs-cap vs-run" x="${W - 14}" y="20" text-anchor="end">● REVIEW IN PROGRESS</text>` : ""}
+  return `<svg class="vs-svg" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-height:420px" font-family="Inter,Segoe UI,system-ui,sans-serif" role="group" aria-label="Survey video coverage by floor: which floors were filmed, and where findings need verification.">
+    <text class="vs-cap" x="14" y="20" font-family="JetBrains Mono,monospace" font-size="10" letter-spacing="1.4" font-weight="600" fill="#7C89A1">VIDEO SURVEY · ${vf.coverage.reviewed} OF ${vf.coverage.drive_videos || vf.coverage.on_this_computer} REVIEWED</text>
+    ${running ? `<text class="vs-cap vs-run" x="${W - 14}" y="20" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="#22D3EE">● REVIEW IN PROGRESS</text>` : ""}
     <g class="vs-cols">${cols}</g>${slabs.map((x) => x[0]).reverse().join("")}${slabs.map((x) => x[1]).join("")}
-    ${running ? `<line class="vs-scanline" x1="${X0 - 6}" x2="${X0 + SW + DX + 6}" y1="${y0}" y2="${y0}" style="--vs-y0:${y0}px;--vs-y1:${y1}px"/>` : ""}
+    ${running ? `<line class="vs-scanline" stroke="#22D3EE" stroke-width="1.5" stroke-opacity=".7" x1="${X0 - 6}" x2="${X0 + SW + DX + 6}" y1="${y0}" y2="${y0}" style="--vs-y0:${y0}px;--vs-y1:${y1}px"/>` : ""}
     ${trayG}</svg>`;
 }
 let vsNarrow = window.innerWidth < 720;
@@ -420,9 +420,9 @@ window.addEventListener("resize", () => { const n = window.innerWidth < 720, el 
 function vfTopRow(f, i) {
   FIND[f.finding_id] = f;
   const fr = bestFrame(f.localization);
-  const th = fr ? `<img src="/api/frames/${esc(fr.frame_file)}" alt="" loading="lazy" onerror="this.remove()">` : "";
+  const th = fr ? `<img src="/api/frames/${esc(fr.frame_file)}" alt="" loading="lazy" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">` : "";
   return `<button class="icard vf vs-row" data-finding="${esc(f.finding_id)}" aria-label="${esc(`Top finding ${i + 1}: ${f.title}. View finding`)}">
-    <span class="vs-th" aria-hidden="true">${th}<span class="vs-thn">No frame</span><b>${i + 1}</b>${fr ? `<em>${fmtTime(fr.frame_time_s)}</em>` : ""}</span>
+    <span class="vs-th" aria-hidden="true" style="position:relative;display:flex;overflow:hidden;width:104px;aspect-ratio:16/10">${th}<span class="vs-thn">No frame</span><b>${i + 1}</b>${fr ? `<em>${fmtTime(fr.frame_time_s)}</em>` : ""}</span>
     <span class="ic-t">${esc(f.zone ? zshort(f.zone) : "Location not verified")} · ${aiT(f.title)}</span>
     <span class="ic-d">${esc(f.category_label)} · ${esc(f.filename)} at ${fmtTime(f.time_start_s)}</span>
     <span class="ic-m"><span class="kindtag vfk">Meta Muse Spark video finding</span><span>${esc(f.status_label)}</span>${f.linked ? `<span>· linked to ${f.links.length} alert(s)</span>` : ""}${f.certainty === "possibly_visible" ? "<span>· possibly visible</span>" : ""}</span>
