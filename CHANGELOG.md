@@ -39,7 +39,8 @@
   MSB room. Now only a strong match is pictured: video linked to the same equipment in the asset register, or video /
   area name containing the room or equipment named in the issue (e.g. "Wastewater" -> Wastewater Treatment Room.mp4);
   the most relevant group and a located frame come first, and the reason is printed. Same-floor-only findings are
-  mentioned in one line without a picture.
+  mentioned in one line without a picture. Follow-up (08:36): an equipment link counts only for the risk it belongs
+  to (a zone alert holds several risks; the MSB video is linked to the water-in-electrical-rooms risk, not AB-01A).
 - Fix: the "Source not updated / unavailable" lines now use the English tab name (a Vietnamese tab name reached the
   page once the data was more than 2 days old).
 

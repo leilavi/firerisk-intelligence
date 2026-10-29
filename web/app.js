@@ -1340,7 +1340,8 @@ function evidenceMatches(i) {
   const W = placeWords(i), cats = PATH_CATS[i.risk_type] || [];
   const out = [];
   (VF?.findings || []).forEach((f) => {
-    const eq = f.links.find((l) => l.alert_id === i.alert_id && /same equipment|this equipment/i.test(l.reason));
+    // The link must point at THIS risk: a zone alert holds several risks, each with its own equipment.
+    const eq = f.links.find((l) => l.alert_id === i.alert_id && (!i.signal_id || l.signal_id === i.signal_id) && /same equipment|this equipment/i.test(l.reason));
     const hay = `${f.filename || ""} ${VI_RE.test(f.area_label || "") ? "" : f.area_label || ""}`;
     const word = W.long.find((w) => hay.toLowerCase().includes(w)) || W.acr.find((w) => new RegExp(`\\b${w}\\b`).test(hay));
     if (!eq && !word) return;
