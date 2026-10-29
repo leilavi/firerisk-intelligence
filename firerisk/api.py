@@ -597,9 +597,9 @@ def _ai_text(t):
 
 
 AI_BRIEF_LABEL = {
-    "complete": "AI Analysis Complete", "complete_older": "AI Analysis Complete · Update Pending",
-    "pending": "AI Analysis Pending", "failed": "AI Analysis Failed", "insufficient_evidence": "Insufficient Evidence",
-    "unavailable": "AI Analysis Unavailable", "not_applicable": "Rule-Based Summary",
+    "complete": "Meta Muse Spark Analysis Complete", "complete_older": "Meta Muse Spark Analysis Complete · Update Pending",
+    "pending": "Meta Muse Spark Analysis Pending", "failed": "Meta Muse Spark Analysis Failed", "insufficient_evidence": "Insufficient Evidence",
+    "unavailable": "Meta Muse Spark Analysis Unavailable", "not_applicable": "Rule-Based Summary",
 }
 
 
@@ -742,7 +742,7 @@ def _brief_eq(issue: dict, ea) -> dict:
             "ai": {"code": "not_applicable", "label": AI_BRIEF_LABEL["not_applicable"], "running": False,
                    "analysed_at": None, "model": None, "api_mode": None, "is_current": False, "error": None,
                    "has_full_analysis": False,
-                   "note": "Muse Captain analyses fire-safety risks; equipment alerts are explained by the rule set."}}
+                   "note": "Meta Muse Spark analyses fire-safety risks; equipment alerts are explained by the rule set."}}
 
 
 @app.get("/api/briefing")
@@ -1226,7 +1226,7 @@ def analyse_video_endpoint(video_id: str):
     if not v["analysable"]:
         raise HTTPException(400, v["analysable_reason"])
     if not MuseConfig.load().configured:
-        raise HTTPException(400, "Muse Captain is not configured (no MODEL_API_KEY)")
+        raise HTTPException(400, "Meta Muse Spark is not configured (no MODEL_API_KEY)")
     started = state.videos.analyse_in_background(video_id, state.ai.client_factory,
                                                  state.video_context_text(v, state.get()), on_done=state.on_video_analysed)
     return {"started": started, "video": state.videos.get(video_id)}
@@ -1234,7 +1234,7 @@ def analyse_video_endpoint(video_id: str):
 
 @app.get("/api/video-findings")
 def video_findings():
-    """AI video findings (Muse Captain survey-video review v2), separate from rule-based alerts, plus coverage."""
+    """AI video findings (Meta Muse Spark survey-video review v2), separate from rule-based alerts, plus coverage."""
     from .video_findings import collect
     out = collect(state.videos, state.get(), state.store, _is_active, localizer=state.localizer)
     for f in out["findings"]:

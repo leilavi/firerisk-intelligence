@@ -135,7 +135,7 @@ def test_evidence_overlay_renders_aligned_and_english_only(app_env, monkeypatch,
             page.click("#samg .samcard"); page.wait_for_selector("#drawer .evblock img")
             page.wait_for_function("() => document.querySelector('#drawer .evblock img').complete")
             txt = page.text_content("#drawer")
-            assert "AI observation (Muse Spark)" in txt and "Visual model detected (SAM 3.1)" in txt
+            assert "Observation · Meta Muse Spark" in txt and "Located by Meta SAM 3.1" in txt
             assert "Located in frame at 00:05 (confidence 0.80)" in txt and "Video Timestamp" in txt
             img = page.eval_on_selector("#drawer .ev-frame img", "e => { const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }")
             rect = page.eval_on_selector("#drawer .ev-frame svg rect", "e => { const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }")

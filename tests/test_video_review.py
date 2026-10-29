@@ -149,14 +149,21 @@ def test_v6_claims_without_valid_records_are_downgraded():
     assert cl[1]["basis"] == "hypothesis" and cl[1]["downgraded"]
 
 
-def test_display_name_is_muse_captain_but_model_id_unchanged():
+def test_display_names_are_meta_model_names_and_model_ids_unchanged():
+    """Author's decision 2026-10-29: no generic "AI" label and no "Muse Captain" name; every model-made part is
+    named after the Meta model that made it (Meta Muse Spark, Meta SAM 3.1). Model IDs are unchanged."""
+    import re
     from pathlib import Path
     from firerisk.ai.muse import MuseConfig
+    from firerisk.sam import SAM_MODEL
     root = Path(__file__).resolve().parent.parent
     js = (root / "web/app.js").read_text(encoding="utf-8")
-    assert "Muse Captain" in js and "GROUND LEVEL" not in js and "gEarth" not in js
-    # Muse Spark is named only on the technical "powered by" line and in the required evidence label
-    # "AI observation (Muse Spark)" (SAM 3.1 integration spec, section 14) that separates it from SAM 3.1.
-    assert all("powered by" in line or "AI observation (Muse Spark)" in line
-               for line in js.splitlines() if "Muse Spark" in line)
+    html = (root / "web/index.html").read_text(encoding="utf-8")
+    for src in (js, html):
+        assert "Muse Captain" not in src and "GROUND LEVEL" not in src
+        code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+        texts = re.findall(r"(?:\"[^\"\n]*\"|`[^`]*`|>[^<]+<)", code)
+        assert not [t for t in texts if re.search(r"\bAI\b", t)], "generic AI label left"
+    assert "Meta Muse Spark" in js and "Meta SAM 3.1" in js and "Meta Muse Spark" in html
     assert MuseConfig.load().model == "muse-spark-1.3" or MuseConfig.load().model      # model id untouched
+    assert SAM_MODEL == "sam-3.1"
