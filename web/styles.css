@@ -443,5 +443,5 @@ details.acc.sub{margin-top:6px} details.acc.sub > summary{padding:6px 10px;font-
 .vs-th b{position:absolute;left:4px;top:4px;z-index:2;width:18px;height:18px;border-radius:50%;background:#2A1F45;border:1px solid var(--purple);color:#D8B4FE;font-size:10.5px;display:flex;align-items:center;justify-content:center}
 .vs-th em{position:absolute;right:4px;bottom:3px;z-index:2;font:600 10px var(--mono);font-style:normal;color:var(--ink);background:rgba(11,16,32,.78);padding:0 4px;border-radius:3px}
 @media (max-width:1180px){.vs-wrap{grid-template-columns:1fr}.vs-svg{max-height:380px}}
-@media (max-width:720px){.vs-th{width:76px}.icard.vs-row{gap:1px 10px}}
+@media (max-width:720px){.vs-th{width:76px!important}.icard.vs-row{gap:1px 10px}}
 @media (max-width:720px){.icard.vs-row .ic-go{display:none}.icard.vs-row{grid-template-columns:auto minmax(0,1fr)}.vs-fl{font-size:11px}.vs-sub{font-size:10px}}
