@@ -307,8 +307,10 @@ def enrich_alerts(alerts, signals, index: dict, source_status: list[dict], now: 
     for s in signals:
         s.fields = signal_fields(s, index, now)
         s.fields["short"] = short_text(s, index)
-    down = [f"{x['source']} / {x.get('sheet') or ''}: {x['error']}" for x in source_status if x.get("error")]
-    stale = [f"{x['source']} / {x.get('sheet') or ''}: newest record {x.get('age_days')} days old" for x in source_status
+    # English display: the tab name goes through SHEET_EN (a Vietnamese tab name must not reach the page).
+    tab = lambda x: SHEET_EN.get(x.get("sheet") or "", x.get("sheet") or "")
+    down = [f"{x['source']} / {tab(x)}: {x['error']}" for x in source_status if x.get("error")]
+    stale = [f"{x['source']} / {tab(x)}: newest record {x.get('age_days')} days old" for x in source_status
              if x.get("stale")]
     for a in alerts:
         sigs = [by_id[i] for i in a.signal_ids if i in by_id]
