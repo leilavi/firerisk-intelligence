@@ -4,7 +4,8 @@
 - Naming (author's decision 2026-10-29 19:50): the generic "AI" label and the display name "Muse Captain" are
   removed from the dashboard. Every model-made part is named after the Meta model that made it: "Meta Muse Spark"
   (analysis, video review, translations; tag META MUSE SPARK) and "Meta SAM 3.1" (object outlines; tag META SAM 3.1).
-  "Risk Briefing" replaces "AI Risk Briefing". Model IDs (`muse-spark-1.3`, `sam-3.1`) unchanged. Rule results keep
+  The briefing is titled "Meta Muse Spark – Risk Briefing" when its text comes from a Meta Muse Spark analysis, and
+  "Risk Briefing · rule-based until Meta Muse Spark completes" otherwise. Model IDs (`muse-spark-1.3`, `sam-3.1`) unchanged. Rule results keep
   the RULE tag. Test `test_display_names_are_meta_model_names_and_model_ids_unchanged`.
 - Phase 1: `scripts/check_sam.py` + `run_sam_check.bat` — one real frame to `sam-3.1`; verified live on the author's PC
   (valid no-match for "electrical panel" on a close-up frame; 8 objects located for "push button").
