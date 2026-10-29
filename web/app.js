@@ -187,7 +187,7 @@ async function viewOverview() {
   const floorsN = B.floors.filter((f) => f.zone !== "Building").length;
   $("#app").innerHTML = `
     ${sm.sources_down.length ? `<div class="warnbox"><b>Data source problem.</b> ${sm.sources_down.map((x) => esc(`${x.source}: ${x.error}`)).join("; ")}. Results may be incomplete. <a href="#/data">Data &amp; Evidence</a></div>` : ""}
-    <section id="brief" class="brief" aria-label="Risk Briefing" aria-live="polite"></section>
+    <section id="brief" class="brief" aria-label="Meta Muse Spark – Risk Briefing" aria-live="polite"></section>
     <section class="kpis" aria-label="Building summary">
       <div class="kpi k-${esc(bs)}" title="${esc(sm.building_state_rule)}"><span class="kicker">Building condition</span><span class="v">${ICON[bs] || ""}${esc(sm.building_state_label)}</span><span class="d">${sm.floors_not_assessed.length ? `${sm.floors_not_assessed.length} floor(s) not assessed` : "Highest level among active issues"}</span></div>
       <div class="kpi k-urgent"><span class="kicker">High-priority issues</span><span class="v num">${sm.high_priority}</span><span class="d">open, High Risk or Emergency · of ${sm.issues_active} active</span></div>
@@ -253,7 +253,7 @@ function renderBrief() {
   const more = rest.filter(({ x }) => !(rank(x.severity) >= rank("high") && x.open));
   const other = ({ x, i }) => `<button class="br-other sv-${esc(x.severity)}" data-bi="${i}"><b>${esc(x.kind === "fire_risk" ? x.title : `${issueName(x)}: ${issueDesc(x)}`)}</b><span class="muted">${esc(LABEL[x.severity])} · ${esc(zshort(x.zone))} · ${esc(x.kind_label)}</span></button>`;
   el.innerHTML = `
-    <div class="br-top"><span class="kicker">Risk Briefing · Highest priority${briefIdx ? " (selected issue)" : ""}</span>
+    <div class="br-top"><span class="kicker">${["complete", "complete_older", "insufficient_evidence"].includes(it.ai?.code) ? "Meta Muse Spark – Risk Briefing" : "Risk Briefing · rule-based until Meta Muse Spark completes"} · Highest priority${briefIdx ? " (selected issue)" : ""}</span>
       <span class="br-tag">${esc(LABEL[it.severity])} · ${esc(zshort(it.zone))}</span><span class="kindtag ${esc(it.kind)}">${esc(it.kind_label)}</span>
       ${it.open ? '<span class="rst open">Unresolved</span>' : '<span class="rst fixed">Marked fixed in records</span>'}</div>
     <div class="br-grid"><div>
