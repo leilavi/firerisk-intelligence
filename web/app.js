@@ -213,6 +213,7 @@ async function viewOverview() {
     </div>`;
   renderBrief(); renderMap(); renderCtx(); bindEvidence(); bindIssues($("#app")); bindFindings($("#app"));
   const acc = $("#vf-acc"); if (acc) acc.addEventListener("toggle", () => acc.open && renderVideoFindings());
+  bindVfScan($("#app"));
   clearInterval(briefPoll);
   if (BR.items.some((x) => x.ai.running || x.ai.code === "pending")) briefPoll = setInterval(refreshBrief, 10000);
 }
@@ -335,7 +336,11 @@ function videoFindingsPanel(vf) {
       <div class="vf-k"><b class="num">${k.needs_verification}</b><span>need on-site verification</span></div>
       <div class="vf-k"><b class="num">${k.linked}</b><span>linked to an existing alert</span></div>
       <div class="vf-k"><span class="muted small">${latest ? `Latest review ${dt(latest)}` : "No review yet"}${c.failed.length ? ` · <span class="openmark">${c.failed.length} failed</span>` : ""}${c.not_downloaded.length ? ` · ${c.not_downloaded.length} not downloaded yet` : ""}</span></div></div>
-    ${vf.top.length ? `<div class="kicker" style="margin:10px 0 4px">Top findings to verify · Meta Muse Spark video findings, not official alerts</div><div class="icards">${vf.top.map(findingRow).join("")}</div>` : ""}
+    <div class="vs-wrap${vf.top.length ? "" : " vs-solo"}">
+      <figure class="vs-fig">${vfScanSvg(vf)}
+        <figcaption class="tiny muted">Schematic view of the survey. Floors are the building's floors; positions inside a floor are not drawn to scale and do not show where a room is. <span class="vs-key"><i class="vs-k-path"></i>filmed in a reviewed video</span> <span class="vs-key"><i class="vs-k-ver"></i>findings that need on-site verification</span> <span class="vs-key"><i class="vs-k-num"></i>top finding</span></figcaption></figure>
+      ${vf.top.length ? `<div class="vs-top"><div class="kicker" style="margin:0 0 4px">Top findings to verify · Meta Muse Spark video findings, not official alerts</div><div class="icards">${vf.top.map(vfTopRow).join("")}</div></div>` : ""}
+    </div>
     <details class="acc" id="vf-acc"><summary><b>View video findings</b> <span class="muted small">by floor and video, with timestamps · coverage report</span></summary><div class="acc-body" id="vf-body"></div></details>`;
 }
 function findingRow(f) {
@@ -346,6 +351,92 @@ function findingRow(f) {
     <span class="ic-m"><span class="kindtag vfk">Meta Muse Spark video finding</span><span>${esc(f.status_label)}</span>${f.linked ? `<span>· linked to ${f.links.length} alert(s)</span>` : ""}${f.certainty === "possibly_visible" ? "<span>· possibly visible</span>" : ""}</span>
     <span class="ic-go" aria-hidden="true">View →</span></button>`;
 }
+/* Survey scan illustration (Survey Video Findings only). Drawn ONLY from /api/video-findings and the building's floor
+   list: which floors have a reviewed video, how many findings per floor still need verification, where the top
+   findings were filmed (floor level only - no room positions exist in the data). Static unless a review is running. */
+const VS_NEEDS = (f) => ["new", "acknowledged", "investigating"].includes(f.status);
+function vfScanSvg(vf) {
+  const order = ["Roof", "F4", "F3", "F2", "F1", "B1"].filter((z) => !B || B.floors.some((f) => f.zone === z));
+  const narrow = window.innerWidth < 720;          // phones: smaller drawing so the labels stay readable
+  const W = narrow ? 330 : 460, X0 = narrow ? 110 : 124, SW = narrow ? 134 : 196, DX = narrow ? 44 : 66, DY = narrow ? 22 : 30, T = 6, GAP = narrow ? 40 : 44, top = narrow ? 52 : 62;
+  const yOf = (i) => top + i * GAP;
+  const topIdx = Object.fromEntries(vf.top.map((f, n) => [f.finding_id, n + 1]));
+  const running = vf.videos.some((v) => v.state === "running");
+  const nTray = ["", "Building"].filter((z) => vf.videos.some((v) => (v.zone || "") === z)).length;
+  const H = yOf(order.length - 1) + T + 22 + nTray * 30;
+  const slab = (z, i) => {
+    const y = yOf(i), vids = vf.videos.filter((v) => v.zone === z), fs = vf.findings.filter((f) => f.zone === z);
+    const reviewed = vids.some((v) => v.state === "reviewed" || v.state === "older_review_only"), ver = fs.filter(VS_NEEDS).length;
+    const p = (a, b) => `${a},${b}`;
+    const face = [p(X0, y), p(X0 + SW, y), p(X0 + SW + DX, y - DY), p(X0 + DX, y - DY)].join(" ");
+    const edge = [p(X0, y), p(X0 + SW, y), p(X0 + SW, y + T), p(X0, y + T)].join(" ");
+    const side = [p(X0 + SW, y), p(X0 + SW + DX, y - DY), p(X0 + SW + DX, y - DY + T), p(X0 + SW, y + T)].join(" ");
+    const div = [0.34, 0.67].map((k) => `<line x1="${X0 + SW * k}" y1="${y}" x2="${X0 + SW * k + DX}" y2="${y - DY}"/>`).join("")
+      + `<line x1="${X0 + DX / 2}" y1="${y - DY / 2}" x2="${X0 + SW + DX / 2}" y2="${y - DY / 2}"/>`;
+    // camera route: a schematic zig-zag across the slab, only on floors that a reviewed video covers
+    const route = reviewed ? `<polyline class="vs-route" points="${[[0.06, 0.25], [0.3, 0.75], [0.55, 0.25], [0.8, 0.75], [0.94, 0.4]].map(([a, b]) => p(X0 + SW * a + DX * b, y - DY * b)).join(" ")}"/>
+      <g class="vs-cam" transform="translate(${X0 + SW * 0.06 + DX * 0.25 - 7},${y - DY * 0.25 - 4})"><rect width="9" height="7" rx="1.5"/><path d="M9 3.5 L13 1 L13 6 Z"/></g>` : "";
+    const cx = X0 + SW * 0.5 + DX * 0.5, cy = y - DY * 0.5;
+    const mk = ver ? `<g class="vs-ver" data-vffloor="${esc(z)}" role="button" tabindex="0" aria-label="${esc(`${zshort(z)}: ${ver} video finding(s) need on-site verification. Show this floor's findings`)}"><title>${esc(`${ver} finding(s) to verify on ${zshort(z)}`)}</title>
+      <path d="M${cx} ${cy - 11} L${cx + 11} ${cy} L${cx} ${cy + 11} L${cx - 11} ${cy} Z"/><text x="${cx}" y="${cy + 4}" text-anchor="middle">${ver}</text></g>` : "";
+    const tops = fs.filter((f) => topIdx[f.finding_id]).map((f, k) => {
+      const bx = cx + (narrow ? 22 : 30) + k * 20, by = cy + 2, n = topIdx[f.finding_id], lx = W - 14, ly = cy - 2 + k * 13;
+      return `<g class="vs-num" data-finding="${esc(f.finding_id)}" role="button" tabindex="0" aria-label="${esc(`Top finding ${n}: ${f.title}`)}">
+        ${narrow ? "" : `<polyline class="vs-lead" points="${bx + 7.5},${by} ${lx - 52},${ly}"/><text class="vs-tag" x="${lx}" y="${ly + 3}" text-anchor="end">${n} · ${fmtTime(f.time_start_s)}</text>`}
+        <circle cx="${bx}" cy="${by}" r="7.5"/><text x="${bx}" y="${by + 3.5}" text-anchor="middle">${n}</text></g>`;
+    }).join("");
+    const sub = vids.length ? `${vids.length} video${vids.length > 1 ? "s" : ""} · ${fs.length} finding${fs.length === 1 ? "" : "s"}` : "No survey video";
+    const base = `<g class="vs-floor${reviewed ? " on" : vids.length ? " part" : ""}">
+      <polygon class="vs-edge" points="${edge}"/><polygon class="vs-side" points="${side}"/><polygon class="vs-face" points="${face}"/>
+      <g class="vs-div">${div}</g>${route}
+      <line class="vs-tick" x1="${X0 - 66}" x2="${X0 - 6}" y1="${y + 1}" y2="${y + 1}"/>
+      <text class="vs-fl" x="${X0 - 12}" y="${y - 4}" text-anchor="end">${esc(zshort(z).toUpperCase())}</text>
+      <text class="vs-sub" x="${X0 - 12}" y="${y + 13}" text-anchor="end">${esc(sub)}</text></g>`;
+    return [base, `<g class="vs-pins">${mk}${tops}</g>`];
+  };
+  const cols = [[X0, 0], [X0 + SW, 0], [X0 + SW + DX, -DY], [X0 + DX, -DY]].map(([x, d]) => `<line x1="${x}" y1="${yOf(0) + d}" x2="${x}" y2="${yOf(order.length - 1) + d}"/>`).join("");
+  // videos without a verified floor, and whole-building videos: shown beside the building, never placed on a floor
+  const tray = [["", "Location not verified"], ["Building", "Whole building"]].map(([z, label]) => {
+    const vids = vf.videos.filter((v) => (v.zone || "") === z); if (!vids.length) return "";
+    const fs = vf.findings.filter((f) => (f.zone || "") === z), ver = fs.filter(VS_NEEDS).length;
+    const nums = fs.filter((f) => topIdx[f.finding_id]).map((f) => topIdx[f.finding_id]);
+    return { z, txt: `${label} · ${vids.length} video${vids.length > 1 ? "s" : ""} · ${ver} to verify`, nums };
+  }).filter(Boolean);
+  const ty = yOf(order.length - 1) + T + 34;
+  const trayG = tray.map((t, k) => { const x = X0 - (narrow ? 90 : 110), yk = ty + k * 30, tw = SW + DX + (narrow ? 90 : 110);
+    return `<g class="vs-tray" data-vffloor="${esc(t.z)}" role="button" tabindex="0" aria-label="${esc(t.txt)}. Show these findings"><rect x="${x}" y="${yk - 14}" width="${tw}" height="24" rx="6"/>
+      <text x="${x + 10}" y="${yk + 2}">${esc(t.txt)}</text>${t.nums.map((n, j) => `<g class="vs-num"><circle cx="${x + tw - 14 - j * 18}" cy="${yk - 2}" r="7"/><text x="${x + tw - 14 - j * 18}" y="${yk + 1.5}" text-anchor="middle">${n}</text></g>`).join("")}</g>`; }).join("");
+  const slabs = order.map(slab);
+  const y0 = yOf(0) - DY - 10, y1 = yOf(order.length - 1) + T + 4;
+  return `<svg class="vs-svg" viewBox="0 0 ${W} ${H}" role="group" aria-label="Survey video coverage by floor: which floors were filmed, and where findings need verification.">
+    <text class="vs-cap" x="14" y="20">VIDEO SURVEY · ${vf.coverage.reviewed} OF ${vf.coverage.drive_videos || vf.coverage.on_this_computer} REVIEWED</text>
+    ${running ? `<text class="vs-cap vs-run" x="${W - 14}" y="20" text-anchor="end">● REVIEW IN PROGRESS</text>` : ""}
+    <g class="vs-cols">${cols}</g>${slabs.map((x) => x[0]).reverse().join("")}${slabs.map((x) => x[1]).join("")}
+    ${running ? `<line class="vs-scanline" x1="${X0 - 6}" x2="${X0 + SW + DX + 6}" y1="${y0}" y2="${y0}" style="--vs-y0:${y0}px;--vs-y1:${y1}px"/>` : ""}
+    ${trayG}</svg>`;
+}
+let vsNarrow = window.innerWidth < 720;
+window.addEventListener("resize", () => { const n = window.innerWidth < 720, el = $(".vs-svg"); if (n !== vsNarrow && el && VF) { vsNarrow = n; el.outerHTML = vfScanSvg(VF); bindVfScan($(".vs-fig")); bindFindings($(".vs-fig")); } });
+function vfTopRow(f, i) {
+  FIND[f.finding_id] = f;
+  const fr = bestFrame(f.localization);
+  const th = fr ? `<img src="/api/frames/${esc(fr.frame_file)}" alt="" loading="lazy" onerror="this.remove()">` : "";
+  return `<button class="icard vf vs-row" data-finding="${esc(f.finding_id)}" aria-label="${esc(`Top finding ${i + 1}: ${f.title}. View finding`)}">
+    <span class="vs-th" aria-hidden="true">${th}<span class="vs-thn">No frame</span><b>${i + 1}</b>${fr ? `<em>${fmtTime(fr.frame_time_s)}</em>` : ""}</span>
+    <span class="ic-t">${esc(f.zone ? zshort(f.zone) : "Location not verified")} · ${aiT(f.title)}</span>
+    <span class="ic-d">${esc(f.category_label)} · ${esc(f.filename)} at ${fmtTime(f.time_start_s)}</span>
+    <span class="ic-m"><span class="kindtag vfk">Meta Muse Spark video finding</span><span>${esc(f.status_label)}</span>${f.linked ? `<span>· linked to ${f.links.length} alert(s)</span>` : ""}${f.certainty === "possibly_visible" ? "<span>· possibly visible</span>" : ""}</span>
+    <span class="ic-go" aria-hidden="true">View →</span></button>`;
+}
+function bindVfScan(root) {
+  $$("[data-vffloor]", root).forEach((g) => {
+    const go = () => { const acc = $("#vf-acc"); if (!acc) return; acc.open = true; renderVideoFindings();
+      const h = $(`#vf-body h5[data-vfz="${CSS.escape(g.dataset.vffloor)}"]`); (h || acc).scrollIntoView({ behavior: "smooth", block: "start" }); };
+    g.addEventListener("click", go);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+  $$(".vs-num[data-finding]", root).forEach((g) => g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openFinding(FIND[g.dataset.finding]); } }));
+}
 const FIND = {};
 function bindFindings(root) { $$("[data-finding]", root).forEach((b) => (b.onclick = () => openFinding(FIND[b.dataset.finding]))); }
 function renderVideoFindings() {
@@ -355,7 +446,7 @@ function renderVideoFindings() {
   vf.videos.forEach((v) => (byFloor[v.zone || ""] = byFloor[v.zone || ""] || []).push(v));
   const order = ["Roof", "F4", "F3", "F2", "F1", "B1", "Building", ""].filter((z) => byFloor[z]);
   const obsOf = Object.fromEntries((B?.recent?.videos || []).map((v) => [v.video_id, v]));
-  body.innerHTML = order.map((z) => `<h5>${esc(z ? zshort(z) : "Location not verified")}</h5>${byFloor[z].map((v) => {
+  body.innerHTML = order.map((z) => `<h5 data-vfz="${esc(z)}">${esc(z ? zshort(z) : "Location not verified")}</h5>${byFloor[z].map((v) => {
       const fs = vf.findings.filter((f) => f.video_id === v.video_id);
       const old = obsOf[v.video_id];
       return `<div class="vf-video"><div><a href="#/video/${esc(v.video_id)}"><b>${esc(v.filename)}</b></a> <span class="tiny muted">${v.recorded_at ? `recorded ${dt(v.recorded_at)}` : "recording date unknown"} · ${esc(VSTATE[v.state] || v.state)}${v.state === "failed" ? `: ${esc(v.error_kind || "")} ${esc((v.error || "").slice(0, 160))}` : ""}${v.method?.transcoded ? " · a smaller copy was analysed" : ""}</span></div>

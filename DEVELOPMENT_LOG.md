@@ -315,3 +315,13 @@ only for their own risk (d4c1c1d); verified live: AB-01A shows the open motor te
 16:38 had failed with invalid JSON because the answer was cut off at 8,000 completion tokens (reasoning included).
 Budget raised to 32,000 (47737f5). Live re-analysis 08:49: ok in 39 s, 9,712 completion tokens (4,077 reasoning),
 5 per-risk briefings, 0 invalid evidence citations - confirming the cause. Author confirmed the dashboard is correct.
+
+## 2026-10-29 20:45–21:40 — Survey Video Findings illustration (UI only, scoped)
+Changed only `web/app.js` (videoFindingsPanel + new vfScanSvg / vfTopRow / bindVfScan, one bind call, a data-vfz
+attribute on the floor headings of the findings list) and appended `.vs-*` rules to `web/styles.css` (no existing rule
+edited). Checked on a TEST snapshot with 3 TEST videos and a fake Meta/SAM: Overview HTML of every other section and
+computed styles of map, KPI, panel and card elements identical before/after at 1440 px and 390 px; Building Risk Map
+screenshot max pixel difference 1/255 (anti-aliasing); marker → floor list, number / row → finding drawer, tray chip,
+keyboard and narrow re-render verified; no page errors. pytest 187 passed, 2 skipped (private snapshot absent).
+Not yet viewed on the real data on the author's PC.
+
