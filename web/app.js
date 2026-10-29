@@ -578,10 +578,10 @@ async function openIssue(i) {
     const br = (BR?.items || []).find((x) => x.issue_id === i.issue_id);
     if (i.kind === "fire_risk") {
       const d = await alertDetail(i.alert_id);
-      $("#drawer-body").innerHTML = issueHead(i) + linkedEvidenceSection(i.alert_id, i.signal_id) + (br ? briefDl(br) : "") + riskDetailInline(d, i.signal_id);
+      $("#drawer-body").innerHTML = issueHead(i) + linkedEvidenceSection(i) + (br ? briefDl(br) : "") + riskDetailInline(d, i.signal_id);
     } else {
       const d = await api(`/api/equipment-alerts/${encodeURIComponent(i.alert_id)}`);
-      $("#drawer-body").innerHTML = issueHead(i) + linkedEvidenceSection(i.alert_id) + eqDetailInline(d);
+      $("#drawer-body").innerHTML = issueHead(i) + linkedEvidenceSection(i) + eqDetailInline(d);
     }
     bindEvidence(); bindEvidenceThumbs($("#drawer-body")); bindFindings($("#drawer-body"));
   } catch (e) { $("#drawer-body").innerHTML = `<div class="errbox">Could not load the details: ${esc(e.message)}</div>`; }
@@ -1321,18 +1321,41 @@ function evidenceFor(f) {
   const id = html.match(/id="(ev[a-z0-9]+)"/)[1]; EVLOC[id] = f.localization;
   return html;
 }
-/* Video findings linked (by the deterministic link rules) to one alert / risk */
-function linkedFindings(alertId, signalId) {
-  return (VF?.findings || []).filter((f) => f.links.some((l) => l.alert_id === alertId && (!signalId || !l.signal_id || l.signal_id === signalId)))
-    .sort((a, b) => (["located", "not_located", "error", "not_checked", "not_applicable"].indexOf(a.localization?.status || "not_checked")) - (["located", "not_located", "error", "not_checked", "not_applicable"].indexOf(b.localization?.status || "not_checked")));
+/* Which video finding may illustrate one issue at the top of its drawer. Only a STRONG, stated match is used:
+   (1) the video is linked to the same equipment in the asset register, or (2) the video / area name contains the
+   room or equipment named in the issue (e.g. "Wastewater ..." -> "Wastewater Treatment Room.mp4").
+   "Same floor" alone is too weak to show a picture: another room's frame would mislead. */
+const PATH_CATS = { motor_overheat: ["ignition_source", "combustibles_housekeeping"], water_electrical: ["water_moisture_electrical", "ignition_source"],
+  electrical_anomaly: ["ignition_source"], backup_power: ["ignition_source"], fire_water: ["extinguishers_first_aid", "suppression_smoke_control"],
+  smoke_control: ["suppression_smoke_control", "egress_access"], pa_system: ["detection_alarm", "egress_access"], detection_impairment: ["detection_alarm"] };
+const GENERIC_WORDS = new Set(["panel", "panels", "room", "rooms", "basement", "technical", "floor", "water", "electrical", "system", "systems", "alarm",
+  "fire", "equipment", "building", "level", "area", "main", "pump", "pumps", "motor", "motors", "meter", "meters", "blower", "cabinet"]);
+function placeWords(i) {
+  const txt = `${i.place || ""} ${i.kind === "equipment" ? i.title || "" : ""}`;
+  const long = (txt.toLowerCase().match(/[a-z]{5,}/g) || []).filter((w) => !GENERIC_WORDS.has(w));
+  const acr = (txt.match(/\b[A-Z]{3,5}\b/g) || []).filter((w) => !["AB", "B1"].includes(w));
+  return { long: [...new Set(long)], acr: [...new Set(acr)] };
 }
-function linkedEvidenceSection(alertId, signalId) {
-  const fs = linkedFindings(alertId, signalId);
-  if (!fs.length) return "";
-  const f = fs[0];
-  return `<h5>Video evidence · ${aiT(f.title)}</h5>${evidenceFor(f)}${fs.length > 1 ? `<p class="tiny muted">${fs.length - 1} more linked video finding(s): ${fs.slice(1, 4).map((x) => `<button class="linkbtn" data-finding="${esc(x.finding_id)}">${aiT(x.title)}</button>`).join(" · ")}</p>` : ""}`;
+function evidenceMatches(i) {
+  const W = placeWords(i), cats = PATH_CATS[i.risk_type] || [];
+  const out = [];
+  (VF?.findings || []).forEach((f) => {
+    const eq = f.links.find((l) => l.alert_id === i.alert_id && /same equipment|this equipment/i.test(l.reason));
+    const hay = `${f.filename || ""} ${VI_RE.test(f.area_label || "") ? "" : f.area_label || ""}`;
+    const word = W.long.find((w) => hay.toLowerCase().includes(w)) || W.acr.find((w) => new RegExp(`\\b${w}\\b`).test(hay));
+    if (!eq && !word) return;
+    out.push({ f, why: eq ? "Video linked to this equipment in the asset register" : `Video of the same room or equipment (name match: “${word}”)`,
+      rank: (eq ? 0 : 10) + (cats.includes(f.category) ? 0 : 3) + (["located", "not_located", "error", "not_checked", "not_applicable"].indexOf(f.localization?.status || "not_checked")) });
+  });
+  return out.sort((a, b) => a.rank - b.rank);
 }
-
+function linkedEvidenceSection(i) {
+  const m = evidenceMatches(i);
+  const floorOnly = (VF?.findings || []).filter((f) => f.links.some((l) => l.alert_id === i.alert_id) && !m.some((x) => x.f === f));
+  if (!m.length) return floorOnly.length ? `<p class="tiny muted">No survey video of this room or equipment yet. ${floorOnly.length} video finding(s) from other rooms on the same floor are listed under the floor, not shown here.</p>` : "";
+  const { f, why } = m[0];
+  return `<h5>Video evidence · ${aiT(f.title)}</h5><p class="tiny muted">${esc(why)}.</p>${evidenceFor(f)}${m.length > 1 ? `<p class="tiny muted">${m.length - 1} more video finding(s) from the same room or equipment: ${m.slice(1, 4).map((x) => `<button class="linkbtn" data-finding="${esc(x.f.finding_id)}">${aiT(x.f.title)}</button>`).join(" · ")}</p>` : ""}`;
+}
 /* Photos & Videos: frames that support AI video findings, with SAM 3.1 outlines where located */
 function samGallery(vf) {
   const fs = vf.findings.filter((f) => f.localization && (f.localization.frames || []).some((x) => x.frame_file));

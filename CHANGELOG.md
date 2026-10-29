@@ -34,6 +34,12 @@
   "Demo building", building-name text masked on the page (patterns built from the private site_config.json, accent-
   and case-insensitive, both word orders, branch prefix, initials form, optional `extra_names`), frames served only as
   blurred copies, original videos and on-request frames not served. Not called anonymized until reviewed.
+- Fix (author's report 2026-10-29 08:11): the evidence frame at the top of a risk / equipment drawer came from any
+  video finding linked by "same floor + matching group", so the wastewater blower risk showed a cable frame from the
+  MSB room. Now only a strong match is pictured: video linked to the same equipment in the asset register, or video /
+  area name containing the room or equipment named in the issue (e.g. "Wastewater" -> Wastewater Treatment Room.mp4);
+  the most relevant group and a located frame come first, and the reason is printed. Same-floor-only findings are
+  mentioned in one line without a picture.
 - Fix: the "Source not updated / unavailable" lines now use the English tab name (a Vietnamese tab name reached the
   page once the data was more than 2 days old).
 
