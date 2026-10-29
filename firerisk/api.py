@@ -37,6 +37,7 @@ from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
 from .drive_videos import DriveVideoSync, drive_video_items, video_settings
+from .demo import DEMO_BUILDING, demo_frame_path, demo_mode, name_patterns
 from .localize import FRAMES_DIR, Localizer, sam_settings
 from .sam import SamClient
 from .video import VIDEO_PROMPT_VERSION, INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
@@ -285,7 +286,9 @@ def status():
     active = [a for a in res.alerts if states[a.alert_id] not in ("resolved", "false_alarm")]
     serious = [a for a in active if _rank(a.severity) >= _rank("high")]
     abnormal_assets = _abnormal_assets(res)
-    return {"building": BUILDING_NAME, "version": __version__, "generated_at": res.generated_at.isoformat(),
+    demo = demo_mode()
+    return {"building": DEMO_BUILDING if demo else BUILDING_NAME, "version": __version__,
+            "demo_mode": demo, "name_patterns": name_patterns() if demo else [], "generated_at": res.generated_at.isoformat(),
             "run_id": state.run_id, "sources": _sources_en(res.source_status), "alert_counts": dict(counts),
             "active_alerts": len(active), "serious_alerts": len(serious),
             "abnormal_equipment": len(abnormal_assets),
@@ -1183,8 +1186,14 @@ def video_meta(video_id: str, body: VideoMetaIn):
     return v
 
 
+def _no_video_in_demo():
+    if demo_mode():
+        raise HTTPException(403, "Original survey videos are hidden in demo mode (they can show building names)")
+
+
 @app.get("/api/videos/{video_id}/file")
 def video_file(video_id: str):
+    _no_video_in_demo()
     v = _video(video_id)
     p = state.videos.path(video_id)
     if not p:
@@ -1194,6 +1203,7 @@ def video_file(video_id: str):
 
 @app.get("/api/videos/{video_id}/frame")
 def video_frame(video_id: str, t: float = 0):
+    _no_video_in_demo()
     p = state.videos.path(video_id)
     if not p:
         raise HTTPException(404, "video file missing")
@@ -1270,7 +1280,12 @@ def localization_frame(folder: str, name: str):
     """Private still frame extracted for localization (served only by this local dashboard)."""
     if not re.fullmatch(r"[0-9a-f]{16}", folder) or not re.fullmatch(r"t\d{6}\.jpg", name):
         raise HTTPException(404, "not found")
-    p = FRAMES_DIR / folder / name
+    if demo_mode():                     # demo: only the blurred copy, never the original
+        p = demo_frame_path(f"{folder}/{name}")
+        if not p:
+            raise HTTPException(404, "no blurred demo copy for this frame")
+    else:
+        p = FRAMES_DIR / folder / name
     if not p.exists():
         raise HTTPException(404, "frame not available")
     return FileResponse(p, media_type="image/jpeg")

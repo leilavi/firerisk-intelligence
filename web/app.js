@@ -85,9 +85,22 @@ function enforceEnglish(root) {
     console.warn(`[english-only] replaced ${hits.length} untranslated text node(s)`, hits.slice(0, 5).map((h) => (h.nodeValue || h.outerHTML || "").slice(0, 80)));
   }
 }
+/* Demo mode: building names are masked in every visible text and attribute (patterns come from the private site
+   configuration via /api/status, only when FIRERISK_DEMO_MODE=1). Links and IDs used by the app are not changed. */
+let NAME_RES = [];
+function maskNames(root) {
+  if (!NAME_RES.length || !root) return;
+  const hide = (v) => NAME_RES.reduce((t, re) => t.replace(re, "[name hidden]"), v);
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) { const v = hide(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+  $$("[title],[placeholder],[aria-label],[alt]", root).forEach((el) => ["title", "placeholder", "aria-label", "alt"].forEach((a) => {
+    const v = el.getAttribute(a); if (v) { const h = hide(v); if (h !== v) el.setAttribute(a, h); } }));
+  if (root.nodeType === 1 || root === document) $$("video", root).forEach((v) => {
+    const d = document.createElement("div"); d.className = "empty small"; d.textContent = "Video hidden in demo mode"; v.replaceWith(d); });
+}
 const enObserver = new MutationObserver((muts) => {
   const roots = new Set(muts.map((m) => { const el = m.target.nodeType === 1 ? m.target : m.target.parentElement; return el?.closest("#app,#drawer,header") || el; }).filter(Boolean));
-  roots.forEach(enforceEnglish);
+  roots.forEach((r) => { maskNames(r); enforceEnglish(r); });
 });
 
 /* ---------- labels ---------- */
@@ -111,7 +124,10 @@ function aiPill(st, withFallback) {
 let S = null;
 async function loadStatus() {
   S = await api("/api/status");
+  NAME_RES = (S.name_patterns || []).map((p) => new RegExp(p, "giu"));
   $("#building").textContent = roman(S.building);
+  if (S.demo_mode && !$("#demo-chip")) $("#freshness").insertAdjacentHTML("beforebegin", '<span class="hchip" id="demo-chip" title="Building names are hidden, frames are blurred copies and original videos are not shown"><i></i>Demo mode · names hidden</span>');
+  maskNames(document.body);
   const issues = S.sources_down.length + S.sources_stale.length;
   const sy = S.sync || {};
   const drive = !sy.configured ? '<span class="hchip"><i></i>Google Drive not connected</span>'
