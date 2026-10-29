@@ -286,3 +286,14 @@ is visible but not returned). "Not located" therefore keeps meaning "not outline
 **Known limitations:** some phrases chosen by Muse Spark are generic ("floor", "sign plate", "pipe"); frames of
 technical rooms show name plates (keep private; check before the demo); SAM is never asked about people, but people
 can appear in frames that are sent.
+
+## 2026-10-29 08:00 — Demo privacy: blur names
+**Author:** "ok làm mờ các tên gọi" (blur the names). **Checked first** (PC database copy): the building name appears
+in (1) frames of technical rooms (name plates), (2) two Muse Spark observations quoting the transformer plate,
+(3) record IDs and asset names using the branch prefix, (4) the dashboard header (from site_config.json).
+**Built:** see CHANGELOG. Patterns are generated from the private site_config.json, so no building name is in the
+repository; tests use invented TEST names. Original videos are not blurred: demo mode does not serve them at all.
+**Incident:** the first push (e379dc4) had the real building name in two code comments; replaced within minutes by
+a717f0e (force-push of that one commit). Main history no longer contains it; the old commit may stay reachable on
+GitHub by its hash for a while.
+**Also fixed:** Vietnamese tab name in the "Source not updated" line (found because the test data turned 2 days old).
