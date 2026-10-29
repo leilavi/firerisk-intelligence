@@ -1299,6 +1299,19 @@ def zones():
 if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
+    @app.middleware("http")
+    async def _no_stale_ui(request, call_next):
+        """The page and its script/style are always revalidated, so a restarted dashboard never runs an old UI
+        (a browser served app.js from its cache after an update on 2026-10-29)."""
+        resp = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.get("/")
     def index():
-        return FileResponse(WEB_DIR / "index.html")
+        from fastapi.responses import HTMLResponse
+        html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+        for name in ("app.js", "styles.css"):     # version = file time: a changed file is a new URL for the browser
+            html = html.replace(f"/static/{name}\"", f"/static/{name}?v={int((WEB_DIR / name).stat().st_mtime)}\"")
+        return HTMLResponse(html)
