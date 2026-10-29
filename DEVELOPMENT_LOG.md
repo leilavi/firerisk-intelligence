@@ -306,3 +306,12 @@ were blurred. SAM missed 7 items, added as manual regions and rebuilt (14 more r
 the generator room (unreadable but blurred), one dark door plate in the car park, and a handwritten tenant-store note
 on the fresh-air fan panel (4 frames). Side effect noted: "label" also blurs the START/STOP legends on control panels.
 Manifest marked `reviewed: true` (08:35). Original frames untouched; copies stay in data/private (git-ignored).
+
+## 2026-10-29 08:36–08:50 — Author: "dashboard still shows 28 Oct" and wrong frame for AB-01A
+Checked in the author's browser pane on the running dashboard. (1) The drawer of the AB-01A risk used an MSB video
+linked by equipment to ANOTHER risk of the same zone alert (water in electrical rooms); equipment links now count
+only for their own risk (d4c1c1d); verified live: AB-01A shows the open motor terminal box from the wastewater room.
+(2) The "28 Oct 15:06" on the briefing was the last successful Muse Spark analysis of ZONE-B1: 8 runs since 28 Oct
+16:38 had failed with invalid JSON because the answer was cut off at 8,000 completion tokens (reasoning included).
+Budget raised to 32,000 (47737f5). Live re-analysis 08:49: ok in 39 s, 9,712 completion tokens (4,077 reasoning),
+5 per-risk briefings, 0 invalid evidence citations - confirming the cause. Author confirmed the dashboard is correct.
