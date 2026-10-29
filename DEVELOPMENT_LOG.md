@@ -297,3 +297,12 @@ repository; tests use invented TEST names. Original videos are not blurred: demo
 a717f0e (force-push of that one commit). Main history no longer contains it; the old commit may stay reachable on
 GitHub by its hash for a while.
 **Also fixed:** Vietnamese tab name in the "Source not updated" line (found because the test data turned 2 days old).
+
+## 2026-10-29 08:12–08:35 — Demo frames: real run and review
+`run_mask_labels.bat` on the author's PC: 165 evidence frames, phrases "sign" and "label", 330 SAM requests
+(≈ $0.83 at the official price), 0 errors; 90 copies with SAM regions, 75 with nothing found. Claude reviewed every
+copy by eye from the PC: all room name plates and the transformer enclosure plate (which carries the building name)
+were blurred. SAM missed 7 items, added as manual regions and rebuilt (14 more requests): two operating log sheets in
+the generator room (unreadable but blurred), one dark door plate in the car park, and a handwritten tenant-store note
+on the fresh-air fan panel (4 frames). Side effect noted: "label" also blurs the START/STOP legends on control panels.
+Manifest marked `reviewed: true` (08:35). Original frames untouched; copies stay in data/private (git-ignored).
