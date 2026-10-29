@@ -43,6 +43,11 @@ class MuseBadResponse(MuseError):
     kind = "bad_response"
 
 
+class MuseTruncated(MuseBadResponse):
+    """The model stopped because the completion budget (which includes reasoning tokens) ran out."""
+    kind = "truncated"
+
+
 @dataclass
 class MuseConfig:
     api_key: str | None
@@ -137,8 +142,12 @@ class MuseClient:
         secs = time.monotonic() - start
         try:
             content = body["choices"][0]["message"]["content"]
+            finish = body["choices"][0].get("finish_reason")
         except (KeyError, IndexError, TypeError):
             raise MuseBadResponse(f"unexpected response shape: {str(body)[:300]}") from None
+        if finish == "length":
+            raise MuseTruncated(f"answer cut off at max_completion_tokens={max_completion_tokens} "
+                                f"(usage {body.get('usage')})")
         try:
             data = json.loads(content)
         except (json.JSONDecodeError, TypeError):

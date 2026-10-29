@@ -362,6 +362,9 @@ def fingerprint(alert, evidence_index, equipment_alerts=None) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:20]
 
 
+INVESTIGATION_MAX_TOKENS = 32000
+
+
 def investigate(alert, signals, evidence_index, now: datetime, client: MuseClient | None = None,
                 equipment_alerts=None) -> dict:
     client = client or MuseClient()
@@ -373,7 +376,9 @@ def investigate(alert, signals, evidence_index, now: datetime, client: MuseClien
               "model_requested": client.config.model, "request_hash": request_hash,
               "package_evidence_count": len(package["evidence"]), "redacted": True}
     try:
-        res = client.chat_json(SYSTEM_PROMPT, user, SCHEMA)
+        # The completion budget includes the model's reasoning tokens. 8,000 was too small for a zone with many
+        # risks (ZONE-B1, 9 per-risk briefings): the JSON was cut off 7 times on 28-29 Oct. 32,000 leaves room.
+        res = client.chat_json(SYSTEM_PROMPT, user, SCHEMA, max_completion_tokens=INVESTIGATION_MAX_TOKENS)
     except MuseError as err:
         record.update({"status": "failed", "error_kind": err.kind, "error": str(err)})
         return record

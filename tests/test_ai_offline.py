@@ -129,3 +129,18 @@ def test_not_configured():
     alert, sigs, idx = scenario()
     rec = investigate(alert, sigs, idx, NOW, MuseClient(MuseConfig(api_key=None)))
     assert rec["error_kind"] == "not_configured"
+
+
+def test_cut_off_answer_is_reported_as_truncated_and_budget_is_large():
+    from firerisk.ai import investigation as inv
+    alert, sigs, idx = scenario()
+    seen = {}
+
+    def _open(req, timeout=0):
+        body = json.loads(req.data)
+        seen["max"] = body["max_completion_tokens"]
+        return FakeResp(json.dumps({"model": "muse-spark-1.3", "usage": {"completion_tokens": 32000},
+                                    "choices": [{"finish_reason": "length", "message": {"content": '{"summary": "cut'}}]}).encode())
+    rec = investigate(alert, sigs, idx, NOW, MuseClient(MuseConfig(api_key="k"), opener=_open))
+    assert rec["status"] == "failed" and rec["error_kind"] == "truncated"
+    assert seen["max"] == inv.INVESTIGATION_MAX_TOKENS >= 32000
