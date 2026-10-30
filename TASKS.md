@@ -20,7 +20,8 @@
 - [ ] Author: `pip install -r requirements.txt` (adds OpenCV), then `run_mask_labels.bat` (local face pass, no SAM cost for frames already done) and check review.html for faces.
 - [x] Author: the 2 drawings and the O&M manual are in scope — referenced in the approved asset register (2026-10-30).
 - [x] Claude: `scripts/probe_drawings.py` + `run_drawing_probe.bat` — local probe of the drawings, counts only (2026-10-30).
-- [ ] Author: copy the 2 drawings (and the O&M manual) from Drive into `data\private\drawings\`, run `run_drawing_probe.bat`, paste the summary.
+- [x] Claude: `scripts/ocr_drawings.py` + `run_drawing_ocr.bat` — local OCR of the scanned drawings, private results + review page, counts-only summary (2026-10-30).
+- [ ] Author: copy the 2 drawings from Drive into `data\private\drawings\`, run `run_drawing_ocr.bat`, open `ocr\review.html`, paste the summary.
 - [ ] Claude + Author: local drawing extractor (detailed layer, private) + simplified zone summary (the only layer sent to AI / shown in demo mode), filled on the author's computer (floor/zone → fire-safety equipment types, feeding panel; no dimensions, cable routes or equipment details); app links electrical faults to the fire-safety equipment of the same zone.
 
 - [x] Claude: unified dark dashboard with AI Risk Briefing and floor markers (0.8).
