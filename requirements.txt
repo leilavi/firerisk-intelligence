@@ -5,3 +5,4 @@ openpyxl==3.1.5
 imageio-ffmpeg==0.6.0   # ffmpeg binary: smaller upload copy for videos over 1 GiB, still frames
 meta-sam-parser==0.0.6  # Meta's official SAM 3.1 output parser (boxes, confidence, base85 masks); SAM License
 opencv-python-headless==4.12.0.88  # local face detection for demo copies only (Haar cascades, runs offline); Apache-2.0
+pdfplumber==0.11.10  # reads the technical drawings locally (text layer and vector counts); MIT
