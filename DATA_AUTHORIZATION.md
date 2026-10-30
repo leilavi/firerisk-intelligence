@@ -19,6 +19,11 @@ Materials covered by the approval: operational records (meter readings, incident
 safety checklists, asset register), fire-safety survey videos, building layouts and floor plans, electrical cable
 routing drawings and fire protection system drawings.
 
+Technical documents added on 2026-10-30 (an exit and emergency lighting schematic, an electrical cable routing and MSB
+fire protection layout, and the building's operation and maintenance manual) are documents of the building's assets,
+referenced in the approved asset register, so they fall within the approval (author's confirmation, 2026-10-30).
+They are used under condition 2: the original files stay on the author's computer and are processed there only.
+
 ## Conditions and how they are met
 
 | # | Owner's condition (summary) | How the project meets it | Where to check |
@@ -33,5 +38,7 @@ routing drawings and fire protection system drawings.
 
 * Face detection is a classical local detector; it can miss small or turned faces. The blurred frames are therefore
   reviewed by eye before the demo, and the demo shows still frames only, never the original video.
-* Documents outside the list above (for example an operation and maintenance manual) are treated like drawings:
-  name only, never opened by the app or sent to an AI service, unless the owner extends the approval.
+* The operation and maintenance manual is a long PDF that also contains drawings. It is handled like a drawing: the
+  original file is never uploaded to an AI service. Only information extracted on the author's computer and checked
+  by the author (for example maintenance intervals per equipment type, without dimensions, cable routes or equipment
+  details) may be used further.

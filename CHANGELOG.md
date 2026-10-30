@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Docs: the 2 technical drawings and the O&M manual are in scope (referenced in the approved asset register); used
+  under condition 2 (local processing only).
 - Data owner's approval (2026-10-30) recorded without names in `DATA_AUTHORIZATION.md`; U-05 resolved; R-08 verified.
 - `firerisk/data_policy.py`: documents (PDF, CAD, office files) and anything named like a drawing, schematic, layout or
   manual are refused before every upload to the Meta Model API (video upload, image description, SAM), also when a
