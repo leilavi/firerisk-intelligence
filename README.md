@@ -169,6 +169,12 @@ The earlier work was a Claude skill: a Markdown instruction file with **no code*
 written during the building period (Oct 27 – Nov 4, 2026). [FEATURE_ORIGIN_MATRIX.md](FEATURE_ORIGIN_MATRIX.md)
 lists each component as Existing, Modified (ported rule) or New.
 
+## AI-Assisted Development
+This project was designed, directed, and validated by the author, with Claude serving as an AI development
+assistant. The author defined the architecture, established technical requirements, made implementation decisions,
+reviewed the generated code, and validated the system's functionality. All final design and development decisions
+remain under the author's responsibility.
+
 ## Development history (how to verify what is new)
 * **Building period:** Oct 27 – Nov 4, 2026. Every commit on `main` is dated inside it (first commit 2026-10-27 11:54
   UTC+7). `git log --reverse --date=iso` shows the full sequence; commit messages say what was built.

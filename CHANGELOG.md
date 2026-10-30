@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- README "AI-Assisted Development" section (text written by the author, 2026-10-30).
 - README "Development history" for judges (building period, baseline commit `b79223f` on branch `baseline`,
   `git diff baseline main`, disclosed history rewrites); wrong baseline references (`3219f8c`, tag
   `baseline-pre-hackathon`, which was never on GitHub) corrected in HACKATHON_COMPLIANCE, PROJECT_STATUS and
