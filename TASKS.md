@@ -18,7 +18,8 @@
 - [x] Author: U-05 confirmed — written approval of the data owner's CEO, 2026-10-30 (`DATA_AUTHORIZATION.md`).
 - [x] Claude: owner's conditions in code — documents/drawings refused before every AI upload, listed by name only in the Drive sync; faces blurred locally in demo copies (2026-10-30).
 - [ ] Author: `pip install -r requirements.txt` (adds OpenCV), then `run_mask_labels.bat` (local face pass, no SAM cost for frames already done) and check review.html for faces.
-- [ ] Author: decide whether the O&M manual is in scope (it was not in the approval list); until then it is treated like a drawing.
+- [x] Author: the 2 drawings and the O&M manual are in scope — referenced in the approved asset register (2026-10-30).
+- [ ] Claude + Author: simplified zone file from the drawings, filled on the author's computer (floor/zone → fire-safety equipment types, feeding panel; no dimensions, cable routes or equipment details); app links electrical faults to the fire-safety equipment of the same zone.
 
 - [x] Claude: unified dark dashboard with AI Risk Briefing and floor markers (0.8).
 - [x] Author: restart `run_dashboard` once; Claude then checks the v5 briefings and the record translations from the PC database.
