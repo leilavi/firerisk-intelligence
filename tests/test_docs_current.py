@@ -20,6 +20,8 @@ OUTDATED = [
     r"Muse Captain",
     r"\b108 tests\b",
     r"\b87 tests\b",
+    r"3219f8c`? tagged",
+    r"tag `baseline-pre-hackathon`",
 ]
 
 

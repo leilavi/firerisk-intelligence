@@ -5,7 +5,7 @@ database on 2026-10-30.
 
 | Area | Status | Evidence |
 |---|---|---|
-| Baseline recorded | Done | tag `baseline-pre-hackathon` |
+| Baseline recorded | Done | commit `b79223f`, branch `baseline` on GitHub |
 | Rules audit / compliance checklist | Done, maintained | `HACKATHON_COMPLIANCE.md` |
 | Meta API connection | **Live** (2026-10-27) | `evidence/api_check_20261027_133317.json` |
 | Real-data engine (ported + new rules, correlation, pipeline hardening) | Done | test suite |

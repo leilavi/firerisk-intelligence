@@ -169,6 +169,21 @@ The earlier work was a Claude skill: a Markdown instruction file with **no code*
 written during the building period (Oct 27 – Nov 4, 2026). [FEATURE_ORIGIN_MATRIX.md](FEATURE_ORIGIN_MATRIX.md)
 lists each component as Existing, Modified (ported rule) or New.
 
+## Development history (how to verify what is new)
+* **Building period:** Oct 27 – Nov 4, 2026. Every commit on `main` is dated inside it (first commit 2026-10-27 11:54
+  UTC+7). `git log --reverse --date=iso` shows the full sequence; commit messages say what was built.
+* **Baseline:** commit `b79223f` (branch [`baseline`](https://github.com/leilavi/firerisk-intelligence/tree/baseline)) contains only the redacted pre-existing
+  skill (`baseline/`, a Markdown instruction file, no code), `PRE_EXISTING_WORK.md` and `.gitignore`.
+  `git diff baseline main --stat` lists everything added during the Hackathon.
+* **Per-step record:** [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) (what was asked, built, checked live, and what failed,
+  with times), [CHANGELOG.md](CHANGELOG.md), [FEATURE_ORIGIN_MATRIX.md](FEATURE_ORIGIN_MATRIX.md) (Existing / Modified /
+  New per component), `evidence/` (sanitized results of real Meta API calls). Source files carry `ORIGIN: NEW` or
+  `ORIGIN: PORTED` markers.
+* **Disclosed history rewrites:** (1) 2026-10-27 14:34–14:40, before the first publication: personal data and the
+  building's name replaced in file contents with `git filter-repo`; author/committer dates and messages kept, hashes
+  changed. (2) 2026-10-29: commit `e379dc4`, which had the building's name in two code comments, was replaced on `main` minutes
+  after it was pushed. Both are described in DEVELOPMENT_LOG.md.
+
 ## Repository
 ```
 firerisk/            Python package (sources, rules, hazards, correlation, ai, store, api, video, video_findings,

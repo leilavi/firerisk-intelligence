@@ -11,7 +11,7 @@ add real photos/video when provided.
 
 | Component or Feature | Current Status | Origin | Recommended Action | Verification Evidence |
 |---|---|---|---|---|
-| Risk-alert skill v2.2 (SKILL.md) | Unchanged; still used inside Claude | Existing | Keep as baseline | `baseline/`, `PRE_EXISTING_WORK.md`, tag `baseline-pre-hackathon` |
+| Risk-alert skill v2.2 (SKILL.md) | Unchanged; still used inside Claude | Existing | Keep as baseline | `baseline/`, `PRE_EXISTING_WORK.md`, commit `b79223f` (branch `baseline`) |
 | Claude-only Drive/Gmail workflow, Vietnamese HTML report, e-mail alerts | Unchanged, not part of this app | Existing | Keep running separately | Skill §10–14 |
 | Real-data loaders with row-level source references (`firerisk/sources`) | Implemented | New | Add live Google Drive sync | `test_real_snapshot.py`: every meter row loaded and traceable; 1,254 evidence records from real snapshot |
 | Scope filter and test-record flags (`rules/scope.py`) | Implemented | Modified (skill §2.3) | — | `test_rules_ported.py` (2 tests) |
