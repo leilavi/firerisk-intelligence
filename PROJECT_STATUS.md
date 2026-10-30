@@ -1,22 +1,28 @@
-# Project status — 2026-10-28 23:10 (UTC+7)
+# Project status — 2026-10-30 16:30 (UTC+7)
+
+"Live" = run with the real Meta Model API / Google Drive on the author's PC. Numbers below were read from the PC
+database on 2026-10-30.
 
 | Area | Status | Evidence |
 |---|---|---|
 | Baseline recorded | Done | tag `baseline-pre-hackathon` |
 | Rules audit / compliance checklist | Done, maintained | `HACKATHON_COMPLIANCE.md` |
-| Meta API connection | Verified live | `evidence/api_check_20261027_133317.json` |
-| Real-data engine (ported + new rules, correlation, pipeline hardening, 14 fields) | Done | 87 tests passing |
-| Muse Spark investigation | **Live run verified** on author's PC (14:19) | `evidence/investigation_ZONE-B1_20261027_1419_summary.json` |
-| Dashboard v2 + backend | Built; browser-tested (desktop, tablet) in Claude's workspace; live check on PC pending | Playwright |
-| Two alert systems (equipment / fire risk) + Overview | Done; browser-tested on a copy of real data | `test_two_systems.py`, Playwright |
-| Automatic Muse Spark analysis | Built; mock-tested; live automatic run pending on PC | `ai/auto.py` |
-| Survey videos | Architecture built per official docs; **no real video, never sent to Meta** | `firerisk/video.py`, `test_video.py` |
-| Photos | Prepared; **no real photos yet** | `firerisk/media.py` |
-| SAM 3.1 visual localization | **Live verified**: API, client, real run over 76 items (35 located, 29 not located, 12 not applicable, 0 errors, 171 images ≈ $0.43); background localization of new analyses built and tested; dashboard overlay Playwright-tested 1440/390; live dashboard check on PC pending | `evidence/sam_*.json`, `tests/test_sam.py`, `tests/test_localize*.py` |
-| Automatic Drive sync | Built and mock-tested; author's one-time setup + first real run pending | `tests/test_drive_sync.py` |
-| Dashboard 0.8 (dark, unified building view, AI Risk Briefing, English-only) | Built; Playwright-checked on a copy of real data (0 Vietnamese strings visible); live check on PC pending | `test_unified_briefing.py` |
-| Muse Spark video review | **Live verified** on PC: 8 videos, 64 observations | PC database `video_analyses` 1–8 |
-| Public GitHub repo | **Published** | https://github.com/leilavi/firerisk-intelligence |
-| Demo video | Not started | — |
+| Meta API connection | **Live** (2026-10-27) | `evidence/api_check_20261027_133317.json` |
+| Real-data engine (ported + new rules, correlation, pipeline hardening) | Done | test suite |
+| Muse Spark investigation (`investigation-v6`, per-risk briefings) | **Live**, automatic in the background: 19 successful runs, latest 2026-10-29 22:10; 9 failed runs recorded (8 of them caused by the 8k completion budget, fixed 2026-10-29) | `evidence/investigation_ZONE-B1_20261027_1419_summary.json`, PC database `ai_investigations` |
+| Automatic Google Drive sync (sheets, Asset tab, videos) | **Live** since 2026-10-28 11:35, every 30 min while the dashboard runs | `DEVELOPMENT_LOG.md` |
+| Muse Spark survey-video review (`survey-video-v2`) | **Live**: all 14 videos reviewed, 34 findings with timestamps; uploaded copies deleted | PC database `video_analyses` |
+| SAM 3.1 visual localization | **Live**: 511 frame results (299 located, 212 not located, 0 errors); background run after each new review; overlays on the dashboard | `evidence/sam_*.json`, PC database `video_finding_locations` |
+| Demo mode (names hidden, blurred frames) | Done; 165 frames reviewed by eye, 7 regions added by hand | `run_dashboard_demo.bat`, `DEVELOPMENT_LOG.md` |
+| Dashboard (Overview, Risk Briefing, Building Risk Map, Survey Video Findings, detail pages) | Done; checked on the author's PC 2026-10-29 | Playwright tests, live check |
+| Single inspection photos (Muse Spark image input) | Implemented, **not run live** — no photos available | `firerisk/media.py` |
+| Sensor telemetry (temperature / smoke / gas) | **Not available** — no feed connected; stated in the dashboard and README | — |
+| Tool calling over the evidence store | **Not implemented** (investigation receives the full evidence package) | — |
+| Tests | 191 collected: 189 pass, 2 skipped (private snapshot absent) — 2026-10-30 | `python -m pytest -q` |
+| Public GitHub repo | Published; README updated 2026-10-30 | https://github.com/leilavi/firerisk-intelligence |
+| Asset register floors | 9 of 14 videos have no floor in the register (7 rows with an empty floor, 2 videos without a row) | author to fill |
+| U-05 data / video rights confirmation | **Pending** (author) | `HACKATHON_COMPLIANCE.md` |
+| Demo video (≤ 3 min) | Not started | — |
 
 Deadline: Wed Nov 4, 9:00 PM ET = **Thu Nov 5, 09:00 UTC+7**.
+Documentation rule (author, 2026-10-30): every change updates this file, README.md and CHANGELOG.md in the same commit.

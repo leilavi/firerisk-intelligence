@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Documents brought up to date with the live state (2026-10-30, after an outside review read the old README):
+  README Meta AI usage table (video review and SAM 3.1 live, single photos not run, numbers from the PC database),
+  data limits (one building, no sensor telemetry, floors not recorded), SAM / demo-mode sections, dashboard, tests
+  (191), dependencies; PROJECT_STATUS rewritten (no more contradictory video rows); ARCHITECTURE, TASKS and
+  HACKATHON_COMPLIANCE corrected (tool calling marked not implemented). New `tests/test_docs_current.py` fails when
+  the README test count is wrong or an outdated status sentence remains; `CLAUDE.md` records the rule that every
+  change updates the documents in the same commit.
 - Survey Video Findings (Overview): survey-scan illustration added inside this section only (author's request
   2026-10-29). Isometric floor slabs drawn from the building's floor list and `/api/video-findings`: floors covered by
   a reviewed video (cyan schematic camera route), amber count of findings that still need verification per floor

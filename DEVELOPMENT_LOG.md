@@ -325,3 +325,12 @@ screenshot max pixel difference 1/255 (anti-aliasing); marker → floor list, nu
 keyboard and narrow re-render verified; no page errors. pytest 187 passed, 2 skipped (private snapshot absent).
 Not yet viewed on the real data on the author's PC.
 
+## 2026-10-30 16:00–16:40 — Documents updated to the live state
+Author: an outside reviewer judged the project from the README (video "mock only", SAM "not integrated", 108 tests).
+Checked against the PC database (copy, read only): 14/14 videos reviewed live with survey-video-v2 (34 findings),
+511 SAM 3.1 frame results (299 located, 212 not located, 0 errors), 19 successful / 9 failed live investigations;
+`pytest --collect-only`: 189 tests before this change. README, PROJECT_STATUS, ARCHITECTURE, TASKS,
+HACKATHON_COMPLIANCE updated; true limits kept (no single photos run, no sensor telemetry, tool calling not
+implemented, 9 videos without a floor). Author's rule recorded in CLAUDE.md and TASKS.md; guarded by
+tests/test_docs_current.py. Suite: 189 passed, 2 skipped (191 collected).
+
