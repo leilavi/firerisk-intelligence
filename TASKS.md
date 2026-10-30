@@ -26,7 +26,7 @@
 
 - [x] Claude: agentic investigation with Muse Spark tool calling + fallback + dashboard trace (2026-10-30, offline-tested).
 - [x] Author: run `run_tool_calling_check.bat` (PASS 2026-10-30 18:57).
-- [ ] Author: restart `run_dashboard` so the alerts are re-analysed with tool calling; Claude checks the result from the PC database.
+- [x] Author: restart `run_dashboard` (19:05; 2 agentic investigations ok at 19:06) so the alerts are re-analysed with tool calling; Claude checks the result from the PC database.
 
 ## Rule (author, 2026-10-30)
 Every change or new feature updates README.md, PROJECT_STATUS.md, CHANGELOG.md and, when affected, ARCHITECTURE.md,

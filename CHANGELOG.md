@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Agentic investigation live on the building data (2026-10-30 19:06): ZONE-B1 and ZONE-Building analysed
+  automatically with tool calling, 0 invalid citations, no fallback; sanitized summary
+  `evidence/agentic_investigation_live_20261030.json`. Trace heading says "no records beyond the rule package found"
+  when that is the case.
 - Tool calling verified live (2026-10-30 18:57, synthetic records, `evidence/tool_calling_check_20261030_185751.json`):
   2 parallel tool calls in round 1, plain answer in round 2, strict-schema final answer; tools + response_format
   accepted together. The intent sentence Muse Spark writes next to its tool calls is now kept in the trace and shown
