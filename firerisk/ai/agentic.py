@@ -260,6 +260,9 @@ def investigate_agentic(alert, signals, evidence_index, now: datetime, client: M
                                   "seconds": t.seconds})
                 break
             messages.append(t.message)                     # assistant message with tool_calls, unchanged
+            if (t.message.get("content") or "").strip():  # live 2026-10-30: Muse Spark states its intent with the calls
+                trace.append({"turn": turn, "type": "intent", "text": red.text(inv._clip(t.message["content"], 400)),
+                              "seconds": t.seconds})
             for tc in t.tool_calls:
                 fn = (tc.get("function") or {})
                 calls += 1

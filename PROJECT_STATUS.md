@@ -1,4 +1,4 @@
-# Project status — 2026-10-30 16:30 (UTC+7)
+# Project status — 2026-10-30 19:10 (UTC+7)
 
 "Live" = run with the real Meta Model API / Google Drive on the author's PC. Numbers below were read from the PC
 database on 2026-10-30.
@@ -17,7 +17,7 @@ database on 2026-10-30.
 | Dashboard (Overview, Risk Briefing, Building Risk Map, Survey Video Findings, detail pages) | Done; checked on the author's PC 2026-10-29 | Playwright tests, live check |
 | Single inspection photos (Muse Spark image input) | Implemented, **not run live** — no photos available | `firerisk/media.py` |
 | Sensor telemetry (temperature / smoke / gas) | **Not available** — no feed connected; stated in the dashboard and README | — |
-| Agentic investigation (Muse Spark tool calling, 6 read-only tools, fallback to one call) | **Implemented 2026-10-30**, 6 offline tests (fake transport); **live check pending** on the PC | `firerisk/ai/agentic.py`, `tests/test_agentic.py`, `scripts/check_tool_calling.py` |
+| Agentic investigation (Muse Spark tool calling, 6 read-only tools, fallback to one call) | **Tool protocol live-verified** 2026-10-30 18:57 (synthetic records, PASS); 6 offline tests; **first live investigation on building data pending** (dashboard restart) | `evidence/tool_calling_check_20261030_185751.json`, `firerisk/ai/agentic.py`, `tests/test_agentic.py` |
 | Tests | 197 collected: 195 pass, 2 skipped (private snapshot absent) — 2026-10-30 | `python -m pytest -q` |
 | Public GitHub repo | Published; README updated 2026-10-30 | https://github.com/leilavi/firerisk-intelligence |
 | Asset register floors | 9 of 14 videos have no floor in the register (7 rows with an empty floor, 2 videos without a row) | author to fill |

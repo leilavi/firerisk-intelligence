@@ -355,3 +355,11 @@ changed to count analyses (first request of each). Tests: 195 passed, 2 skipped 
 `test_video_analysis_uses_documented_api_and_becomes_context_only` that did not repeat in 2 later full runs (timing).
 Not verified live yet.
 
+## 2026-10-30 18:57–19:15 — Tool calling check on the author's PC: PASS
+`run_tool_calling_check.bat` (synthetic records only): round 1 `finish_reason: tool_calls` with two parallel calls
+(`get_asset_history`, `get_meter_readings`) and a content sentence stating the intent; round 2 plain answer citing
+both results (repeat fault + 180 % consumption the day before); final strict-schema answer valid (T1, T2, T3);
+tools + `response_format` in one request accepted. Usage ≈ 4.1k tokens in total. Change from what was seen: the
+intent sentence is now stored in the trace (`type: intent`) and shown. The dashboard had not been restarted since
+the agentic code was copied (log last written 15:34), so no live investigation on building data yet.
+

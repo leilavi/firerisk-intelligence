@@ -37,7 +37,8 @@ class Scripted:
         if "tools" in body:
             if self.turns:
                 calls = self.turns.pop(0)
-                msg = {"role": "assistant", "content": None, "reasoning_content": "TEST kept as returned",
+                msg = {"role": "assistant", "content": "TEST: checking the switchboard history." if len(self.bodies) == 1 else None,
+                       "reasoning_content": "TEST kept as returned",
                        "tool_calls": [{"id": f"call_{len(self.bodies)}_{n}", "type": "function",
                                        "function": {"name": name, "arguments": args}} for n, (name, args) in enumerate(calls)]}
                 return self._resp(body, msg, "tool_calls")
@@ -76,6 +77,7 @@ def test_muse_spark_looks_up_records_and_may_cite_them_and_ids_stay_private():
     tr = rec["agent"]["trace"]
     assert [t["tool"] for t in tr if t["type"] == "tool"] == ["get_asset_history", "list_assets", "search_records"]
     assert tr[-1]["type"] == "note" and rec["agent"]["stop"] == "model_finished"
+    assert tr[0] == {"turn": 1, "type": "intent", "text": "TEST: checking the switchboard history.", "seconds": tr[0]["seconds"]}
     assert rec["agent"]["records_looked_up"] == 1                    # a:old became E03 through a tool
     assert rec["agent"]["cited_beyond_package"] == ["a:old"]           # cited, mapped back to the real record
     assert "E99" in rec["validation"]["invalid_evidence_ids"]          # never shown -> dropped and reported
