@@ -1,6 +1,6 @@
 """AI video findings and survey coverage. ORIGIN: NEW (0.9).
 
-A video finding is something Muse Captain (Meta Muse Spark, survey-video prompt v2) saw in a survey video and
+A video finding is something Meta Muse Spark (survey-video prompt v2) saw in a survey video and
 recommends checking on site. It is NOT a rule-based alert:
   * it has no official risk level (the rule engine sets levels; there is no rule for video findings yet);
   * it starts as "New finding" and only a person can move it to Needs verification / Confirmed / Resolved;

@@ -58,8 +58,9 @@
 | Vehicle counts workbook | Automatic Drive sync (after setup) | Yes (activity baseline) |
 | Electricity / water bills, parking revenue | Available in Drive, not loaded | No (not fire-relevant for this phase) |
 | Old skill Alert_Log | Available in Drive | No (the app keeps its own log) |
-| Photos referenced by logs, survey video | Not accessible | No — media inventory only |
-| Live sync without Claude | Built (`sources/drive_sync.py`); tested against a local mock of the web app; **first real run pending on the author's PC** | — |
+| Survey videos (Drive folder + `Asset` tab `Reference_File`) | Automatic Drive sync, read-only token | Yes — 14 videos reviewed live by Muse Spark, findings localized by SAM 3.1 |
+| Photos referenced by logs | Not accessible | No — media inventory only |
+| Live sync without Claude | Built (`sources/drive_sync.py`); first real run on the author's PC 2026-10-28 11:35, then every 30 min while the dashboard runs | — |
 
 ## Failure behaviour
 * A missing/corrupt workbook or tab → `source_unavailable` in Data sources and in the alert's "not verified" list;
@@ -68,8 +69,10 @@
 * Drive sync fails (no internet, wrong token, web page instead of data) → nothing changes, failure listed in Data
   sources. One file invalid or missing → that file keeps its previous version and `sync_error` is shown; the other
   file is still updated.
-* Automatic AI analysis fails or times out → status "Phân tích AI thất bại", the rule-based explanation is shown
-  ("Đang sử dụng giải thích theo quy tắc"); one automatic retry after 15 minutes, then only on request.
+* Automatic AI analysis fails or times out → status "Meta Muse Spark Analysis Failed", the rule-based explanation is
+  shown ("Rule-Based Explanation"); one automatic retry after 15 minutes, then only on request.
+* SAM 3.1 unavailable → localization stays pending or "Localization unavailable"; Muse Spark findings, alerts and
+  levels are unchanged.
 * No survey video → every function works; the alert shows "No survey video for this zone yet".
 * Newest record older than the source's expected cadence → `stale_source`.
 
@@ -93,17 +96,18 @@ time, meter label, ongoing), what the context records SAY (kind, equipment, stat
 tomorrow's passing checklist is not a change), linked equipment alerts and their levels, and the survey-video
 analyses attached to the zone. Same fingerprint → no new automatic call.
 
-## Survey video integration (prepared 2026-10-27; no real video yet)
+## Survey video integration (built 2026-10-27; live since 2026-10-28)
 | Step | How | Verified |
 |---|---|---|
 | Upload | Browser sends the file as the request body (`POST /api/videos?filename&zone&floor&area&room&recorded_at&duration_s`); stored in `data/private/media/videos/` (git-ignored); 1 GiB limit (Meta Files API) | TEST files |
 | Metadata | Zone must be a known zone; recording time is entered by a person or "unknown" (file dates are not trusted); duration read by the browser | TEST |
-| Analysis (on request only) | `POST /v1/files` (purpose `user_data`, expires after 3600 s) → `POST /v1/responses` with `input_video` + `text.format` json_schema, `store: false` → `DELETE /v1/files/{id}` | Request shape against the official docs and a fake transport; **never run against the real API** |
+| Analysis (automatic after download, daily limit; or on request) | `POST /v1/files` (purpose `user_data`, expires after 3600 s) → `POST /v1/responses` with `input_video` + `text.format` json_schema, `store: false` → `DELETE /v1/files/{id}` | **Live** on the author's PC since 2026-10-28 (all 14 videos; prompt `survey-video-v2` since 2026-10-28 16:29); fake transport in tests |
 | Validation | Observations need a time range inside the video and a known category; others are set aside with the reason | TEST |
 | Review | Player jumps to each observation (HTTP Range); still frame via ffmpeg when installed | TEST pattern |
 | Use in alerts | Zone match → "Survey videos of this zone" in the fire-risk alert (section 9) and `survey_video_observations` in the Muse package, with recording date and "recording-time only" | TEST |
-Open questions for the first real run: maximum duration, frame-sampling behaviour (`fps` field exists), accuracy of
-the model's timestamps, and whether `text.format` strict schema is accepted on `/v1/responses`.
+Answered by the live runs: the structured `text.format` schema is accepted on `/v1/responses`; videos over 1 GiB are
+sent as a smaller copy; finding times are validated against the video length and the SAM frames are sampled inside
+the finding's time range because timestamps are approximate.
 
 ## Building Risk Map (0.7)
 `GET /api/building` builds one entry per floor (Roof, F4, F3, F2, F1, B1 — the floors used by the asset register

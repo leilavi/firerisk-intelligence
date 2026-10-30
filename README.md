@@ -36,20 +36,31 @@ Real operational sources (Google Sheets / Excel snapshot)
 The dashboard still works when the AI service is unavailable: the rule-based alert is always produced.
 
 ## Meta AI usage
+Status as of 2026-10-30. "Live" means run with the real Meta Model API on the author's PC; evidence in `evidence/`
+(sanitized, no keys) and in the private database on that PC.
+
 | Model | Use | Status |
 |---|---|---|
-| `muse-spark-1.3` (Chat Completions, `response_format: json_schema`, `strict: true`) | Root-cause investigation of a zone alert: observed facts, hypotheses with supporting and contradicting evidence, escalation pathway, missing information, recommended actions, AI priority | Connection and structured output **verified with a real call** (`evidence/api_check_20261027_133317.json`). First live investigation run 2026-10-27 14:19 on the author's PC; automatic background analysis (0.4.0) tested with a fake transport |
-| `muse-spark-1.3` image input (`image_url` data URL) | Describe fire-safety-relevant observations in inspection photos | Implemented (`firerisk/media.py`), **not yet run** — no photos available yet |
-| `muse-spark-1.3` video input (Responses API `input_video`, Files API) | Review survey videos for visible fire-safety conditions with approximate times | Implemented from the official docs, tested with a fake transport, **not yet run** — no video yet |
-| `sam-3.1` | Segment objects in photos/video frames | Available to the key; **not implemented** until its output format is verified |
+| `muse-spark-1.3` (Chat Completions, `response_format: json_schema`, `strict: true`) | Root-cause investigation of a zone alert (prompt `investigation-v6`): observed facts, hypotheses with supporting and contradicting evidence, escalation pathway, missing information, recommended actions, one briefing per risk | **Live.** First real call 2026-10-27 (`evidence/api_check_20261027_133317.json`), first live investigation 14:19 (`evidence/investigation_ZONE-B1_20261027_1419_summary.json`). Runs automatically in the background; 19 successful live investigations so far, latest 2026-10-29 22:10 |
+| `muse-spark-1.3` video input (Files API + Responses API `input_video`) | Survey-video fire-safety review (prompt `survey-video-v2`): findings with timestamps, areas and fire equipment seen, coverage, a `segment_phrase` per item for SAM | **Live.** All 14 survey videos from Google Drive reviewed (latest reviews 2026-10-28 16:29 – 2026-10-29 09:57), 34 findings; each uploaded copy deleted after the call |
+| `muse-spark-1.3` text | English translation of Vietnamese source records (marked as translation) | Live |
+| `sam-3.1` (Responses API, `meta-sam-parser`) | Outlines the object a Muse Spark finding refers to in still frames of the video (box + mask, confidence only when SAM returns one); also finds signs/labels to blur for demo copies | **Live.** 511 frame results stored (299 located, 212 not located, 0 errors), runs in the background after every new video review; live checks in `evidence/sam_check_*.json`, `evidence/sam_client_check_*.json`, `evidence/sam_localization_run_20261028.json` |
+| `muse-spark-1.3` image input (`image_url`) | Describe fire-safety observations in single inspection photos | Implemented (`firerisk/media.py`), **not run live**: no inspection photos are available yet. Visual evidence currently comes from the survey videos |
+
+Model output never sets or changes a rule level. SAM shows where an object appears; it does not confirm a safety
+conclusion. A video finding stays a finding (no risk level) until a person verifies it.
 
 ## Data
 * Real data of one building ([Building]). It is **private** and **not in this repository**. The app reads a
   snapshot from `data/private/snapshot/` (git-ignored) described by `manifest.json`.
 * Sources used: `Operations Data` (tabs: daily meter readings and checklists, asset repairs, incident and
   works log, generator log) and the vehicle-count workbook.
-* Known limits: daily checklists keep only the latest result; no temperature/smoke/gas telemetry; photos
-  referenced by the logs are not yet accessible; generator-connected loads are not recorded.
+* Survey videos: 14 videos of the building recorded 2026-10-27 to 2026-10-28, read from the author's Google Drive.
+* Known limits: one building only; daily checklists keep only the latest result; **no temperature, smoke or gas
+  sensor telemetry** (no such feed is connected, so the risk assessment uses records, rules and video, and the
+  dashboard says that "no active alert" does not mean safe); photos referenced by the logs are not yet accessible;
+  generator-connected loads are not recorded; 9 of the 14 videos are linked to a room in the asset register that has
+  no floor recorded, so they are not placed on a floor (the floor is never guessed).
 
 ## Install and run (Windows)
 1. Install **Python 3.13** (Microsoft Store, publisher *Python Software Foundation*).
@@ -95,8 +106,8 @@ that measures equipment in the alert). Levels of one system are never changed by
 Alerts appear immediately; Muse Spark runs afterwards in a background worker. It runs when a fire-risk alert is new,
 when its evidence fingerprint changes (records added/removed, status or level changed, linked equipment alerts or
 survey-video observations changed), or when the user presses Re-analyse. Reloading the page never calls the AI.
-Statuses (Vietnamese, as requested by the author): *Chưa phân tích AI · Đang phân tích bằng Muse Spark · Đã hoàn tất
-phân tích AI · Phân tích AI thất bại · Đang sử dụng giải thích theo quy tắc*. Every cited evidence ID is checked;
+Statuses shown: *Not Analysed by Meta Muse Spark · Meta Muse Spark Analysis Running · Meta Muse Spark Analysis
+Complete · Meta Muse Spark Analysis Failed · Rule-Based Explanation*. Every cited evidence ID is checked;
 unknown IDs are removed and reported. If the AI fails, the alert, its level and the rule-based explanation stay.
 
 ## Survey videos (read from Google Drive)
@@ -109,27 +120,48 @@ read-only token (a token that could modify Drive is refused), registered with zo
 the zone's fire-risk alerts: a video shows the situation when it was recorded, never the current state.
 Settings: `FIRERISK_DRIVE_VIDEOS` (`1`), `FIRERISK_AUTO_VIDEO_AI` (`1`), `FIRERISK_VIDEO_AI_DAILY_LIMIT` (`20`).
 
-## Dashboard
-The AI analyst is shown in the dashboard as **Muse Captain**; it is Meta Muse Spark (`muse-spark-1.3`) called through the Meta Model API.
+**Video findings.** The review returns findings (what is visible, why it matters, consequence if confirmed, check to
+do, certainty) with a time range that is validated against the video length. Findings have no risk level; a finding
+is linked to an existing alert only for a stated reason (same equipment in the asset register, or same floor and a
+matching fire-safety group). A person records the on-site result (Needs verification / Confirmed / Resolved / Not
+confirmed).
 
-* **Overview** — **AI Risk Briefing** (highest-priority issue: location, consequence, first action, analysis status);
-  building summary; **Building Risk Map** with a marker per floor (fire-safety risks and equipment alerts together,
-  each keeping its own classification); context panel; system health, recent events, data sources.
+## Visual localization with SAM 3.1
+`Muse Spark finding → segment_phrase → 1–3 still frames inside the finding's time range → SAM 3.1 → stored box/mask →
+dashboard overlay`. Results are stored per frame (no duplicate requests, resumable), limited to 300 images per day,
+and run in the background after each new video review; `run_locate_findings.bat` (with a dry-run cost estimate)
+processes older items. "Not located" is a valid answer, not an error. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Demo mode (names hidden)
+`run_dashboard_demo.bat` starts the same dashboard with building names replaced by "[name hidden]", shows only
+blurred copies of video frames (signs and labels found by SAM 3.1 plus regions added by hand after a frame-by-frame
+review) and never plays the original videos. Original frames are not modified.
+
+## Dashboard
+* **Overview** — **Meta Muse Spark – Risk Briefing** (highest-priority issue: location, consequence, first action,
+  analysis status; titled "rule-based" until a Muse Spark result exists); building summary; **Building Risk Map** with
+  a marker per floor (fire-safety risks and equipment alerts together, each keeping its own classification); context
+  panel; **Survey Video Findings** with a survey-coverage drawing of the floors (which floors a reviewed video covers,
+  findings to verify per floor, top findings with their real SAM frame); system health, recent events, data sources.
 * **Fire Safety Risks** — one card per risk with filters; detail in six sections (What Was Detected, Why This Matters,
-  Supporting Evidence, AI Analysis, Recommended Actions, History).
-* **Equipment & Systems**, **Event History**, **Data & Evidence** (sources & sync, photos & videos).
+  Supporting Evidence, Meta Muse Spark analysis, Recommended Actions, History), with a matching video frame only when
+  the video is of the same room or equipment.
+* **Equipment & Systems**, **Event History**, **Data & Evidence** (sources & sync, photos & videos with SAM overlays).
 * All text is English. Vietnamese source records keep their original text; English display text comes from a glossary
   or a Muse Spark translation (marked), and untranslated text is marked "translation pending".
-Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **AI** (Muse Spark; *AI · video* for video
-observations) or **TEST**.
+Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUSE SPARK**, **META SAM 3.1** or **TEST**.
+The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — 108 tests: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness
-on **test fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals), API, offline AI tests
-(fake HTTP transport, clearly not the real API), Google Drive sync against a local mock of the Apps Script web app
-(redirect, wrong token, web page instead of data, invalid or missing file), the two alert systems and automatic AI
-analysis with a fake Muse transport (no duplicate calls, failures, fallback, level unchanged), survey videos with TEST
-files and a fake Meta API, and integration tests on the real snapshot (skipped when absent).
+`python -m pytest -q` — **191 tests (189 pass, 2 skipped** when the private real-data snapshot is absent; last run
+2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
+fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
+with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
+app; the two alert systems and automatic analysis (no duplicate calls, failures, fallback, level unchanged); survey
+videos and video findings with TEST files and a fake Meta API; the SAM 3.1 client and parser, localization and its
+background run (fake SAM); demo-mode masking; and browser checks of the rendered pages with Playwright (English-only
+text, briefing, map, drawers). Live runs against the real Meta API are recorded in `evidence/` and
+`DEVELOPMENT_LOG.md`, not in the test suite.
 
 ## What is new in the Hackathon
 The earlier work was a Claude skill: a Markdown instruction file with **no code**. It is kept, redacted, in
@@ -139,10 +171,11 @@ lists each component as Existing, Modified (ported rule) or New.
 
 ## Repository
 ```
-firerisk/            Python package (sources, rules, hazards, correlation, ai, store, api, media)
+firerisk/            Python package (sources, rules, hazards, correlation, ai, store, api, video, video_findings,
+                     sam, localize, demo, media)
 web/                 dashboard (index.html, app.js, styles.css)
 tests/               pytest suite + offline mock of the Meta API
-scripts/             Meta API connection check, Google Drive sync setup
+scripts/             Meta API and SAM checks, Google Drive sync setup, SAM backfill, demo-copy blurring
 apps_script/         Google Apps Script export web app (template, no IDs or token)
 evidence/            sanitized evidence of real API calls (no keys)
 baseline/            redacted copy of the pre-existing skill
@@ -153,8 +186,9 @@ baseline/            redacted copy of the pre-existing skill
 `MODEL_API_KEY` (Meta Model API key) · `META_API_BASE_URL`, `META_REASONING_MODEL` (optional) ·
 `FIRERISK_AUTO_AI` (`1` default, `0` = only on request) · `FIRERISK_AI_MIN_LEVEL` (default `watch`) ·
 `FIRERISK_AI_DAILY_LIMIT` (default `20`) · `FIRERISK_DRIVE_EXPORT_URL`, `FIRERISK_DRIVE_TOKEN`, `FIRERISK_SYNC_MINUTES` (Drive sync).
-Optional for video still frames: `ffmpeg` on the PATH.
+Still frames use the ffmpeg binary installed with `imageio-ffmpeg`. `FIRERISK_DEMO_MODE=1` = demo mode (set by `run_dashboard_demo.bat`).
 
 ## License
 To be decided by the author before publication (see HACKATHON_COMPLIANCE.md, U-04). Dependencies:
-FastAPI (MIT), Uvicorn (BSD-3), openpyxl (MIT), pytest (MIT).
+FastAPI (MIT), Uvicorn (BSD-3), openpyxl (MIT), imageio-ffmpeg (BSD-2; bundles ffmpeg, LGPL/GPL), meta-sam-parser
+(SAM License), pytest (MIT), Playwright (Apache-2.0, tests only).
