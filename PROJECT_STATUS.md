@@ -1,4 +1,4 @@
-# Project status — 2026-10-30 19:25 (UTC+7)
+# Project status — 2026-10-30 20:00 (UTC+7)
 
 "Live" = run with the real Meta Model API / Google Drive on the author's PC. Numbers below were read from the PC
 database on 2026-10-30.
@@ -6,7 +6,7 @@ database on 2026-10-30.
 | Area | Status | Evidence |
 |---|---|---|
 | Baseline recorded | Done | commit `b79223f`, branch `baseline` on GitHub |
-| Rules audit / compliance checklist | Done, maintained | `HACKATHON_COMPLIANCE.md` |
+| Rules audit / compliance checklist | Done, maintained; checklist and feature-origin matrix re-checked against the PC database 2026-10-30 20:00 | `HACKATHON_COMPLIANCE.md`, `FEATURE_ORIGIN_MATRIX.md` |
 | Meta API connection | **Live** (2026-10-27) | `evidence/api_check_20261027_133317.json` |
 | Real-data engine (ported + new rules, correlation, pipeline hardening) | Done | test suite |
 | Muse Spark investigation (`investigation-v7`, per-risk briefings) | **Live**, automatic in the background: 21 successful runs, latest 2026-10-30 19:06 (agentic); 9 failed runs recorded (8 of them caused by the 8k completion budget, fixed 2026-10-29) | `evidence/investigation_ZONE-B1_20261027_1419_summary.json`, PC database `ai_investigations` |

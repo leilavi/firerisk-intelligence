@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_DOCS = ["README.md", "PROJECT_STATUS.md", "ARCHITECTURE.md", "HACKATHON_COMPLIANCE.md"]
+PUBLIC_DOCS = ["README.md", "PROJECT_STATUS.md", "ARCHITECTURE.md", "HACKATHON_COMPLIANCE.md", "FEATURE_ORIGIN_MATRIX.md"]
 
 # Sentences that were true once and are now false. Add to this list when a status changes.
 OUTDATED = [
@@ -23,6 +23,10 @@ OUTDATED = [
     r"3219f8c`? tagged",
     r"tag `baseline-pre-hackathon`",
     r"Tool calling over the evidence store[^\n]*not implemented",
+    r"SAM 3\.1 segmentation \| \*\*Not implemented",
+    r"not yet run live",
+    r"mock-tested only",
+    r"19 successful investigations",
 ]
 
 
