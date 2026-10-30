@@ -363,3 +363,13 @@ tools + `response_format` in one request accepted. Usage ≈ 4.1k tokens in tota
 intent sentence is now stored in the trace (`type: intent`) and shown. The dashboard had not been restarted since
 the agentic code was copied (log last written 15:34), so no live investigation on building data yet.
 
+## 2026-10-30 19:05–19:25 — First live agentic investigations (building data)
+Dashboard restarted 19:05; prompt v7 changed the fingerprint, so both fire-risk alerts were re-analysed automatically.
+Read from a copy of the PC database: id 29 ZONE-B1 (agentic, ok, 46.6 s, 52,656 tokens, 2 rounds, 3 lookups:
+history of blower P-BG.TTC167, history of MSB room P-BG.TTC046, search "thấm nước" in B1; intent: test whether the
+faults are still active; conclusion: no records beyond the package); id 30 ZONE-Building (agentic, ok, 23.2 s, 15,379
+tokens, 3 searches for PA / switch history and checklists; only the one resolved incident exists). Validation clean
+for both, no fallback, AI priority high / watch as before. Observation: on this data set the rule package was already
+complete; tool calling showed that Muse Spark actively tested for repeat faults and contradicting checks instead of
+assuming. Sanitized summary saved to evidence/.
+

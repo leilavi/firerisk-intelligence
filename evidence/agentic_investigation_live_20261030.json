@@ -1,0 +1,187 @@
+{
+  "what": "Sanitized summary of the first live agentic investigations (Meta Muse Spark tool calling) on the author's PC. Real record IDs are not included; the model only ever saw aliases (E..). Full results stay in the private database.",
+  "model": "muse-spark-1.3",
+  "runs": [
+    {
+      "alert": "ZONE-B1",
+      "created_at": "2026-10-30T19:06:08.050308+07:00",
+      "trigger": "auto",
+      "prompt_version": "investigation-v7",
+      "mode": "agentic",
+      "status": "ok",
+      "seconds": 46.57,
+      "usage": {
+        "completion_tokens": 10294,
+        "prompt_tokens": 42362,
+        "total_tokens": 52656
+      },
+      "package_evidence_count": 31,
+      "agent": {
+        "tool_calls": 3,
+        "turns": 2,
+        "stop": "model_finished",
+        "records_looked_up": 0,
+        "cited_beyond_package": [],
+        "limits": {
+          "turns": 6,
+          "calls": 16,
+          "results": 25
+        }
+      },
+      "trace": [
+        {
+          "turn": 1,
+          "type": "intent",
+          "text": "I’ll dig into the blower, switchboard, and water-ingress history to test whether these faults are still active.",
+          "seconds": 5.1
+        },
+        {
+          "turn": 1,
+          "type": "tool",
+          "tool": "get_asset_history",
+          "seconds": 5.1,
+          "args": {
+            "asset_id": "P-BG.TTC167"
+          },
+          "error": null,
+          "returned": 2,
+          "total_matches": 2,
+          "new_evidence_aliases": []
+        },
+        {
+          "turn": 1,
+          "type": "tool",
+          "tool": "get_asset_history",
+          "seconds": 5.1,
+          "args": {
+            "asset_id": "P-BG.TTC046"
+          },
+          "error": null,
+          "returned": 2,
+          "total_matches": 2,
+          "new_evidence_aliases": []
+        },
+        {
+          "turn": 1,
+          "type": "tool",
+          "tool": "search_records",
+          "seconds": 5.1,
+          "args": {
+            "text": "thấm nước",
+            "zone": "B1"
+          },
+          "error": null,
+          "returned": 3,
+          "total_matches": 3,
+          "new_evidence_aliases": []
+        },
+        {
+          "turn": 2,
+          "type": "note",
+          "text": "Checked full history of blower AB-01A (P-BG.TTC167) for repeat motor faults, history of MSB room for prior water ingress, and searched all B1 water-ingress records to test whether the open 8 Oct incident is isolated — no additional records beyond the package were found.",
+          "seconds": 3.09
+        }
+      ],
+      "validation": {
+        "invalid_evidence_ids": [],
+        "unsupported_facts": [],
+        "unknown_signals": [],
+        "ok": true
+      },
+      "ai_priority": "high",
+      "rule_level": "high",
+      "risk_briefings": 5
+    },
+    {
+      "alert": "ZONE-Building",
+      "created_at": "2026-10-30T19:06:54.624161+07:00",
+      "trigger": "auto",
+      "prompt_version": "investigation-v7",
+      "mode": "agentic",
+      "status": "ok",
+      "seconds": 23.15,
+      "usage": {
+        "completion_tokens": 5284,
+        "prompt_tokens": 10095,
+        "total_tokens": 15379
+      },
+      "package_evidence_count": 1,
+      "agent": {
+        "tool_calls": 3,
+        "turns": 2,
+        "stop": "model_finished",
+        "records_looked_up": 0,
+        "cited_beyond_package": [],
+        "limits": {
+          "turns": 6,
+          "calls": 16,
+          "results": 25
+        }
+      },
+      "trace": [
+        {
+          "turn": 1,
+          "type": "intent",
+          "text": "Checking PA history for repeats before assessing this resolved fault.",
+          "seconds": 2.38
+        },
+        {
+          "turn": 1,
+          "type": "tool",
+          "tool": "search_records",
+          "seconds": 2.38,
+          "args": {
+            "kind": "incident",
+            "text": "loa thông báo"
+          },
+          "error": null,
+          "returned": 1,
+          "total_matches": 1,
+          "new_evidence_aliases": []
+        },
+        {
+          "turn": 1,
+          "type": "tool",
+          "tool": "search_records",
+          "seconds": 2.38,
+          "args": {
+            "text": "switch volktek âm thanh"
+          },
+          "error": null,
+          "returned": 1,
+          "total_matches": 1,
+          "new_evidence_aliases": []
+        },
+        {
+          "turn": 1,
+          "type": "tool",
+          "tool": "search_records",
+          "seconds": 2.38,
+          "args": {
+            "kind": "inspection_check",
+            "text": "loa"
+          },
+          "error": null,
+          "returned": 0,
+          "total_matches": 0,
+          "new_evidence_aliases": []
+        },
+        {
+          "turn": 2,
+          "type": "note",
+          "text": "Checked PA / announcement and Volktek switch history and inspection checklists to test for a repeat fault or contradicting passed checks — only the single resolved 2026-09-15 incident (E01) was found, with no additional history.",
+          "seconds": 2.11
+        }
+      ],
+      "validation": {
+        "invalid_evidence_ids": [],
+        "unsupported_facts": [],
+        "unknown_signals": [],
+        "ok": true
+      },
+      "ai_priority": "watch",
+      "rule_level": "watch",
+      "risk_briefings": 1
+    }
+  ]
+}
