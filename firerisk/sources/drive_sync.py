@@ -117,6 +117,11 @@ def _check_workbook(content: bytes) -> list[str]:
     return names
 
 
+def _local_only(f: dict) -> bool:
+    from ..data_policy import is_local_only_document
+    return is_local_only_document(str(f.get("title") or ""), f.get("mime_type"), f.get("folder"))
+
+
 def _sha256(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
 
@@ -190,9 +195,12 @@ def sync_from_drive(snapshot_dir: Path, cfg: SyncConfig | None = None, now: date
 
     if isinstance(data.get("listing"), list):        # every file in the data folder (incl. "Video Uploaded")
         manifest["drive_listing"] = {"at": started, "files": data["listing"]}
+        # Technical drawings and manuals: recorded by name only, never downloaded or sent anywhere (condition 2).
+        from ..data_policy import local_only_documents
+        manifest["local_only_documents"] = {"at": started, "files": local_only_documents(data["listing"])}
         catalog = manifest.setdefault("video_catalog", {})
         for f in data["listing"]:
-            if str(f.get("mime_type", "")).startswith("video/"):
+            if str(f.get("mime_type", "")).startswith("video/") and not _local_only(f):
                 catalog[f["id"]] = {"title": f.get("title"), "size": f.get("size"), "mime_type": f.get("mime_type"),
                                     "drive_created_time": f.get("created_time"),
                                     "drive_modified_time": f.get("modified_time"), "folder": f.get("folder"),

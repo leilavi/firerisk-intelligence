@@ -54,7 +54,8 @@ Model output never sets or changes a rule level. SAM shows where an object appea
 conclusion. A video finding stays a finding (no risk level) until a person verifies it.
 
 ## Data
-* Real data of one building ([Building]). It is **private** and **not in this repository**. The app reads a
+* Real data of one building ([Building]), used with the **written permission of the data owner** (approval of
+  2026-10-30; conditions and how each is enforced: [`DATA_AUTHORIZATION.md`](DATA_AUTHORIZATION.md)). It is **private** and **not in this repository**. The app reads a
   snapshot from `data/private/snapshot/` (git-ignored) described by `manifest.json`.
 * Sources used: `Operations Data` (tabs: daily meter readings and checklists, asset repairs, incident and
   works log, generator log) and the vehicle-count workbook.
@@ -62,7 +63,8 @@ conclusion. A video finding stays a finding (no risk level) until a person verif
 * Known limits: one building only; daily checklists keep only the latest result; **no temperature, smoke or gas
   sensor telemetry** (no such feed is connected, so the risk assessment uses records, rules and video, and the
   dashboard says that "no active alert" does not mean safe); photos referenced by the logs are not yet accessible;
-  generator-connected loads are not recorded; 9 of the 14 videos are linked to a room in the asset register that has
+  generator-connected loads are not recorded; technical drawings and manuals are **never** opened by the app or sent
+  to an AI service (owner's condition, enforced in `firerisk/data_policy.py`), so the building map uses floor names only; 9 of the 14 videos are linked to a room in the asset register that has
   no floor recorded, so they are not placed on a floor (the floor is never guessed).
 
 ## Install and run (Windows)
@@ -146,8 +148,8 @@ processes older items. "Not located" is a valid answer, not an error. Details: [
 
 ## Demo mode (names hidden)
 `run_dashboard_demo.bat` starts the same dashboard with building names replaced by "[name hidden]", shows only
-blurred copies of video frames (signs and labels found by SAM 3.1 plus regions added by hand after a frame-by-frame
-review) and never plays the original videos. Original frames are not modified.
+blurred copies of video frames (signs and labels found by SAM 3.1, faces found locally with OpenCV - SAM is never
+asked to find people - plus regions added by hand after a frame-by-frame review) and never plays the original videos. Original frames are not modified.
 
 ## Dashboard
 * **Overview** — **Meta Muse Spark – Risk Briefing** (highest-priority issue: location, consequence, first action,
@@ -165,12 +167,13 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **197 tests (195 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **203 tests (201 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
 app; the two alert systems and automatic analysis (no duplicate calls, failures, fallback, level unchanged); survey
-videos and video findings with TEST files and a fake Meta API; the agentic investigation (tool protocol, read-only tools, privacy of what is sent, caps, fallback); the SAM 3.1
+videos and video findings with TEST files and a fake Meta API; the agentic investigation (tool protocol, read-only tools, privacy of what is sent, caps, fallback); the data owner's
+conditions (documents and drawings refused before every AI upload, faces blurred locally); the SAM 3.1
 client and parser, localization and its
 background run (fake SAM); demo-mode masking; and browser checks of the rendered pages with Playwright (English-only
 text, briefing, map, drawers). Live runs against the real Meta API are recorded in `evidence/` and

@@ -96,6 +96,8 @@ VISION_SCHEMA = {
 def describe_image(client, path: Path, context: str) -> dict:
     """Ask Muse Spark what is visible in a photo that matters for fire safety (verified request format)."""
     import json
+    from .data_policy import assert_may_send_to_ai
+    assert_may_send_to_ai(path)                      # data owner's condition 2: never a document or drawing
     body = {
         "model": client.config.model,
         "messages": [

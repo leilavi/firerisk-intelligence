@@ -26,6 +26,38 @@ MANIFEST = "manifest.json"
 DEMO_BUILDING = "Demo building"
 DEFAULT_PHRASES = ("sign", "label")
 PAD = 0.06                                  # box padding, fraction of the box size (a sign edge must not show)
+FACE_PAD = 0.35                             # faces: generous padding (hair, ears, partial profile)
+FACE_DETECTOR = "opencv-haar-local"
+
+
+def local_face_boxes(jpeg: Path) -> tuple[list[tuple[int, int, int, int]], str]:
+    """Faces found ON THIS COMPUTER with OpenCV's classical Haar detectors (frontal + profile, both directions).
+
+    Data owner's condition 3: faces must be concealed in the demo. Project rule: SAM is never asked to find people,
+    so this runs locally and sends nothing anywhere. A Haar detector misses some faces (small, turned, blurred), so
+    the review sheet is still the final check. Returns (boxes, detector) - detector "unavailable" when OpenCV is
+    not installed (pip install opencv-python-headless)."""
+    try:
+        import cv2
+    except ImportError:
+        return [], "unavailable"
+    img = cv2.imread(str(jpeg))
+    if img is None:
+        return [], FACE_DETECTOR
+    gray = cv2.equalizeHist(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+    h, w = gray.shape
+    min_side = max(20, min(w, h) // 40)
+    boxes: list[tuple[int, int, int, int]] = []
+    for name, flip in (("haarcascade_frontalface_default.xml", False), ("haarcascade_profileface.xml", False),
+                       ("haarcascade_profileface.xml", True)):
+        det = cv2.CascadeClassifier(cv2.data.haarcascades + name)
+        if det.empty():                                    # cascade files missing in this OpenCV build
+            return [], "unavailable"
+        src = cv2.flip(gray, 1) if flip else gray
+        for (x, y, bw, bh) in det.detectMultiScale(src, scaleFactor=1.1, minNeighbors=5, minSize=(min_side, min_side)):
+            x = w - x - bw if flip else x
+            boxes.append((int(x), int(y), int(x + bw), int(y + bh)))
+    return [padded({"x1": b[0], "y1": b[1], "x2": b[2], "y2": b[3], "w": b[2] - b[0], "h": b[3] - b[1]}, w, h, FACE_PAD) for b in boxes], FACE_DETECTOR
 
 
 def demo_mode() -> bool:

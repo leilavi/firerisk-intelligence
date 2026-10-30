@@ -189,3 +189,36 @@ def test_demo_page_masks_names_and_shows_blurred_frame(tmp_path, monkeypatch):
     finally:
         server.should_exit = True
         t.join(timeout=5)
+
+
+@needs_ffmpeg
+def test_faces_are_blurred_locally_and_never_requested_from_sam(tmp_path, monkeypatch):
+    """Data owner's condition 3 (faces concealed) without breaking the project rule that SAM never looks for people:
+    faces come from a local detector, and frames already checked by SAM get the face pass with no API call."""
+    mod = _script()
+    frames, out = tmp_path / "frames", tmp_path / "frames_demo"
+    f = "cccccccccccccccc/t000010.jpg"
+    (frames / f).parent.mkdir(parents=True, exist_ok=True)
+    _jpeg(frames / f)
+    monkeypatch.setattr(mod, "local_face_boxes", lambda p: ([], "unavailable"))
+    sam = FakeSam(["miss", "miss"])
+    assert mod.process([f], ["sign", "label"], sam, frames, out)["no_label_found"] == 1
+    assert all("person" not in c and "face" not in c for c in map(str, sam.calls))
+    monkeypatch.setattr(mod, "local_face_boxes", lambda p: ([(20, 20, 60, 60)], mod.FACE_DETECTOR))
+    sam2 = FakeSam([])
+    st = mod.process([f], ["sign", "label"], sam2, frames, out)
+    e = load_manifest(out)["frames"][f]
+    assert sam2.calls == [] and st["faces"] == 1
+    assert e["status"] == "blurred" and e["face_boxes"] == [[20, 20, 60, 60]] and e["face_detector"] == mod.FACE_DETECTOR
+    assert load_manifest(out)["reviewed"] is False
+    st3 = mod.process([f], ["sign", "label"], FakeSam([]), frames, out)
+    assert st3["skipped"] == 1                                             # face pass done once
+
+
+def test_local_face_detector_runs_offline_on_a_frame(tmp_path):
+    pytest.importorskip("cv2")
+    from firerisk.demo import FACE_DETECTOR, local_face_boxes
+    p = tmp_path / "t.jpg"
+    _jpeg(p)
+    boxes, det = local_face_boxes(p)
+    assert det == FACE_DETECTOR and boxes == []                            # a plain test pattern has no face
