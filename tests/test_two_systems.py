@@ -19,14 +19,15 @@ from fixtures import build_snapshot
 
 
 class FakeMuse:
-    """Counts calls; answers with a v3-shaped result citing one real alias (E01) and one invented ID (E99)."""
+    """Counts analyses (first request of each); answers with a v3-shaped result citing one real alias (E01) and one invented ID (E99)."""
 
     def __init__(self, mode="ok", ai_priority="emergency"):
         self.mode, self.calls, self.ai_priority = mode, 0, ai_priority
 
     def opener(self, req, timeout=0):
-        self.calls += 1
         body = json.loads(req.data)
+        if len(body["messages"]) == 2:      # first request of one analysis (agentic tool turn or single call)
+            self.calls += 1
         if self.mode == "timeout":
             raise TimeoutError("timed out")
         if self.mode == "500":

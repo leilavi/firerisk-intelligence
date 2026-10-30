@@ -445,3 +445,10 @@ details.acc.sub{margin-top:6px} details.acc.sub > summary{padding:6px 10px;font-
 @media (max-width:1180px){.vs-wrap{grid-template-columns:1fr}.vs-svg{max-height:380px}}
 @media (max-width:720px){.vs-th{width:76px!important}.icard.vs-row{gap:1px 10px}}
 @media (max-width:720px){.icard.vs-row .ic-go{display:none}.icard.vs-row{grid-template-columns:auto minmax(0,1fr)}.vs-fl{font-size:11px}.vs-sub{font-size:10px}}
+
+/* ---------- Meta Muse Spark investigation steps (agentic tool calling) ---------- */
+details.agent{margin-top:8px}
+.agent-steps{margin:6px 0 4px;padding-left:22px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.agent-steps li::marker{color:var(--purple);font-family:var(--mono);font-size:11px}
+.agent-steps li.note{list-style:none;margin-left:-22px;padding:6px 10px;border-left:2px solid var(--purple);background:var(--purple-soft);border-radius:0 var(--r-sm) var(--r-sm) 0}
+.agent-steps .mono{font-family:var(--mono);color:var(--ink-2)}

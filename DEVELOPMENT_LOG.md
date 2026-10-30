@@ -342,3 +342,16 @@ has a "Development history" section. Commits on `main`: 47 before this change (1
 Oct 29, 1 on Oct 30), all inside the building period. Commit identities used so far: "FireRisk Dev", "Claude",
 "leilavi" (the last four, from 2026-10-29 evening, used a noreply e-mail by mistake; history not rewritten).
 
+## 2026-10-30 16:40–17:40 — Agentic investigation (Muse Spark tool calling)
+Author: build tool calling, to see how Muse Spark decides and analyses on its own; keep the current single call as
+the fallback. Read the official docs first (dev.meta.ai/docs/tool-calling and the cookbook): function tools only,
+`tool_choice` only "auto", assistant message with tool_calls must be sent back, `role: "tool"` + `tool_call_id`.
+Built `scripts/check_tool_calling.py` (synthetic records; checks: calls a tool, uses the results, final strict JSON,
+and whether tools + response_format are accepted together) - copied to the PC, **not run yet**. Built
+`firerisk/ai/agentic.py`, client methods, auto-analyst switch, dashboard trace, store listing with mode. Fallback
+narrowed: only problems of the tool conversation (4xx, malformed, cut off) fall back to one call; timeouts, rate
+limits, 5xx and auth errors are recorded as failed to avoid a second long wait. Existing test counted HTTP requests;
+changed to count analyses (first request of each). Tests: 195 passed, 2 skipped (197). One run showed a failure in
+`test_video_analysis_uses_documented_api_and_becomes_context_only` that did not repeat in 2 later full runs (timing).
+Not verified live yet.
+

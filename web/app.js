@@ -271,6 +271,7 @@ function renderBrief() {
       <div class="br-side">
         <div class="row"><span>Analysis status</span><span class="aist ${esc(it.ai.code)}">${it.ai.running ? '<span class="spinner"></span>' : ""}${esc(it.ai.label)}</span></div>
         <div class="small muted">${esc(AI_NOTE[it.ai.code](it.ai))}</div>
+        ${it.ai.mode === "agentic" ? `<div class="row"><span>Investigation</span><span title="Meta Muse Spark chose which records to look up (tool calling)">${it.ai.lookups} lookup${it.ai.lookups === 1 ? "" : "s"} by Meta Muse Spark</span></div>` : ""}
         <div class="row"><span>Rule level</span><span>${lvl(it.severity)}</span></div>
         <div class="row"><span>Evidence</span><span>${esc(it.evidence_text || "—")}</span></div>
         <div class="br-btns">
@@ -528,8 +529,26 @@ function aiFull(d, signalId) {
     <p class="small">Meta Muse Spark priority ${lvl(r.risk_assessment.ai_priority)} · rule level ${lvl(d.alert.severity)}: ${r.risk_assessment.agrees_with_rule_severity ? "agrees" : "differs; the rule level stays official"}. ${aiT(r.risk_assessment.rationale)}</p>
     ${r.hypotheses?.length ? `<details><summary>Possible causes: hypotheses, not confirmed (${r.hypotheses.length})</summary>${r.hypotheses.map((h) => `<div class="hyp"><span class="plaus">${esc(h.plausibility)}</span> <b>${aiT(h.cause)}</b><div class="small">${aiT(h.reasoning)}</div><div class="small muted">Supports: ${ids(h.supporting_evidence_ids)} Contradicts: ${ids(h.contradicting_evidence_ids)}</div><div class="small"><i>How to verify:</i> ${aiT(h.how_to_verify)}</div></div>`).join("")}</details>` : ""}
     ${r.scenarios?.length ? `<details><summary>Possible scenarios: not predictions (${r.scenarios.length})</summary>${r.scenarios.map((sc) => `<div class="scen"><b>${aiT(sc.scenario)}</b> <span class="plaus">${esc(sc.plausibility)}</span><div class="small">${aiT(sc.how_it_could_develop)}</div><div class="small"><i>Would confirm:</i> ${aiT(sc.what_would_confirm)}</div></div>`).join("")}</details>` : ""}
+    ${agentTrace(inv)}
     <details><summary>Missing information and uncertainty</summary><ul class="unk">${(r.missing_information || []).map((m) => `<li><b>${aiT(m.item)}</b>: ${aiT(m.why_it_matters)}</li>`).join("")}${(r.limitations || []).map((x) => `<li>${aiT(x)}</li>`).join("")}</ul><p class="small"><b>Uncertainty:</b> ${aiT(r.uncertainty)}</p></details>
     <p class="small" style="margin-top:10px"><a href="#/fire/${esc(d.alert.alert_id)}?risk=${encodeURIComponent(signalId)}">Open the full investigation →</a></p></div>`;
+}
+
+/* How Meta Muse Spark investigated (agentic mode): the lookups it chose, in order, exactly as recorded. */
+const TOOL_TXT = { list_assets: "Listed assets and meters", get_asset_history: "Asset history", search_records: "Searched records",
+  get_meter_readings: "Meter readings", get_equipment_alerts: "Equipment alerts", get_video_findings: "Survey-video findings" };
+function agentTrace(inv) {
+  if (inv?.mode !== "agentic" && !inv?.agentic_fallback) return "";
+  if (inv.mode !== "agentic") return `<p class="tiny muted">Tool-calling investigation was not possible (${esc(inv.agentic_fallback.reason)}); this analysis was made in one call with the rule-assembled evidence.</p>`;
+  const a = inv.agent || {}, steps = a.trace || [];
+  const argTxt = (x) => Object.entries(x || {}).map(([k, v]) => `${k} ${v}`).join(", ");
+  const STOP = { model_finished: "Meta Muse Spark decided it had enough evidence", turn_limit: `stopped at the limit of ${a.limits?.turns} rounds`, call_limit: `stopped at the limit of ${a.limits?.calls} lookups` };
+  return `<details class="agent"><summary>How Meta Muse Spark investigated: ${a.tool_calls} lookup${a.tool_calls === 1 ? "" : "s"}, ${a.records_looked_up} record${a.records_looked_up === 1 ? "" : "s"} beyond the rule package${a.cited_beyond_package?.length ? `, ${a.cited_beyond_package.length} cited` : ""}</summary>
+    <ol class="agent-steps">${steps.map((t) => t.type === "note" ? `<li class="note"><span class="kicker">Reasoning note</span> ${aiT(t.text)}</li>`
+      : `<li><b>${esc(TOOL_TXT[t.tool] || t.tool)}</b>${t.args && Object.keys(t.args).length ? ` <span class="mono tiny"${VI_RE.test(argTxt(t.args)) ? ' lang="vi" title="search words as typed by Meta Muse Spark (source-record language)"' : ""}>${esc(argTxt(t.args))}</span>` : ""}
+        <span class="tiny muted">${t.error ? `error returned to the model: ${esc(t.error)}` : `${t.returned ?? 0} returned${t.total_matches != null && t.total_matches > (t.returned ?? 0) ? ` of ${t.total_matches}` : ""}${t.new_evidence_aliases?.length ? ` · ${t.new_evidence_aliases.length} new record(s)` : ""}`}</span></li>`).join("")}</ol>
+    ${a.cited_beyond_package?.length ? `<p class="small">Cited records found by these lookups: ${a.cited_beyond_package.map(chip).join("")}</p>` : ""}
+    <p class="tiny muted">${esc(STOP[a.stop] || a.stop)}. Lookups only read the building records; record IDs and names were replaced before sending. Turn order and tools are as recorded, not reconstructed.</p></details>`;
 }
 
 /* ---------- Building Risk Map (SVG, front view with depth) ---------- */
@@ -840,6 +859,7 @@ async function viewFire(id, focusRisk) {
       ${inv.validation?.ok === false ? `<div class="warnbox">${inv.validation.invalid_evidence_ids?.length ? `Removed ${inv.validation.invalid_evidence_ids.length} citation(s) to records that do not exist. ` : ""}${inv.validation.unsupported_facts?.length ? `${inv.validation.unsupported_facts.length} statement(s) without a valid source are marked unsupported.` : ""}</div>` : ""}
       <h3 class="sub">Meta Muse Spark interpretation</h3><p>${aiT(r.situation || r.summary)}</p>
       <p class="small">Meta Muse Spark priority ${lvl(r.risk_assessment.ai_priority)} · official rule severity ${lvl(a.severity)} — ${r.risk_assessment.agrees_with_rule_severity ? "agrees" : "differs; the rule severity stays"}. ${aiT(r.risk_assessment.rationale)}</p>
+      ${agentTrace(inv)}
       <details open><summary>Confirmed observations Meta Muse Spark read from the records (${r.observed_facts.length})</summary><ul class="small">${r.observed_facts.map((f) => `<li>${aiT(f.statement)} ${f.supported === false ? '<b style="color:var(--emergency)">unsupported</b>' : ""} ${ids(f.evidence_ids)}</li>`).join("")}</ul></details>
       ${r.hypotheses?.length ? `<details><summary>Possible causes — hypotheses, not confirmed (${r.hypotheses.length})</summary>${r.hypotheses.map((h) => `<div class="hyp"><span class="plaus">${esc(h.plausibility)}</span> <b>${aiT(h.cause)}</b><div class="small">${aiT(h.reasoning)}</div><div class="small muted">Supports: ${ids(h.supporting_evidence_ids)} Contradicts: ${ids(h.contradicting_evidence_ids)}</div><div class="small"><i>How to verify:</i> ${aiT(h.how_to_verify)}</div></div>`).join("")}</details>` : ""}
       ${r.scenarios?.length ? `<details><summary>Possible scenarios — not predictions (${r.scenarios.length})</summary>${r.scenarios.map((sc) => `<div class="scen"><b>${aiT(sc.scenario)}</b> <span class="plaus">${esc(sc.plausibility)}</span><div class="small">${aiT(sc.how_it_could_develop)}</div><div class="small"><span class="pro">Supports</span> ${ids(sc.supporting_evidence_ids)} <span class="con">Weakens</span> ${ids(sc.weakening_evidence_ids)}</div><div class="small"><i>Would confirm:</i> ${aiT(sc.what_would_confirm)}</div></div>`).join("")}</details>` : ""}
@@ -853,7 +873,7 @@ async function viewFire(id, focusRisk) {
 
   const s6 = `<div class="hist2"><div><h3 class="sub">Status changes</h3>${d.status_log.map((x) => `<div class="small">${dt(x.changed_at)} — ${esc(STATUS_TXT[x.status] || x.status)}${x.note ? `: ${esc(x.note)}` : ""}${x.changed_by ? ` (${esc(x.changed_by)})` : ""}</div>`).join("") || '<span class="muted small">No status change yet.</span>'}</div>
     <div><h3 class="sub">Severity per analysis run</h3>${d.history.slice(0, 8).map((h) => `<div class="small">${dt(h.recorded_at)} ${lvl(h.severity)} <span class="muted">${h.open_items} open</span></div>`).join("") || '<span class="muted small">First run.</span>'}</div>
-    <div><h3 class="sub">Meta Muse Spark analyses</h3>${d.investigations.slice(0, 8).map((x) => `<div class="small">${dt(x.created_at)} — ${esc(x.status === "ok" ? "completed" : x.status)}</div>`).join("") || '<span class="muted small">None yet.</span>'}</div></div>
+    <div><h3 class="sub">Meta Muse Spark analyses</h3>${d.investigations.slice(0, 8).map((x) => `<div class="small">${dt(x.created_at)} — ${esc(x.status === "ok" ? "completed" : x.status)}${x.mode === "agentic" ? ` · ${x.agent?.tool_calls ?? 0} lookups` : x.agentic_fallback ? " · one call (tool calling unavailable)" : ""}</div>`).join("") || '<span class="muted small">None yet.</span>'}</div></div>
     <h3 class="sub" style="margin-top:12px">Timeline of the records</h3><ol class="tline">${d.timeline.filter((e) => e.role === "finding").slice(-14).map((e) => `<li><span class="when">${day(e.timestamp)}</span> ${tr(e, "title")}${e.is_open ? '<span class="open">● unresolved</span>' : ""} ${chip(e.evidence_id)}</li>`).join("") || "<li class='muted'>No Data Available</li>"}</ol>`;
 
   $("#app").innerHTML = `<div class="crumbs"><a href="#/fire">Fire Safety Risks</a> / ${esc(a.alert_id)}</div>

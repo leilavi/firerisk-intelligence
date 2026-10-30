@@ -27,6 +27,8 @@ Real operational sources (Google Sheets / Excel snapshot)
        └─ NEW pathway rules R1–R9 ──── deterministic signals with plain-language basis
        └─ NEW correlation ──────────── evidence links with reasons → zone alerts (compound-risk rule)
             └─ NEW Muse Spark investigation (Meta Model API, JSON schema)
+                 • agentic: Muse Spark chooses read-only lookups (tool calling) before answering;
+                   falls back to one call with the rule-assembled package if tool calling fails
                  • personal names/e-mails pseudonymised before sending
                  • every cited evidence ID validated; unknown IDs removed and reported
                  • rule severity stays authoritative; AI priority shown next to it
@@ -43,6 +45,7 @@ Status as of 2026-10-30. "Live" means run with the real Meta Model API on the au
 |---|---|---|
 | `muse-spark-1.3` (Chat Completions, `response_format: json_schema`, `strict: true`) | Root-cause investigation of a zone alert (prompt `investigation-v6`): observed facts, hypotheses with supporting and contradicting evidence, escalation pathway, missing information, recommended actions, one briefing per risk | **Live.** First real call 2026-10-27 (`evidence/api_check_20261027_133317.json`), first live investigation 14:19 (`evidence/investigation_ZONE-B1_20261027_1419_summary.json`). Runs automatically in the background; 19 successful live investigations so far, latest 2026-10-29 22:10 |
 | `muse-spark-1.3` video input (Files API + Responses API `input_video`) | Survey-video fire-safety review (prompt `survey-video-v2`): findings with timestamps, areas and fire equipment seen, coverage, a `segment_phrase` per item for SAM | **Live.** All 14 survey videos from Google Drive reviewed (latest reviews 2026-10-28 16:29 – 2026-10-29 09:57), 34 findings; each uploaded copy deleted after the call |
+| `muse-spark-1.3` tool calling (Chat Completions `tools`, `tool_choice: auto`) | Agentic investigation (`firerisk/ai/agentic.py`): Muse Spark decides which records to look up - asset history, record search, meter readings, equipment alerts, survey-video findings, asset list - then answers in the same strict schema; every lookup is shown on the dashboard | **Implemented 2026-10-30, tested offline with a fake transport; live check pending** (`run_tool_calling_check.bat`, synthetic data only). Falls back to the single call automatically |
 | `muse-spark-1.3` text | English translation of Vietnamese source records (marked as translation) | Live |
 | `sam-3.1` (Responses API, `meta-sam-parser`) | Outlines the object a Muse Spark finding refers to in still frames of the video (box + mask, confidence only when SAM returns one); also finds signs/labels to blur for demo copies | **Live.** 511 frame results stored (299 located, 212 not located, 0 errors), runs in the background after every new video review; live checks in `evidence/sam_check_*.json`, `evidence/sam_client_check_*.json`, `evidence/sam_localization_run_20261028.json` |
 | `muse-spark-1.3` image input (`image_url`) | Describe fire-safety observations in single inspection photos | Implemented (`firerisk/media.py`), **not run live**: no inspection photos are available yet. Visual evidence currently comes from the survey videos |
@@ -106,6 +109,15 @@ that measures equipment in the alert). Levels of one system are never changed by
 Alerts appear immediately; Muse Spark runs afterwards in a background worker. It runs when a fire-risk alert is new,
 when its evidence fingerprint changes (records added/removed, status or level changed, linked equipment alerts or
 survey-video observations changed), or when the user presses Re-analyse. Reloading the page never calls the AI.
+
+**Agentic investigation (tool calling).** Muse Spark receives the rule-assembled evidence package plus six read-only
+tools over the whole record store and decides what else to check (e.g. the history of the same asset, earlier
+incidents in the room, meter readings around the fault date). Each call is validated and executed locally; records
+get opaque aliases and names are redacted before anything is sent. Limits: 6 tool rounds, 16 lookups, 25 records per
+lookup. The final answer uses the same strict JSON schema and citation check; records found by lookups may be cited.
+The dashboard lists every lookup in order ("How Meta Muse Spark investigated"). If the API rejects the tool
+conversation or the answer is malformed or cut off, the proven single-call investigation runs instead and the record
+says why; if the API is unreachable the attempt is recorded as failed. `FIRERISK_AI_TOOLS=0` switches tool calling off.
 Statuses shown: *Not Analysed by Meta Muse Spark · Meta Muse Spark Analysis Running · Meta Muse Spark Analysis
 Complete · Meta Muse Spark Analysis Failed · Rule-Based Explanation*. Every cited evidence ID is checked;
 unknown IDs are removed and reported. If the AI fails, the alert, its level and the rule-based explanation stay.
@@ -153,12 +165,13 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **191 tests (189 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **197 tests (195 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
 app; the two alert systems and automatic analysis (no duplicate calls, failures, fallback, level unchanged); survey
-videos and video findings with TEST files and a fake Meta API; the SAM 3.1 client and parser, localization and its
+videos and video findings with TEST files and a fake Meta API; the agentic investigation (tool protocol, read-only tools, privacy of what is sent, caps, fallback); the SAM 3.1
+client and parser, localization and its
 background run (fake SAM); demo-mode masking; and browser checks of the rendered pages with Playwright (English-only
 text, briefing, map, drawers). Live runs against the real Meta API are recorded in `evidence/` and
 `DEVELOPMENT_LOG.md`, not in the test suite.
@@ -192,11 +205,11 @@ remain under the author's responsibility.
 
 ## Repository
 ```
-firerisk/            Python package (sources, rules, hazards, correlation, ai, store, api, video, video_findings,
+firerisk/            Python package (sources, rules, hazards, correlation, ai (investigation, agentic, auto), store, api, video, video_findings,
                      sam, localize, demo, media)
 web/                 dashboard (index.html, app.js, styles.css)
 tests/               pytest suite + offline mock of the Meta API
-scripts/             Meta API and SAM checks, Google Drive sync setup, SAM backfill, demo-copy blurring
+scripts/             Meta API, tool-calling and SAM checks, Google Drive sync setup, SAM backfill, demo-copy blurring
 apps_script/         Google Apps Script export web app (template, no IDs or token)
 evidence/            sanitized evidence of real API calls (no keys)
 baseline/            redacted copy of the pre-existing skill
@@ -206,7 +219,7 @@ baseline/            redacted copy of the pre-existing skill
 ## Settings (`.env`, never committed)
 `MODEL_API_KEY` (Meta Model API key) · `META_API_BASE_URL`, `META_REASONING_MODEL` (optional) ·
 `FIRERISK_AUTO_AI` (`1` default, `0` = only on request) · `FIRERISK_AI_MIN_LEVEL` (default `watch`) ·
-`FIRERISK_AI_DAILY_LIMIT` (default `20`) · `FIRERISK_DRIVE_EXPORT_URL`, `FIRERISK_DRIVE_TOKEN`, `FIRERISK_SYNC_MINUTES` (Drive sync).
+`FIRERISK_AI_DAILY_LIMIT` (default `20`) · `FIRERISK_AI_TOOLS` (`1` default, `0` = single call, no tool calling) · `FIRERISK_DRIVE_EXPORT_URL`, `FIRERISK_DRIVE_TOKEN`, `FIRERISK_SYNC_MINUTES` (Drive sync).
 Still frames use the ffmpeg binary installed with `imageio-ffmpeg`. `FIRERISK_DEMO_MODE=1` = demo mode (set by `run_dashboard_demo.bat`).
 
 ## License

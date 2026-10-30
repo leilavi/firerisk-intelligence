@@ -22,6 +22,7 @@ OUTDATED = [
     r"\b87 tests\b",
     r"3219f8c`? tagged",
     r"tag `baseline-pre-hackathon`",
+    r"Tool calling over the evidence store[^\n]*not implemented",
 ]
 
 

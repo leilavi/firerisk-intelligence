@@ -17,7 +17,7 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v6"  # v6: structured, record-specific briefing (dates, mechanism, chain, 3 action groups, claim basis); v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
+PROMPT_VERSION = "investigation-v7"  # v7: agentic tool calling (ai/agentic.py) with this prompt + same schema; v6: structured, record-specific briefing (dates, mechanism, chain, 3 action groups, claim basis); v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
                                      #     related equipment alerts in the package
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building

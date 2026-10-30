@@ -61,6 +61,7 @@ class State:
         self.auto_sync_minutes: int = 0
         self.next_sync_at: str | None = None
         self.ai = AutoAnalyst(self.store, self.get)
+        self.ai.video_lookup = lambda zone: self.videos.context_for(zone)
         self.videos = VideoStore(DB_PATH)
         self.drive_videos = DriveVideoSync(self.videos, INBOX_DIR)
         self.translator = Translator(DB_PATH)
@@ -724,7 +725,10 @@ def _brief_fire(issue: dict, res, a, sig) -> dict:
                    "model": inv.get("model") if inv else None,
                    "api_mode": _investigation_view(inv)["api_mode"] if inv else None,
                    "is_current": bool(inv and st["result_is_current"]), "per_risk": bool(rb),
-                   "error": st.get("error"), "has_full_analysis": bool(inv)}}
+                   "error": st.get("error"), "has_full_analysis": bool(inv),
+                   "mode": (inv or {}).get("mode") or ("single_call" if inv else None),
+                   "lookups": ((inv or {}).get("agent") or {}).get("tool_calls"),
+                   "records_looked_up": ((inv or {}).get("agent") or {}).get("records_looked_up")}}
 
 
 def _brief_eq(issue: dict, ea) -> dict:

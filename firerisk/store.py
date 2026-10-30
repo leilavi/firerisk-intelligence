@@ -141,9 +141,14 @@ class Store:
 
     def investigations(self, alert_id: str) -> list[dict]:
         with self._conn() as c:
-            return [{"id": r["id"], "created_at": r["created_at"], "status": r["status"], "model": r["model"]}
-                    for r in c.execute("SELECT id, created_at, status, model FROM ai_investigations WHERE alert_id=? "
-                                       "ORDER BY id DESC", (alert_id,))]
+            out = []
+            for r in c.execute("SELECT id, created_at, status, model, record FROM ai_investigations WHERE alert_id=? "
+                               "ORDER BY id DESC", (alert_id,)):
+                rec = json.loads(r["record"]) if r["record"] else {}
+                out.append({"id": r["id"], "created_at": r["created_at"], "status": r["status"], "model": r["model"],
+                            "mode": rec.get("mode"), "agent": {"tool_calls": (rec.get("agent") or {}).get("tool_calls")},
+                            "agentic_fallback": bool(rec.get("agentic_fallback"))})
+            return out
 
     # --- Google Drive sync runs (reports never contain the token or the URL) -------------------
     def save_sync(self, report: dict, trigger: str) -> int:

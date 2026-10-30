@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Agentic investigation (2026-10-30): Meta Muse Spark tool calling (`firerisk/ai/agentic.py`). Six read-only tools
+  over the record store (asset list, asset history, record search, meter readings, equipment alerts, survey-video
+  findings); validated arguments, aliases and redaction for everything returned, caps (6 rounds, 16 lookups, 25
+  records), final answer in the existing strict schema with citations validated against all records shown.
+  Automatic fallback to the single-call investigation when the tool conversation is rejected or the answer is
+  malformed / cut off; API-down errors recorded as failed. Dashboard: "How Meta Muse Spark investigated" (every lookup
+  in order, records cited beyond the rule package) in the briefing drawer and the investigation page, lookup count in
+  the Risk Briefing and the analysis history. Client: `chat_tools`, `chat_json_messages`. Prompt `investigation-v7`.
+  `FIRERISK_AI_TOOLS`. Live check script `scripts/check_tool_calling.py` + `run_tool_calling_check.bat` (synthetic
+  data). 6 new tests; offline only so far.
 - README "AI-Assisted Development" section (text written by the author, 2026-10-30).
 - README "Development history" for judges (building period, baseline commit `b79223f` on branch `baseline`,
   `git diff baseline main`, disclosed history rewrites); wrong baseline references (`3219f8c`, tag
