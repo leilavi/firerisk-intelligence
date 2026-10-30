@@ -15,7 +15,10 @@
 - [ ] Author: record the demo with `run_dashboard_demo.bat`.
 - [x] Claude: automatic Google Drive sync (Apps Script web app; chosen over an OAuth desktop client because it needs no Google Cloud project and its access does not expire after 7 days in testing mode).
 - [ ] ~~Postponed (author, 16:53)~~ resumed 2026-10-28 10:54: author will add new data files first. Then: Claude extends the script to read a Drive folder (and parsers for the new files); author runs run `setup_drive_sync.bat` once (deploy the script in own Google account), then confirm the first real sync.
-- [ ] Author: confirm U-05 (authority to process data / send redacted excerpts to Meta API).
+- [x] Author: U-05 confirmed — written approval of the data owner's CEO, 2026-10-30 (`DATA_AUTHORIZATION.md`).
+- [x] Claude: owner's conditions in code — documents/drawings refused before every AI upload, listed by name only in the Drive sync; faces blurred locally in demo copies (2026-10-30).
+- [ ] Author: `pip install -r requirements.txt` (adds OpenCV), then `run_mask_labels.bat` (local face pass, no SAM cost for frames already done) and check review.html for faces.
+- [ ] Author: decide whether the O&M manual is in scope (it was not in the approval list); until then it is treated like a drawing.
 
 - [x] Claude: unified dark dashboard with AI Risk Briefing and floor markers (0.8).
 - [x] Author: restart `run_dashboard` once; Claude then checks the v5 briefings and the record translations from the PC database.

@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Data owner's approval (2026-10-30) recorded without names in `DATA_AUTHORIZATION.md`; U-05 resolved; R-08 verified.
+- `firerisk/data_policy.py`: documents (PDF, CAD, office files) and anything named like a drawing, schematic, layout or
+  manual are refused before every upload to the Meta Model API (video upload, image description, SAM), also when a
+  document is saved under an image name (content check). Drive sync records them by name only
+  (`manifest.json` → `local_only_documents`) and never puts them in the video catalogue. Survey videos are unaffected.
+- Demo blurring: faces detected locally with OpenCV Haar cascades and blurred (SAM is still never asked to find people);
+  frames already processed by SAM get the face pass without any API call. New dependency `opencv-python-headless`.
+- Tests: `tests/test_data_policy.py` (4), 2 new tests in `tests/test_demo.py`.
 - Docs (2026-10-30 20:00): `FEATURE_ORIGIN_MATRIX.md` brought up to date (rows that still said "not yet run live",
   "mock-tested only", "no real video", "SAM 3.1 not implemented" now state the live status and counts from the PC
   database); `HACKATHON_COMPLIANCE.md` R-02 updated (21 investigations, prompt v7, SAM 511 frame results counted per

@@ -211,12 +211,17 @@ def _safe(exc: Exception) -> str:
     return msg.split("access_token")[0][:300]
 
 
+def _is_doc(c: dict) -> bool:
+    from .data_policy import is_local_only_document
+    return is_local_only_document(str(c.get("title") or ""), c.get("mime_type"), c.get("folder"))
+
+
 def drive_video_items(catalog: dict, refs: list[dict]) -> list[dict]:
     """All videos known from Drive: the folder listing plus links in the asset register."""
     by_id = {r["drive_file_id"]: r for r in refs}
     items = []
     for fid, c in (catalog or {}).items():
-        if str(c.get("mime_type", "video/")).startswith("video/"):
+        if str(c.get("mime_type", "video/")).startswith("video/") and not _is_doc(c):
             items.append({"drive_file_id": fid, "title": c.get("title") or fid, "size": c.get("size"),
                           "folder": c.get("folder"), "drive": c, "ref": by_id.get(fid)})
     for fid, r in by_id.items():

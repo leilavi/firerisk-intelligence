@@ -479,6 +479,8 @@ class VideoNotAnalysable(Exception):
 def upload_file(client, path: Path, mime: str = "video/mp4") -> str:
     """POST /v1/files (multipart). Field order per docs: purpose and expires_after first, file last."""
     import urllib.request
+    from .data_policy import assert_may_send_to_ai
+    assert_may_send_to_ai(path, mime_type=mime)      # data owner's condition 2: never a document or drawing
     boundary = "----firerisk" + uuid.uuid4().hex
     def part(name, value):
         return (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").encode()

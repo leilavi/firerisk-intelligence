@@ -319,6 +319,8 @@ class SamClient:
         problem = phrase_problem(phrase)
         if problem:
             raise SamBadRequest(f"invalid phrase: {problem}")
+        from .data_policy import assert_may_send_to_ai
+        assert_may_send_to_ai(data=image_jpeg)       # data owner's condition 2: never a document or drawing
         payload = {
             "model": self.model,
             "input": [{"role": "user", "content": [

@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from firerisk.config import LOCAL_TZ  # noqa: E402
-from firerisk.demo import (DEFAULT_PHRASES, FRAMES_DEMO_DIR, blur_regions, load_manifest, padded,  # noqa: E402
+from firerisk.demo import (DEFAULT_PHRASES, FACE_DETECTOR, FRAMES_DEMO_DIR, blur_regions, local_face_boxes, load_manifest, padded,  # noqa: E402
                            save_manifest)
 from firerisk.localize import FRAMES_DIR, PRICE_PER_IMAGE_USD, jpeg_size  # noqa: E402
 from firerisk.sam import SamClient, SamError, SamModelNotFound, SamAuthError, SamNotConfigured, SamRateLimited  # noqa: E402
@@ -55,7 +55,26 @@ def process(files, phrases, sam, frames_dir: Path, out_dir: Path, max_requests=N
     for ff in files:
         e = m["frames"].get(ff)
         if e and e.get("status") in ("blurred", "no_label_found") and e.get("phrases") == list(phrases):
-            stats["skipped"] += 1
+            if e.get("face_detector") == FACE_DETECTOR or not (frames_dir / ff).exists():
+                stats["skipped"] += 1
+                continue
+            # SAM part already done: add the local face check only (no API call)
+            src = frames_dir / ff
+            w, h = e.get("frame_size") or (jpeg_size(src.read_bytes()) or (0, 0))
+            faces, det = local_face_boxes(src)
+            regions = [tuple(r) for r in e.get("regions", [])] + faces
+            try:
+                blur_regions(src, out_dir / ff, regions)
+            except Exception as exc:
+                m["frames"][ff] = {**e, "status": "error", "error": f"blur failed: {type(exc).__name__}", "updated_at": now()}
+                stats["errors"] += 1
+                continue
+            m["frames"][ff] = {**e, "status": "blurred" if regions else "no_label_found", "face_boxes": [list(f) for f in faces],
+                               "face_detector": det, "regions": [list(r) for r in regions], "updated_at": now()}
+            if faces:
+                m["reviewed"] = False
+            stats["faces"] = stats.get("faces", 0) + len(faces)
+            save_manifest(m, out_dir)
             continue
         src = frames_dir / ff
         if not src.exists():
@@ -88,7 +107,8 @@ def process(files, phrases, sam, frames_dir: Path, out_dir: Path, max_requests=N
                 break
             continue
         extra = (e or {}).get("manual_boxes", [])
-        regions = [padded(b, w, h) for b in boxes] + [tuple(x) for x in extra]
+        faces, det = local_face_boxes(src)                 # local OpenCV, never SAM (project rule) - condition 3
+        regions = [padded(b, w, h) for b in boxes] + [tuple(x) for x in extra] + faces
         try:
             blur_regions(src, out_dir / ff, regions)
         except Exception as exc:          # ffmpeg problem: no copy, original untouched
@@ -97,7 +117,7 @@ def process(files, phrases, sam, frames_dir: Path, out_dir: Path, max_requests=N
             continue
         status = "blurred" if regions else "no_label_found"
         m["frames"][ff] = {"status": status, "phrases": list(phrases), "frame_size": [w, h], "sam_boxes": boxes,
-                           "manual_boxes": extra, "regions": [list(r) for r in regions], "updated_at": now()}
+                           "manual_boxes": extra, "face_boxes": [list(f) for f in faces], "face_detector": det, "regions": [list(r) for r in regions], "updated_at": now()}
         m["reviewed"] = False                 # any new copy needs a new look
         stats[status] += 1
         save_manifest(m, out_dir)
@@ -122,7 +142,7 @@ def review_sheet(out_dir: Path) -> Path:
 body{{background:#111;color:#eee;font:13px sans-serif;margin:16px}} .g{{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}}
 figure{{margin:0}} .w{{position:relative}} img{{width:100%;display:block}} svg{{position:absolute;inset:0;width:100%;height:100%}}
 rect{{fill:none;stroke:#22d3ee;stroke-width:3;vector-effect:non-scaling-stroke}} .no_label_found figcaption{{color:#facc15}} .error figcaption{{color:#ef4444}}
-</style><h1>Blurred demo frames - PRIVATE</h1><p>Look for any building name or readable label left visible. Cyan outlines = blurred
+</style><h1>Blurred demo frames - PRIVATE</h1><p>Look for any building name, readable label, staff name or face left visible. Cyan outlines = blurred
 regions. Missed text: run <code>--add-box FRAME x1,y1,x2,y2</code>. When everything is checked: <code>--mark-reviewed</code>.
 Reviewed: <b>{m.get('reviewed')}</b></p><div class="g">{''.join(cards)}</div>""", encoding="utf-8")
     return out
@@ -161,16 +181,21 @@ def main() -> int:
         return 0
     files = frame_files(Path(a.db))
     m = load_manifest()
-    todo = [f for f in files if not (m["frames"].get(f, {}).get("status") in ("blurred", "no_label_found")
-                                     and m["frames"][f].get("phrases") == phrases)]
-    n = len(todo) * len(phrases)
-    print(f"Evidence frames: {len(files)} · to process: {len(todo)} · SAM requests: up to {n} "
-          f"(phrases: {', '.join(phrases)}) · estimated cost: up to ${n * PRICE_PER_IMAGE_USD:.4f}")
+    sam_done = lambda f: (m["frames"].get(f, {}).get("status") in ("blurred", "no_label_found")
+                          and m["frames"][f].get("phrases") == phrases)
+    sam_todo = [f for f in files if not sam_done(f)]
+    face_todo = [f for f in files if sam_done(f) and m["frames"][f].get("face_detector") != FACE_DETECTOR]
+    todo = sam_todo + face_todo
+    n = len(sam_todo) * len(phrases)
+    print(f"Evidence frames: {len(files)} · to process: {len(todo)} ({len(face_todo)} need only the local face check) · "
+          f"SAM requests: up to {n} (phrases: {', '.join(phrases)}) · estimated cost: up to ${n * PRICE_PER_IMAGE_USD:.4f}")
+    if local_face_boxes(Path("__none__.jpg"))[1] == "unavailable":
+        print("WARNING: OpenCV is not installed, faces will NOT be blurred. Run: pip install opencv-python-headless")
     if a.dry_run:
         return 0
     if not todo:
         print("Nothing to do.")
-    elif not a.yes and input("Run now? Type yes: ").strip().lower() != "yes":
+    elif sam_todo and not a.yes and input("Run now? Type yes: ").strip().lower() != "yes":
         print("Not run.")
         return 0
     else:
