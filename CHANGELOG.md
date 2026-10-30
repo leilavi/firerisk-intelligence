@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Drawing probe (`scripts/probe_drawings.py`, `run_drawing_probe.bat`): reads the technical drawings on the author's PC
+  with pdfplumber (no AI, no network) and prints counts only - page kinds (CAD text layer / scan / text), vector
+  objects, generic label categories, floor mentions - to design the local extractor. New dependency `pdfplumber`.
 - Docs: the 2 technical drawings and the O&M manual are in scope (referenced in the approved asset register); used
   under condition 2 (local processing only).
 - Data owner's approval (2026-10-30) recorded without names in `DATA_AUTHORIZATION.md`; U-05 resolved; R-08 verified.
