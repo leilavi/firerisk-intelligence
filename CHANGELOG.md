@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Docs (2026-10-30 20:00): `FEATURE_ORIGIN_MATRIX.md` brought up to date (rows that still said "not yet run live",
+  "mock-tested only", "no real video", "SAM 3.1 not implemented" now state the live status and counts from the PC
+  database); `HACKATHON_COMPLIANCE.md` R-02 updated (21 investigations, prompt v7, SAM 511 frame results counted per
+  frame, agentic tool calling). `test_docs_current.py` now also checks the matrix.
 - Agentic investigation live on the building data (2026-10-30 19:06): ZONE-B1 and ZONE-Building analysed
   automatically with tool calling, 0 invalid citations, no fallback; sanitized summary
   `evidence/agentic_investigation_live_20261030.json`. Trace heading says "no records beyond the rule package found"
