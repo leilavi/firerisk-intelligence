@@ -48,7 +48,7 @@ Git commit history, `DEVELOPMENT_LOG.md`, `CHANGELOG.md`, open-source license, `
 | Criterion (weight) | What FireRisk must show |
 |---|---|
 | Impact (30%) | Real problem: isolated building alarms hide combined fire-risk patterns; decision-support for building managers |
-| Use of Meta AI tooling (25%) | Muse Spark doing real cross-source reasoning with structured output (JSON schema), visible in the UI; Muse Spark video review; SAM 3.1 adding segmented visual evidence; go beyond a single chat call. Agentic investigation with Muse Spark tool calling over read-only tools: implemented 2026-10-30, offline-tested; claim it as live only after `run_tool_calling_check.bat` and a live dashboard run pass. |
+| Use of Meta AI tooling (25%) | Muse Spark doing real cross-source reasoning with structured output (JSON schema), visible in the UI; Muse Spark video review; SAM 3.1 adding segmented visual evidence; go beyond a single chat call. Agentic investigation with Muse Spark tool calling over read-only tools: tool protocol verified live 2026-10-30 (`evidence/tool_calling_check_20261030_185751.json`, synthetic data); claim live investigations on building data only after the first live dashboard run is checked. |
 | Technical depth (20%) | Deterministic rule engine + evidence correlation + LLM reasoning, with traceability, fallback when AI fails, tests |
 | Demo (25%) | Live end-to-end run: "conventional alert" vs "FireRisk investigation" side by side, within 3 minutes |
 

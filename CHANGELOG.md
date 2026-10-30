@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Tool calling verified live (2026-10-30 18:57, synthetic records, `evidence/tool_calling_check_20261030_185751.json`):
+  2 parallel tool calls in round 1, plain answer in round 2, strict-schema final answer; tools + response_format
+  accepted together. The intent sentence Muse Spark writes next to its tool calls is now kept in the trace and shown
+  as "Round n · intent".
 - Agentic investigation (2026-10-30): Meta Muse Spark tool calling (`firerisk/ai/agentic.py`). Six read-only tools
   over the record store (asset list, asset history, record search, meter readings, equipment alerts, survey-video
   findings); validated arguments, aliases and redaction for everything returned, caps (6 rounds, 16 lookups, 25
