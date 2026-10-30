@@ -373,3 +373,7 @@ for both, no fallback, AI priority high / watch as before. Observation: on this 
 complete; tool calling showed that Muse Spark actively tested for repeat faults and contradicting checks instead of
 assuming. Sanitized summary saved to evidence/.
 
+## 2026-10-30 21:05 — history rewrite (author identity)
+Commits `33d9fd4` and `c9e0c74` were made with the author's personal e-mail as git author by mistake. Both were
+re-authored to `Claude <noreply@anthropic.com>` (the identity used for this session's earlier commits) and force-pushed;
+file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empty). New hashes: `92d5bce`, `29e806d`.
