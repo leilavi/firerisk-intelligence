@@ -144,3 +144,20 @@ Spark record, never resolves an alert, and its confidence is never turned into a
 
 Processing stages are tracked separately: video registered (`survey_videos`) → Muse Spark analysis (`video_analyses`
 status + running set) → phrase (`finding_phrases`) → localization (`video_finding_locations`, `/api/localization`).
+
+## Agentic investigation - Meta Muse Spark tool calling (2026-10-30)
+`firerisk/ai/agentic.py`. Format from https://dev.meta.ai/docs/tool-calling (function tools, `tool_choice: "auto"`
+only; the assistant message with `tool_calls` is sent back unchanged, then one `role: "tool"` message per call).
+
+| Step | How |
+|---|---|
+| Start | Same redacted package and system prompt as the single call, plus an instruction to look up only what could change or test the conclusion |
+| Tools (read-only) | `list_assets`, `get_asset_history`, `search_records`, `get_meter_readings`, `get_equipment_alerts`, `get_video_findings` over the in-memory analysis result and the video store |
+| Execution | Arguments parsed and validated; unknown tools, bad JSON or bad dates return an error object to the model (never an exception). Records get the next free alias (E..), names redacted, IDs never sent |
+| Limits | 6 tool rounds (`MAX_TURNS`), 16 lookups (`MAX_CALLS`), 25 records per lookup (`MAX_RESULTS`), 8,000 completion tokens per round |
+| Final answer | Same history + "write the JSON" with the strict `FireRiskInvestigation` schema (no tools offered); IDs mapped back and validated against everything the model was shown |
+| Record | `mode: agentic`, `agent.trace` (round, tool, arguments, returned / total, new aliases, errors, reasoning notes), `records_looked_up`, `cited_beyond_package`, stop reason |
+| Fallback | HTTP 4xx, malformed or cut-off answer → single-call investigation (`mode: single_call`, `agentic_fallback.reason`); timeout / rate limit / 5xx / auth → recorded as failed (one call would fail the same way) |
+| Switch | `FIRERISK_AI_TOOLS=0` → single call only. Prompt version `investigation-v7` (one automatic re-analysis per alert after the update) |
+The rule level stays authoritative; tools cannot change data, levels, alarms or equipment.
+

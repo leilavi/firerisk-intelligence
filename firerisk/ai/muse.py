@@ -82,6 +82,16 @@ class MuseResult:
     raw_content: str
 
 
+@dataclass
+class ToolTurn:
+    message: dict              # the assistant message exactly as returned (sent back in the next turn)
+    tool_calls: list[dict]
+    finish_reason: str | None
+    model: str | None
+    usage: dict | None
+    seconds: float
+
+
 class MuseClient:
     def __init__(self, config: MuseConfig | None = None, opener=None):
         self.config = config or MuseConfig.load()
@@ -117,29 +127,58 @@ class MuseClient:
         except json.JSONDecodeError as err:
             raise MuseBadResponse(f"non-JSON response: {err}") from None
 
-    def chat_json(self, system: str, user: str, schema: dict, *, reasoning_effort: str = "medium",
-                  max_completion_tokens: int = 8000, retries: int = 2) -> MuseResult:
-        if not self.config.configured:
-            raise MuseNotConfigured("MODEL_API_KEY is not set (run setup_api_key.bat)")
-        payload = {
-            "model": self.config.model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "response_format": {"type": "json_schema", "json_schema": schema},
-            "reasoning_effort": reasoning_effort,
-            "max_completion_tokens": max_completion_tokens,
-        }
+    def _post_retry(self, payload: dict, retries: int) -> tuple[dict, float]:
+        """POST /chat/completions; retries only rate limits and timeouts (a 400 is never resent)."""
         attempt = 0
         while True:
             start = time.monotonic()
             try:
                 body = self._post("/chat/completions", payload)
-                break
+                return body, time.monotonic() - start
             except (MuseRateLimited, MuseTimeout):
                 if attempt >= retries:
                     raise
                 time.sleep((2 ** attempt) + random.random())
                 attempt += 1
-        secs = time.monotonic() - start
+
+    def chat_json(self, system: str, user: str, schema: dict, *, reasoning_effort: str = "medium",
+                  max_completion_tokens: int = 8000, retries: int = 2) -> MuseResult:
+        return self.chat_json_messages([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                                       schema, reasoning_effort=reasoning_effort,
+                                       max_completion_tokens=max_completion_tokens, retries=retries)
+
+    def chat_tools(self, messages: list[dict], tools: list[dict], *, reasoning_effort: str = "medium",
+                   max_completion_tokens: int = 8000, retries: int = 2) -> ToolTurn:
+        """One turn of a tool-calling conversation (official format, https://dev.meta.ai/docs/tool-calling):
+        function tools only, tool_choice "auto" (the only value the API accepts). Returns the assistant message
+        unchanged - it must be sent back as-is, followed by one role "tool" message per call."""
+        if not self.config.configured:
+            raise MuseNotConfigured("MODEL_API_KEY is not set (run setup_api_key.bat)")
+        payload = {"model": self.config.model, "messages": messages, "tools": tools, "tool_choice": "auto",
+                   "reasoning_effort": reasoning_effort, "max_completion_tokens": max_completion_tokens}
+        body, secs = self._post_retry(payload, retries)
+        try:
+            choice = body["choices"][0]
+            msg, finish = choice["message"], choice.get("finish_reason")
+        except (KeyError, IndexError, TypeError):
+            raise MuseBadResponse(f"unexpected response shape: {str(body)[:300]}") from None
+        if finish == "length":
+            raise MuseTruncated(f"tool turn cut off at max_completion_tokens={max_completion_tokens}")
+        return ToolTurn(message=msg, tool_calls=list(msg.get("tool_calls") or []), finish_reason=finish,
+                        model=body.get("model"), usage=body.get("usage"), seconds=round(secs, 2))
+
+    def chat_json_messages(self, messages: list[dict], schema: dict, *, reasoning_effort: str = "medium",
+                           max_completion_tokens: int = 8000, retries: int = 2) -> MuseResult:
+        if not self.config.configured:
+            raise MuseNotConfigured("MODEL_API_KEY is not set (run setup_api_key.bat)")
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
+            "response_format": {"type": "json_schema", "json_schema": schema},
+            "reasoning_effort": reasoning_effort,
+            "max_completion_tokens": max_completion_tokens,
+        }
+        body, secs = self._post_retry(payload, retries)
         try:
             content = body["choices"][0]["message"]["content"]
             finish = body["choices"][0].get("finish_reason")

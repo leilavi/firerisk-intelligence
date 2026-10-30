@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 
 from ..config import LOCAL_TZ, SEVERITY_ORDER
 from ..env import load_env
+from .agentic import investigate_agentic
 from .investigation import fingerprint, investigate
 from .muse import MuseClient, MuseConfig
 
@@ -52,6 +53,7 @@ class AutoAnalyst:
         self.pending: dict[str, dict] = {}              # alert_id -> {"trigger", "queued_at", "running"}
         self.skipped: dict[str, str] = {}               # alert_id -> reason it was not queued (for the UI)
         self.thread: threading.Thread | None = None
+        self.video_lookup = None                        # zone -> survey-video context (set by the API)
 
     # --- settings ---------------------------------------------------------------------------
     @staticmethod
@@ -63,7 +65,8 @@ class AutoAnalyst:
             limit = 20
         lvl = env.get("FIRERISK_AI_MIN_LEVEL", "watch")
         return {"enabled": env.get("FIRERISK_AUTO_AI", "1") != "0", "daily_limit": max(0, limit),
-                "min_level": lvl if lvl in SEVERITY_ORDER else "watch"}
+                "min_level": lvl if lvl in SEVERITY_ORDER else "watch",
+                "tools": env.get("FIRERISK_AI_TOOLS", "1") != "0"}
 
     # --- decisions ----------------------------------------------------------------------------
     def _decide(self, alert, fp: str, now: datetime, cfg: dict) -> str | None:
@@ -153,7 +156,12 @@ class AutoAnalyst:
         if alert is None:
             return None
         client = self.client_factory()
-        rec = investigate(alert, res.signals, res.evidence, datetime.now(LOCAL_TZ), client, res.equipment_alerts)
+        now = datetime.now(LOCAL_TZ)
+        if self.settings()["tools"]:     # Muse Spark decides what to look up; falls back to one call on any API error
+            rec = investigate_agentic(alert, res.signals, res.evidence, now, client, res.equipment_alerts, self.video_lookup)
+        else:
+            rec = investigate(alert, res.signals, res.evidence, now, client, res.equipment_alerts)
+            rec["mode"] = "single_call"
         rec["trigger"] = trigger
         rec["base_url"] = client.config.base_url
         rec["api_mode"] = "live" if urlparse(client.config.base_url).hostname == "api.meta.ai" else "test"
