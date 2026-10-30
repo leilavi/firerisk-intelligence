@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- README "Development history" for judges (building period, baseline commit `b79223f` on branch `baseline`,
+  `git diff baseline main`, disclosed history rewrites); wrong baseline references (`3219f8c`, tag
+  `baseline-pre-hackathon`, which was never on GitHub) corrected in HACKATHON_COMPLIANCE, PROJECT_STATUS and
+  FEATURE_ORIGIN_MATRIX and added to the outdated-wording test.
 - Documents brought up to date with the live state (2026-10-30, after an outside review read the old README):
   README Meta AI usage table (video review and SAM 3.1 live, single photos not run, numbers from the PC database),
   data limits (one building, no sensor telemetry, floors not recorded), SAM / demo-mode sections, dashboard, tests

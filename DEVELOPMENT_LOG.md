@@ -334,3 +334,11 @@ HACKATHON_COMPLIANCE updated; true limits kept (no single photos run, no sensor 
 implemented, 9 videos without a floor). Author's rule recorded in CLAUDE.md and TASKS.md; guarded by
 tests/test_docs_current.py. Suite: 189 passed, 2 skipped (191 collected).
 
+## 2026-10-30 16:15–16:35 — Development history made checkable on GitHub
+Checked the remote: refs are `main` and `baseline` (→ `b79223f`); no tags. Documents still named commit `3219f8c`
+(pre-scrub hash) and a tag / branch `baseline-pre-hackathon` that does not exist on GitHub (the entry of 2026-10-27
+14:39 says the marker branch was `baseline-pre-hackathon`; the published branch is `baseline`). Corrected; README now
+has a "Development history" section. Commits on `main`: 47 before this change (18 on Oct 27, 15 on Oct 28, 13 on
+Oct 29, 1 on Oct 30), all inside the building period. Commit identities used so far: "FireRisk Dev", "Claude",
+"leilavi" (the last four, from 2026-10-29 evening, used a noreply e-mail by mistake; history not rewritten).
+
