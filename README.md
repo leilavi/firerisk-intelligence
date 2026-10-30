@@ -204,7 +204,9 @@ remain under the author's responsibility.
 * **Disclosed history rewrites:** (1) 2026-10-27 14:34–14:40, before the first publication: personal data and the
   building's name replaced in file contents with `git filter-repo`; author/committer dates and messages kept, hashes
   changed. (2) 2026-10-29: commit `e379dc4`, which had the building's name in two code comments, was replaced on `main` minutes
-  after it was pushed. Both are described in DEVELOPMENT_LOG.md.
+  after it was pushed. (3) 2026-10-30 21:05: the two latest commits (`33d9fd4`, `c9e0c74`, now `92d5bce`, `29e806d`)
+  had a personal e-mail as author; author re-set to the usual noreply identity, content and dates unchanged. All are
+  described in DEVELOPMENT_LOG.md.
 
 ## Repository
 ```
