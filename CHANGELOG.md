@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Local OCR of scanned drawings (`scripts/ocr_drawings.py`, `run_drawing_ocr.bat`): pages rendered with pypdfium2,
+  read with RapidOCR on the CPU in overlapping tiles (also turned 90 degrees), duplicates removed; results and a review
+  page stay in `data/private/drawings/ocr/`; console prints counts only. No AI service, no network. New dependencies
+  `rapidocr`, `onnxruntime`, `pypdfium2`.
 - Drawing probe (`scripts/probe_drawings.py`, `run_drawing_probe.bat`): reads the technical drawings on the author's PC
   with pdfplumber (no AI, no network) and prints counts only - page kinds (CAD text layer / scan / text), vector
   objects, generic label categories, floor mentions - to design the local extractor. New dependency `pdfplumber`.
