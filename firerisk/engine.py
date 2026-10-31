@@ -148,6 +148,8 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
     power = _power_links(known)                         # confirmed drawing links only (rule EQ-D1)
     equipment_alerts = build_equipment_alerts(evidence, meter_sigs, now, register, power=power)
     link_to_fire_alerts(equipment_alerts, alerts, index)
+    for a in alerts:                                    # what life-safety equipment the floor has (confirmed links)
+        a.life_safety = power.floor_inventory(a.zone) if power and power.links else {}
 
     dq = []
     for meter, iss in issues.items():

@@ -190,3 +190,49 @@ def test_api_uses_confirmed_links_and_reports_their_status(tmp_path, monkeypatch
     body = json.dumps(c.get(f"/api/equipment-alerts/{a['alert_id']}").json())
     assert "TESTSECRET" not in body and "4 emergency lights" in body
     plm._CACHE.clear()
+
+
+def test_floor_inventory_works_without_a_known_panel_and_mezzanine_counts_as_floor_1(tmp_path):
+    pl = load(write_links(tmp_path / "l.xlsx", [
+        row(floor="B1", panel_label="CP-B1", feeds="emergency_light", count=12),
+        row(floor="B1", panel_label="CP-B1", feeds="exit_sign", count=7),
+        row(floor="F1", panel_label="CP-F1", feeds="emergency_light", count=11),
+        row(floor="Tầng lửng", panel_label="CP-F1", feeds="emergency_light", count=6),
+        row(floor="Mái", panel_label="CP-R", feeds="exit_sign", count=7),
+    ]))
+    assert pl.problems == []
+    inv = pl.floor_inventory("B1")
+    assert {(e["equipment"], e["count"]) for e in inv["equipment"]} == {("emergency_light", 12), ("exit_sign", 7)}
+    assert inv["supplying_panel_known"] is False
+    assert pl.floor_inventory("F1")["equipment"][0]["count"] == 17
+    assert pl.floor_inventory("Roof")["equipment"][0]["count"] == 7
+    assert pl.floor_inventory("F3") == {}
+    s = json.dumps(summary(pl, floor="B1"))
+    assert "CP-B1" not in s and "CPB1" not in s and '"count": 12' in s
+
+
+def test_supplying_asset_found_through_the_main_panel(tmp_path):
+    pl = load(write_links(tmp_path / "l.xlsx", [
+        row(floor="B1", panel_label="MAIN", asset_id="P-MAIN", feeds="sub_panel", fed_panel_label="CP-B1", count=""),
+        row(floor="B1", panel_label="CP-B1", feeds="emergency_light", count=12)]))
+    inv = pl.floor_inventory("B1")
+    assert inv["supplying_panel_known"] and inv["equipment"][0]["supplying_assets"] == ["P-MAIN"]
+
+
+def test_investigation_package_carries_the_floor_inventory_and_reanalyses_once(tmp_path):
+    from types import SimpleNamespace
+    from firerisk.ai.investigation import build_package, fingerprint
+    now = datetime(2026, 10, 31, 9, tzinfo=LOCAL_TZ)
+    alert = SimpleNamespace(alert_id="ZONE-B1", zone="B1", zone_label="Basement", severity="warning", severity_basis=[], links=[],
+                            signal_ids=[], evidence_ids=[], context_ids=[], related_equipment=[], video_context=[],
+                            life_safety={})
+    fp0 = fingerprint(alert, {})
+    pkg, _, _ = build_package(alert, [], {}, now)
+    assert "life_safety_equipment_on_this_floor" not in pkg
+    pl = load(write_links(tmp_path / "l.xlsx", [row(panel_label=SECRET_PANEL, count=12)]))
+    alert.life_safety = pl.floor_inventory("B1")
+    pkg, _, _ = build_package(alert, [], {}, now)
+    ls = pkg["life_safety_equipment_on_this_floor"]
+    assert ls["equipment"][0]["count"] == 12 and ls["supplying_panel_known"] is False
+    assert "TESTSECRET" not in json.dumps(pkg)
+    assert fingerprint(alert, {}) != fp0 and fingerprint(alert, {}) == fingerprint(alert, {})
