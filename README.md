@@ -182,7 +182,7 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **224 tests (222 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **227 tests (225 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web

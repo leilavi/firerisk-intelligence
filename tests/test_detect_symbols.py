@@ -117,3 +117,32 @@ def test_legend_line_found_when_ocr_splits_it_or_misreads_accents():
     assert "emergency_light" in m.legend_lines([w("ĐÉN CHIÊU SANG SƯ CÔ", 100)])
     assert m.legend_lines([w("ĐÈN CHIẾU SÁNG SỰ CỐ LOẠI 2x3W TẠI CẦU THANG BỘ VÀ HÀNH LANG", 100, 900)]) == {}
     assert m.legend_lines([w("CHIẾU SÁNG", 100)]) == {}
+
+
+def test_plan_symbols_drawn_much_smaller_than_the_legend_are_found(tmp_path):
+    ocr = build(tmp_path)
+    img = cv2.imread(str(ocr / "TEST_p1.png"), cv2.IMREAD_GRAYSCALE)
+    plan = cv2.resize(img[:1400, :1900], None, fx=0.55, fy=0.55, interpolation=cv2.INTER_AREA)
+    img[:1400, :1900] = 255
+    img[:plan.shape[0], :plan.shape[1]] = plan
+    cv2.imwrite(str(ocr / "TEST_p1.png"), img)
+    page = _mod("detect_symbols").process(tmp_path)[0]["TECH-DIAG_TEST_Exit_Lighting"]["pages"][0]["symbols"]
+    assert (len(page["emergency_light"]), len(page["exit_sign"])) == (5, 3)
+
+
+def test_normal_lighting_is_never_taken_for_emergency_lighting_and_lost_accents_are_tolerated():
+    m = _mod("detect_symbols")
+    w = lambda s: {"text": s, "score": 0.9, "box": [100, 100, 300, 125], "rotated": False}
+    assert m.legend_lines([w("ĐÈN CHIẾU SÁNG")]) == {}
+    assert "emergency_light" in m.legend_lines([w("ĐEN CHIU SANG SC")])                    # as OCR read the real legend
+    assert "main_panel" in m.legend_lines([w("TDIEN CHINH")]) and m.legend_lines([w("TỦ ĐIỆN")]) == {}
+
+
+def test_a_filled_symbol_is_accepted_as_a_template():
+    m = _mod("detect_symbols")
+    img = np.full((300, 600), 255, np.uint8)
+    pts = np.array([[100, 100], [160, 130], [100, 160]]); cv2.fillPoly(img, [pts], 0)       # filled bow-tie halves
+    pts = np.array([[220, 100], [160, 130], [220, 160]]); cv2.fillPoly(img, [pts], 0)
+    cv2.rectangle(img, (100, 100), (220, 160), 0, 2)
+    tpl, box = m.cut_symbol(img, [260, 118, 450, 142])
+    assert tpl is not None and box[0] <= 101 and box[2] >= 219

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import html
 import importlib.util
+import re
 import json
 import sys
 from pathlib import Path
@@ -28,13 +29,16 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DIR = ROOT / "data" / "private" / "drawings"
 
 # legend wording (diacritics removed, lower case) -> equipment type used in power_links
-LEGEND = {"emergency_light": ["chieu sang su co", "den su co", "emergency light"],
+LEGEND = {"emergency_light": ["den chieu sang su co", "chieu sang su co", "den su co", "emergency light"],
           "exit_sign": ["den thoat hiem", "exit sign"],
           "main_panel": ["tu dien chinh", "main switchboard", "main panel"]}
+# a word that must be in the line, so "DEN CHIEU SANG" (normal lighting) is never taken for the emergency light
+MUST = {"emergency_light": re.compile(r"sang\w{0,3}s\w{0,2}c|suco|emerg|densuc"), "exit_sign": re.compile(r"thoat|exit"),
+        "main_panel": re.compile(r"chinh|main")}
 THRESHOLD = 0.72          # normalised correlation needed for a match
-SCALES = (0.85, 0.92, 1.0, 1.08, 1.17)
-MIN_INK, MAX_INK = 0.02, 0.6   # share of dark pixels a symbol cut-out must have
-MAX_SIDE = 5000           # pages are searched at most this many pixels wide/high (speed); boxes scaled back
+SCALES = (0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.05, 1.2, 1.4)   # plan symbols are often drawn smaller than the legend
+MIN_INK, MAX_INK = 0.02, 0.9    # share of dark pixels a symbol cut-out must have (filled symbols are dark)
+MAX_SIDE = 4000           # pages are searched at most this many pixels wide/high (speed); boxes scaled back
 
 
 def _probe():
@@ -79,7 +83,7 @@ def legend_lines(texts: list[dict]) -> dict[str, dict]:
         best, best_r = None, 0.0
         for t in cands:
             c = _collapse(t["text"])
-            if not c or len(c) > 45:
+            if not c or len(c) > 45 or not MUST[kind].search(c):
                 continue
             for w in words:
                 wc = _collapse(w)
@@ -89,7 +93,9 @@ def legend_lines(texts: list[dict]) -> dict[str, dict]:
                     r = max((SequenceMatcher(None, wc, c[i:i + len(wc)]).ratio()
                              for i in range(0, max(1, len(c) - len(wc) + 1))), default=0.0)
                 # the name should be most of the text (a legend line, not a sentence that mentions it)
-                if r >= 0.85 and len(wc) / len(c) >= 0.5 and (r, -len(c)) > (best_r, -len(_collapse(best["text"])) if best else 0):
+                # scans lose accented letters ("DEN CHIU SANG SC"): a slightly lower bar when the start matches
+                need = 0.75 if c[:3] == wc[:3] and 0.75 <= len(c) / len(wc) <= 1.4 else 0.85
+                if r >= need and len(wc) / len(c) >= 0.5 and (r, -len(c)) > (best_r, -len(_collapse(best["text"])) if best else 0):
                     best, best_r = t, r
         if best:
             out[kind] = best
