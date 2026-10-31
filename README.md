@@ -151,7 +151,9 @@ processes older items. "Not located" is a valid answer, not an error. Details: [
 
 ## Electrical supply of life-safety equipment (from the building drawings)
 The scanned electrical and emergency-lighting drawings are read **on the author's computer** (`run_drawing_ocr.bat`,
-local OCR, no AI service). `run_draft_power_links.bat` turns the text into a draft table "which panel supplies which
+local OCR, no AI service). `run_draft_power_links.bat` finds the drawn symbols that carry no text (e.g. emergency lights) by cutting each
+symbol from the drawing's own legend and searching the pages for it (OpenCV template matching, local, with a review
+page), and turns text and symbols into a draft table "which panel supplies which
 emergency lights, exit signs, fire pump, smoke control or fire alarm, on which floor"; the author checks every row
 against the drawing and confirms it. Only confirmed rows are used (rule EQ-D1 in RISK_RULES.md): a panel that supplies
 life-safety equipment is treated as critical, its alert says which floors lose emergency lighting if it fails and adds
@@ -180,7 +182,7 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **219 tests (217 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **223 tests (221 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
