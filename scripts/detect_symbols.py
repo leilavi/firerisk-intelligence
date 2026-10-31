@@ -47,13 +47,52 @@ def _probe():
 fold = _probe().fold
 
 
+def _collapse(s: str) -> str:
+    return "".join(ch for ch in fold(s) if ch.isalnum())
+
+
+def text_lines(texts: list[dict]) -> list[dict]:
+    """OCR words on the same line merged left to right (a legend name is often read as 2-3 pieces)."""
+    items = sorted((t for t in texts if not t.get("rotated")), key=lambda t: (t["box"][1], t["box"][0]))
+    lines: list[dict] = []
+    for t in items:
+        x1, y1, x2, y2 = t["box"]
+        h = max(1, y2 - y1)
+        for ln in lines:
+            lx1, ly1, lx2, ly2 = ln["box"]
+            if abs((y1 + y2) / 2 - (ly1 + ly2) / 2) < 0.6 * h and 0 <= x1 - lx2 < 2.5 * h:
+                ln["text"] += " " + t["text"]
+                ln["box"] = [lx1, min(ly1, y1), x2, max(ly2, y2)]
+                break
+        else:
+            lines.append({"text": t["text"], "box": list(t["box"])})
+    return lines
+
+
 def legend_lines(texts: list[dict]) -> dict[str, dict]:
+    """The legend line of each symbol: matched on letters only (no spaces or accents), on single OCR words and on
+    words merged into lines, tolerant to one or two misread letters."""
+    from difflib import SequenceMatcher
     out = {}
-    for t in texts:
-        ft = " ".join(fold(t["text"]).split())
-        for kind, words in LEGEND.items():
-            if kind not in out and any(w in ft for w in words) and len(ft) <= 40:
-                out[kind] = t
+    cands = list(texts) + text_lines(texts)
+    for kind, words in LEGEND.items():
+        best, best_r = None, 0.0
+        for t in cands:
+            c = _collapse(t["text"])
+            if not c or len(c) > 45:
+                continue
+            for w in words:
+                wc = _collapse(w)
+                if wc in c:
+                    r = 1.0
+                else:
+                    r = max((SequenceMatcher(None, wc, c[i:i + len(wc)]).ratio()
+                             for i in range(0, max(1, len(c) - len(wc) + 1))), default=0.0)
+                # the name should be most of the text (a legend line, not a sentence that mentions it)
+                if r >= 0.85 and len(wc) / len(c) >= 0.5 and (r, -len(c)) > (best_r, -len(_collapse(best["text"])) if best else 0):
+                    best, best_r = t, r
+        if best:
+            out[kind] = best
     return out
 
 
@@ -152,9 +191,13 @@ def legend_area(lines: dict[str, dict], sym_boxes: list[list[int]]) -> list[int]
 
 
 def _load(path: Path):
-    """Grayscale page, shrunk to MAX_SIDE; returns (image, factor)."""
+    """Grayscale page, shrunk to MAX_SIDE; returns (image, factor). Read via numpy so any Windows path works."""
     import cv2
-    img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+    import numpy as np
+    try:
+        img = cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+    except (OSError, ValueError):
+        img = None
     if img is None:
         return None, 1.0
     f = min(1.0, MAX_SIDE / max(img.shape))
@@ -175,11 +218,19 @@ def process(folder: Path) -> tuple[dict, dict]:
         # templates: from the first page whose legend shows the symbol
         templates, notes = {}, {}
         legend_by_page = {}
+        diag = {"pages": len(pages), "pages_read": 0, "legend_lines_matched": 0,
+                "texts_mentioning_su_co": 0, "texts_mentioning_thoat_hiem": 0}
         for p in pages:
+            for t in p["texts"]:
+                c = _collapse(t["text"])
+                diag["texts_mentioning_su_co"] += "suco" in c
+                diag["texts_mentioning_thoat_hiem"] += "thoathiem" in c
             img, f = _load(ocr / p["image"])
             if img is None:
                 continue
+            diag["pages_read"] += 1
             lines = {k: {**t, "box": [int(v * f) for v in t["box"]]} for k, t in legend_lines(p["texts"]).items()}
+            diag["legend_lines_matched"] += len(lines)
             cut_boxes = []
             for kind, t in lines.items():
                 tpl, box = cut_symbol(img, t["box"])
@@ -203,7 +254,7 @@ def process(folder: Path) -> tuple[dict, dict]:
             file_res["pages"].append({"page": p["page"], "image": p["image"], "size": p["size"], "symbols": found})
         results[jf.stem] = file_res
         kind = _probe().classify_name(data.get("file", jf.name))
-        stats[kind] = {"templates_found": sorted(templates), "templates_missing": sorted(file_res["not_found"]),
+        stats[kind] = {"templates_found": sorted(templates), "templates_missing": sorted(file_res["not_found"]), **diag,
                        **{f"count_{k}": sum(len(pg["symbols"].get(k, [])) for pg in file_res["pages"]) for k in templates}}
     (ocr / "symbols.json").write_text(json.dumps(results, indent=1), encoding="utf-8")
     review(ocr, results)

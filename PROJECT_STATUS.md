@@ -18,7 +18,7 @@ database on 2026-10-30.
 | Single inspection photos (Muse Spark image input) | Implemented, **not run live** — no photos available | `firerisk/media.py` |
 | Sensor telemetry (temperature / smoke / gas) | **Not available** — no feed connected; stated in the dashboard and README | — |
 | Agentic investigation (Muse Spark tool calling, 7 read-only tools (7th: `get_fire_safety_supply`, added 2026-10-31; first live use pending the confirmed table), fallback to one call) | **Live**: protocol check 18:57 (PASS) and 2 automatic agentic investigations on the building data at 19:06 (3 lookups each, 0 invalid citations, no fallback; no records beyond the rule package found); 6 offline tests | `evidence/agentic_investigation_live_20261030.json`, `evidence/tool_calling_check_20261030_185751.json`, `firerisk/ai/agentic.py`, `tests/test_agentic.py` |
-| Tests | 223 collected: 221 pass, 2 skipped (private snapshot absent) — 2026-10-30 | `python -m pytest -q` |
+| Tests | 224 collected: 222 pass, 2 skipped (private snapshot absent) — 2026-10-30 | `python -m pytest -q` |
 | Public GitHub repo | Published; README updated 2026-10-30 | https://github.com/leilavi/firerisk-intelligence |
 | Asset register floors | 9 of 14 videos have no floor in the register (7 rows with an empty floor, 2 videos without a row) | author to fill |
 | U-05 data / video rights confirmation | **Done**: written approval of the data owner's CEO, 2026-10-30, with 4 conditions; enforced in code | `DATA_AUTHORIZATION.md`, `firerisk/data_policy.py`, `tests/test_data_policy.py` |
