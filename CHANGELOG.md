@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Drawn symbols without text (2026-10-31): `scripts/detect_symbols.py` cuts each symbol from the drawing's legend
+  ("GHI CHU": emergency light, exit sign, main panel), checks the cut-out, searches all pages (4 rotations, 0.85-1.17
+  scale, speckle removed, overlaps and legend excluded) and writes `ocr/symbols.json` + `ocr/symbols_review.html`.
+  The draft counts emergency lights from these symbols (the first real draft found only 1 text label for them);
+  EXIT text vs EXIT symbols is cross-checked per page. "CP" (floor control panel) recognised as a panel label.
+  4 new tests incl. a noisy, blurred scan with smaller symbols.
 - Electrical supply of life-safety equipment (2026-10-31): `scripts/draft_power_links.py` (+ `run_draft_power_links.bat`)
   makes a draft table panel -> emergency lights / exit signs / fire pump / smoke control / fire alarm per floor from the
   local OCR (floor from floor names, not circuit codes; legend text not counted; nearest panel label; every guess

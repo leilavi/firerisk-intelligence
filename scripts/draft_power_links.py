@@ -48,7 +48,7 @@ def _probe():
 
 P = _probe()
 fold = P.fold
-PANEL_RX = re.compile(r"\b(MSB|MDB|SMDB|SDB|EMDB|EDB|DB|ELP|LP|EP|PP|ATS|MCC)(?:[-_.]?[A-Z0-9]{1,6}){0,3}\b")
+PANEL_RX = re.compile(r"\b(MSB|MDB|SMDB|SDB|EMDB|EDB|DB|ELP|LP|EP|PP|ATS|MCC|CP)(?:[-_.]?[A-Z0-9]{1,6}){0,3}\b")
 DEVICE_RX = {"exit_sign": re.compile(P.CATEGORIES["exit_sign"]), "emergency_light": re.compile(P.CATEGORIES["emergency_light"])}
 FIRE_RX = {"fire_pump": re.compile(r"bom\s*chua\s*chay|fire\s*pump|\bfp\b|\bjockey"),
            "smoke_control": re.compile(r"hut\s*khoi|tang\s*ap|smoke|\beaf\d*\b|\bsef\d*\b|\bpaf\d*\b|\bspf\d*\b"),
@@ -124,7 +124,10 @@ def nearest(t: dict, cands: list[dict], limit: float) -> dict | None:
     return best
 
 
-def draft(ocr_files: list[Path], assets: dict[str, str]) -> tuple[list[dict], list[dict], dict]:
+def draft(ocr_files: list[Path], assets: dict[str, str], symbols: dict | None = None) -> tuple[list[dict], list[dict], dict]:
+    """`symbols`: ocr/symbols.json (scripts/detect_symbols.py). Where the legend symbol of a device type was found,
+    that type is counted from the symbols on the drawing instead of from text labels."""
+    symbols = symbols or {}
     rows: dict[tuple, dict] = {}
     panels: dict[str, dict] = {}
     stats = Counter()
@@ -155,6 +158,10 @@ def draft(ocr_files: list[Path], assets: dict[str, str]) -> tuple[list[dict], li
                         p["floors"][fl] += 1
             only_panel = plabels[0]["panel"] if len({p["panel"] for p in plabels}) == 1 else None
             circuits = [t for t in texts if CIRCUIT_RX.search(fold(t["text"]).strip()) and not panel_label(t["text"])]
+            sym_file = symbols.get(f.stem) or {}
+            sym_page = next((pg["symbols"] for pg in sym_file.get("pages", []) if pg["page"] == page["page"]), {})
+            from_symbols = {k for k in ("emergency_light",) if k in (sym_file.get("templates") or {})}
+            devices = []
             for t in texts:
                 typ = device_type(t["text"]) if kind != "cable_routing_msb" else None
                 typ = typ or fire_type(t["text"])
@@ -162,7 +169,17 @@ def draft(ocr_files: list[Path], assets: dict[str, str]) -> tuple[list[dict], li
                     if fold(t["text"]) and any(rx.search(fold(t["text"])) for rx in DEVICE_RX.values()):
                         stats["legend_or_note_skipped"] += 1
                     continue
-                stats[f"labels_{typ}"] += 1
+                if typ in from_symbols:
+                    continue                       # counted from the drawn symbols below, not twice
+                devices.append((t, typ, "label"))
+            for typ in from_symbols:
+                devices += [({"text": "", "score": s["score"], "box": s["box"]}, typ, "symbol") for s in sym_page.get(typ, [])]
+            if "exit_sign" in sym_page:            # cross-check: EXIT text labels vs EXIT symbols on this page
+                n_txt = sum(1 for _, ty, _ in devices if ty == "exit_sign")
+                if abs(n_txt - len(sym_page["exit_sign"])) > max(1, 0.2 * max(n_txt, 1)):
+                    stats["pages_exit_text_vs_symbol_differ"] += 1
+            for t, typ, how in devices:
+                stats[f"{'symbols' if how == 'symbol' else 'labels'}_{typ}"] += 1
                 near = nearest(t, plabels, limit)
                 if near:
                     panel, basis = near["panel"], "panel label next to the symbol"
@@ -173,7 +190,9 @@ def draft(ocr_files: list[Path], assets: dict[str, str]) -> tuple[list[dict], li
                 stats["linked_near" if near else "linked_page_only" if only_panel else "not_linked"] += 1
                 key = (floor or "?", panel, typ)
                 r = rows.setdefault(key, {"floor": floor or "", "panel_label": panel, "feeds": typ, "count": 0,
-                                          "pages": set(), "bases": Counter(), "scores": [], "circuits": set()})
+                                          "pages": set(), "bases": Counter(), "scores": [], "circuits": set(),
+                                          "how": set()})
+                r["how"].add(how)
                 r["count"] += 1
                 r["pages"].add(f"{kind} p{page['page']}")
                 r["bases"][basis] += 1
@@ -188,7 +207,9 @@ def draft(ocr_files: list[Path], assets: dict[str, str]) -> tuple[list[dict], li
                       "count": r["count"], "fed_panel_label": "", "circuits": ", ".join(sorted(r["circuits"]))[:200], "source": ", ".join(sorted(r["pages"])),
                       "basis": "; ".join(f"{b} ({n})" for b, n in r["bases"].most_common())
                                + ("" if r["floor"] else "; floor not clear on this page - fill in")
-                               + "; count = text labels read by OCR, symbols without a label are missed",
+                               + ("; count = legend symbols found on the drawing (check symbols_review.html)"
+                                  if r["how"] == {"symbol"} else
+                                  "; count = text labels read by OCR, symbols without a label are missed"),
                       "ocr_confidence": round(min(r["scores"]), 2), "note": ""})
     panel_rows = []
     for lab, p in sorted(panels.items()):
@@ -282,12 +303,25 @@ def write_xlsx(path: Path, links: list[dict], panels: list[dict], assets: dict[s
 
 def main(argv: list[str]) -> int:
     folder = Path(argv[1]) if len(argv) > 1 else DEFAULT_DIR
-    files = sorted((folder / "ocr").glob("*.json"))
+    files = sorted(f for f in (folder / "ocr").glob("*.json") if f.name != "symbols.json")
     if not files:
         print(f"No OCR results in {folder / 'ocr'}. Run run_drawing_ocr.bat first.")
         return 1
     assets = load_assets()
-    links, panels, stats = draft(files, assets)
+    sym_path = folder / "ocr" / "symbols.json"
+    if not sym_path.exists() or sym_path.stat().st_mtime < max(f.stat().st_mtime for f in files):
+        print("Finding the legend symbols on the drawings (local, a few minutes) ...", flush=True)
+        try:
+            spec = importlib.util.spec_from_file_location("sym", Path(__file__).with_name("detect_symbols.py"))
+            sym = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sym)
+            _, sstats = sym.process(folder)
+            for k, v in sstats.items():
+                print(f"  symbols {k}: {v}")
+        except Exception as exc:              # OpenCV missing or a page unreadable: draft from text only
+            print(f"  symbol search not done ({type(exc).__name__}); counts come from text labels only")
+    symbols = json.loads(sym_path.read_text(encoding="utf-8")) if sym_path.exists() else {}
+    links, panels, stats = draft(files, assets, symbols)
     out = folder / "power_links_draft.xlsx"
     write_xlsx(out, links, panels, assets)
     print("--- Summary (numbers only, safe to paste in the chat) ---")
