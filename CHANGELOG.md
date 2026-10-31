@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Electrical supply of life-safety equipment (2026-10-31): `scripts/draft_power_links.py` (+ `run_draft_power_links.bat`)
+  makes a draft table panel -> emergency lights / exit signs / fire pump / smoke control / fire alarm per floor from the
+  local OCR (floor from floor names, not circuit codes; legend text not counted; nearest panel label; every guess
+  labelled; nothing confirmed). `firerisk/power_links.py` loads ONLY confirmed, valid rows (every rejection explained;
+  contradictions dropped, not guessed; downstream panels followed, cycle-safe). Rule EQ-D1: such a panel counts as
+  critical, its alert states what loses supply and adds a battery test; link to the fire-risk alert of the supplied
+  floor. 7th Muse Spark tool `get_fire_safety_supply` (floor, type, count only). Status on the dashboard sources panel.
+  12 new tests.
 - Local OCR of scanned drawings (`scripts/ocr_drawings.py`, `run_drawing_ocr.bat`): pages rendered with pypdfium2,
   read with RapidOCR on the CPU in overlapping tiles (also turned 90 degrees), duplicates removed; results and a review
   page stay in `data/private/drawings/ocr/`; console prints counts only. No AI service, no network. New dependencies

@@ -22,7 +22,11 @@
 - [x] Claude: `scripts/probe_drawings.py` + `run_drawing_probe.bat` — local probe of the drawings, counts only (2026-10-30).
 - [x] Claude: `scripts/ocr_drawings.py` + `run_drawing_ocr.bat` — local OCR of the scanned drawings, private results + review page, counts-only summary (2026-10-30).
 - [ ] Author: copy the 2 drawings from Drive into `data\private\drawings\`, run `run_drawing_ocr.bat`, open `ocr\review.html`, paste the summary.
-- [ ] Claude + Author: local drawing extractor (detailed layer, private) + simplified zone summary (the only layer sent to AI / shown in demo mode), filled on the author's computer (floor/zone → fire-safety equipment types, feeding panel; no dimensions, cable routes or equipment details); app links electrical faults to the fire-safety equipment of the same zone.
+- [x] Author: OCR of the 2 drawings run on the PC (2026-10-30).
+- [x] Claude: draft table + rule EQ-D1 + 7th Muse Spark tool `get_fire_safety_supply` + status on the dashboard (2026-10-31).
+- [ ] Author: `run_draft_power_links.bat`, check `power_links_draft.xlsx` (yellow rows first), confirm rows, save as `power_links.xlsx`.
+- [ ] Claude: after confirmation, check counts, re-run the B1 investigation live and look at what Muse Spark looked up.
+- [ ] (superseded) local drawing extractor + simplified zone summary, filled on the author's computer (floor/zone → fire-safety equipment types, feeding panel; no dimensions, cable routes or equipment details); app links electrical faults to the fire-safety equipment of the same zone.
 
 - [x] Claude: unified dark dashboard with AI Risk Briefing and floor markers (0.8).
 - [x] Author: restart `run_dashboard` once; Claude then checks the v5 briefings and the record translations from the PC database.

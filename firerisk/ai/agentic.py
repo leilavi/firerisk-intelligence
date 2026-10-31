@@ -38,7 +38,7 @@ AGENT_ADDENDUM = """
 
 Tools (read-only): the package above is what the deterministic rules assembled. Before you answer you may look up
 more records with the tools - e.g. the full history of an asset, earlier incidents in the same room, meter readings
-around a fault date, related equipment alerts, survey-video findings. Look up only what could change or test your
+around a fault date, related equipment alerts, survey-video findings, which life-safety equipment an electrical panel supplies. Look up only what could change or test your
 conclusion (a repeat fault, a contradicting record, a timeline gap). Records returned by tools get evidence IDs
 (E..) you may cite like package evidence. Do not call a tool for something already in the package. When you have
 enough, stop calling tools and say in one or two sentences what you checked and why; you will then be asked for
@@ -76,6 +76,12 @@ TOOLS = [
         ["meter_id"]),
     _fn("get_equipment_alerts", "Maintenance (equipment) alerts from the rule set, with level and evidence, for a zone or "
         "one asset.", {"zone": {"type": "string"}, "asset_id": {"type": "string"}}, []),
+    _fn("get_fire_safety_supply", "Which life-safety equipment (emergency lights, exit signs, fire pump, smoke control, "
+        "fire alarm) an electrical asset supplies, directly or through downstream panels, per floor with counts - from "
+        "the building's electrical and emergency-lighting drawings, each link checked by a person. Give asset_id to "
+        "ask about one panel, or zone to list the assets supplying life-safety equipment on that floor. An empty list "
+        "means no confirmed link, NOT that the asset supplies nothing.",
+        {"asset_id": {"type": "string"}, "zone": {"type": "string"}}, []),
     _fn("get_video_findings", "Meta Muse Spark survey-video observations for a zone (what was visible at recording time "
         "only; not current state, not a confirmed hazard).", {"zone": {"type": "string"}}, ["zone"]),
 ]
@@ -95,12 +101,14 @@ class EvidenceTools:
     """Executes the model's tool calls on the in-memory analysis result. Shares the package's alias map, so a record
     has the same alias whether it came from the package or from a tool."""
 
-    def __init__(self, evidence_index: dict, real_to_alias: dict, redactor, equipment_alerts=None, video_lookup=None):
+    def __init__(self, evidence_index: dict, real_to_alias: dict, redactor, equipment_alerts=None, video_lookup=None,
+                 power_links=None):
         self.ev = evidence_index
         self.alias = dict(real_to_alias)
         self.red = redactor
         self.equipment_alerts = equipment_alerts or []
         self.video_lookup = video_lookup
+        self.power_links = power_links
         self.video_alias: dict[str, str] = {}
         self.new_aliases: list[str] = []           # records first shown through a tool
 
@@ -192,6 +200,19 @@ class EvidenceTools:
                                       "evidence_ids": [self.alias_of(i) for i in a.evidence_ids if i in self.ev][:15]}
                                      for a in rows[:20]], "total": len(rows)}
 
+    def get_fire_safety_supply(self, asset_id=None, zone=None):
+        """Simplified drawing links only (owner's condition 2): floor, equipment type, count, direct or not.
+        No panel labels, circuits or drawing details."""
+        from ..power_links import summary
+        if not asset_id and not zone:
+            return {"error": "give asset_id or zone"}
+        pl = self.power_links
+        if pl is None or not pl.links:
+            return {"links": [], "note": "no confirmed drawing links are available in this run"}
+        out = summary(pl, asset_id=asset_id or None, floor=zone or None)
+        out["total"] = len(out["links"])
+        return out
+
     def get_video_findings(self, zone):
         if not self.video_lookup:
             return {"error": "survey videos are not available in this run"}
@@ -225,18 +246,20 @@ class EvidenceTools:
         shown = sorted(set(self.alias.values()) - before)
         entry = {"args": clean, "error": result.get("error"),
                  "returned": result.get("returned", len(result.get("readings", [])) or len(result.get("equipment_alerts", []))
-                                        or len(result.get("videos", [])) or len(result.get("assets", []))),
+                                        or len(result.get("videos", [])) or len(result.get("assets", []))
+                                        or len(result.get("links", []))),
                  "total_matches": result.get("total_matches"), "new_evidence_aliases": shown}
         return result, entry
 
 
 def investigate_agentic(alert, signals, evidence_index, now: datetime, client: MuseClient | None = None,
-                        equipment_alerts=None, video_lookup=None) -> dict:
+                        equipment_alerts=None, video_lookup=None, power_links=None) -> dict:
     """Agentic investigation with automatic fallback to the single-call investigation."""
     client = client or MuseClient()
     t_start = time.monotonic()
     package, red, alias_to_real = inv.build_package(alert, signals, evidence_index, now, equipment_alerts)
-    tools = EvidenceTools(evidence_index, {v: k for k, v in alias_to_real.items()}, red, equipment_alerts, video_lookup)
+    tools = EvidenceTools(evidence_index, {v: k for k, v in alias_to_real.items()}, red, equipment_alerts, video_lookup,
+                          power_links)
     user = "Investigate this zone alert. Evidence package (JSON):\n" + json.dumps(package, ensure_ascii=False)
     messages = [{"role": "system", "content": inv.SYSTEM_PROMPT + AGENT_ADDENDUM}, {"role": "user", "content": user}]
     trace: list[dict] = []

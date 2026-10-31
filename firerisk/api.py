@@ -298,6 +298,8 @@ def status():
             "signal_count": len(res.signals), "data_quality_issues": len(res.data_quality),
             "sources_down": [s for s in res.source_status if s.get("error")],
             "sources_stale": [s for s in res.source_status if s.get("stale")],
+            "power_links": (res.power_links.status() if getattr(res, "power_links", None) is not None
+                            else {"present": False}),
             "zone_records": dict(Counter(e.zone or "Building" for e in res.evidence.values()
                                          if e.kind in ("incident", "construction", "asset_service", "inspection_check",
                                                        "generator_run", "meter_episode"))),
@@ -353,7 +355,7 @@ def _eq_summary(ea) -> dict:
             "detected_at": state.store.first_detected(ea.alert_id), "deadline": f.get("deadline"),
             "urgency": f.get("urgency"), "confidence": f.get("confidence"),
             "verification": state.store.current_status(ea.alert_id),
-            "fire_links": ea.fire_links}
+            "fire_links": ea.fire_links, "power_dependents": ea.power_dependents}
 
 
 def _eq_alert(alert_id: str):

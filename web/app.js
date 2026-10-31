@@ -682,6 +682,7 @@ function sourcesPanel() {
   return `${rows}
     <div class="srcrow"><span class="dotst ${sy.configured ? (sy.last && !sy.last.ok ? "bad" : "") : "off"}"></span><span>Google Drive sync<div class="tiny muted">${sy.configured ? (sy.auto_minutes ? `every ${sy.auto_minutes} min` : "manual") : "not connected"}</div></span><span class="tiny muted">${sy.last_ok_at ? dt(sy.last_ok_at) : "—"}</span></div>
     <div class="srcrow"><span class="dotst ${S.ai.configured ? "" : "off"}"></span><span>Meta Muse Spark<div class="tiny muted">${S.ai.configured ? (S.ai.mode === "live" ? "live Meta Model API" : "TEST endpoint") : "not configured"} · powered by ${esc(S.ai.model || "muse-spark-1.3")}</div></span><span class="tiny muted"></span></div>
+    ${(() => { const pl = S.power_links || {}; return `<div class="srcrow"><span class="dotst ${pl.present && !pl.error ? (pl.rejected ? "bad" : "") : "off"}"></span><span>Drawing links (panel → life-safety equipment)<div class="tiny muted">${!pl.present ? "not prepared" : pl.error ? "Not readable" : `${pl.confirmed_used} checked link(s) used · ${pl.unconfirmed} not yet checked${pl.rejected ? ` · ${pl.rejected} rejected` : ""}`}</div></span><span class="tiny muted"></span></div>`; })()}
     <p class="tiny muted" style="margin:8px 0 0">No smoke, heat or gas sensor feed is connected. Photos referenced in the logs: ${S.media.available} of ${S.media.references} available.</p>`;
 }
 

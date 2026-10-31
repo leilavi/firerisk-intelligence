@@ -82,8 +82,9 @@ One alert per equipment item or meter. Independent of fire-risk alerts; the fire
 | EQ2 Overdue | Open repair past its expected completion date (skill §10.4 "Quá hạn") | One level up, but not above Warning: an overdue date alone does not show a serious consequence (skill §7) |
 | EQ3 Repeated faults | ≥ 2 dated fault records with two within 90 days, or a fault that returned after an earlier repair, and recent (90 days) or still open | Warning on critical equipment, otherwise Watch |
 | EQ4 Meter finding | R8 meter signal | Skill §5A.8 level unchanged |
-Equipment alert ↔ fire-risk alert link reasons: shared record, same equipment, or the meter measures equipment that
-is part of the fire-risk alert. A fault with no fire-hazard meaning (e.g. an air-conditioner sensor fault) stays an
+| EQ-D1 Supplies life-safety equipment (NEW, 2026-10-31) | The asset supplies emergency lights, exit signs, fire pump, smoke control or fire alarm, directly or through downstream panels, according to a **confirmed** row of `data/private/drawings/power_links.xlsx` (drawing link checked by a person) | The asset counts as critical equipment for EQ1/EQ3 (skill §2C.A: fire-safety equipment is critical) - Warning instead of Watch. The alert names the floors, equipment types and counts it supplies and adds a battery test of the emergency lighting. Unconfirmed or invalid rows are never used |
+Equipment alert ↔ fire-risk alert link reasons: shared record, same equipment, the meter measures equipment that
+is part of the fire-risk alert, or (EQ-D1) the asset supplies life-safety equipment on the alert's floor. A fault with no fire-hazard meaning (e.g. an air-conditioner sensor fault) stays an
 equipment alert only.
 
 ## Muse Spark (NEW) — never sets a level

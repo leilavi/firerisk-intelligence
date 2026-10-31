@@ -152,7 +152,7 @@ only; the assistant message with `tool_calls` is sent back unchanged, then one `
 | Step | How |
 |---|---|
 | Start | Same redacted package and system prompt as the single call, plus an instruction to look up only what could change or test the conclusion |
-| Tools (read-only) | `list_assets`, `get_asset_history`, `search_records`, `get_meter_readings`, `get_equipment_alerts`, `get_video_findings` over the in-memory analysis result and the video store |
+| Tools (read-only) | `list_assets`, `get_asset_history`, `search_records`, `get_meter_readings`, `get_equipment_alerts`, `get_video_findings`, `get_fire_safety_supply` (simplified drawing links: floor, equipment type, count) over the in-memory analysis result and the video store |
 | Execution | Arguments parsed and validated; unknown tools, bad JSON or bad dates return an error object to the model (never an exception). Records get the next free alias (E..), names redacted, IDs never sent |
 | Limits | 6 tool rounds (`MAX_TURNS`), 16 lookups (`MAX_CALLS`), 25 records per lookup (`MAX_RESULTS`), 8,000 completion tokens per round |
 | Final answer | Same history + "write the JSON" with the strict `FireRiskInvestigation` schema (no tools offered); IDs mapped back and validated against everything the model was shown |

@@ -63,8 +63,10 @@ conclusion. A video finding stays a finding (no risk level) until a person verif
 * Known limits: one building only; daily checklists keep only the latest result; **no temperature, smoke or gas
   sensor telemetry** (no such feed is connected, so the risk assessment uses records, rules and video, and the
   dashboard says that "no active alert" does not mean safe); photos referenced by the logs are not yet accessible;
-  generator-connected loads are not recorded; technical drawings and manuals are **never** opened by the app or sent
-  to an AI service (owner's condition, enforced in `firerisk/data_policy.py`), so the building map uses floor names only; 9 of the 14 videos are linked to a room in the asset register that has
+  generator-connected loads are not recorded; the original drawings are never sent to an AI service (owner's
+  condition, enforced in `firerisk/data_policy.py`): they are read on the author's computer (local OCR), and only
+  links a person has checked against the drawing (panel -> emergency lights / exit signs / fire equipment per floor,
+  `power_links.xlsx`) are used - see "Electrical supply of life-safety equipment" below; 9 of the 14 videos are linked to a room in the asset register that has
   no floor recorded, so they are not placed on a floor (the floor is never guessed).
 
 ## Install and run (Windows)
@@ -112,9 +114,10 @@ Alerts appear immediately; Muse Spark runs afterwards in a background worker. It
 when its evidence fingerprint changes (records added/removed, status or level changed, linked equipment alerts or
 survey-video observations changed), or when the user presses Re-analyse. Reloading the page never calls the AI.
 
-**Agentic investigation (tool calling).** Muse Spark receives the rule-assembled evidence package plus six read-only
+**Agentic investigation (tool calling).** Muse Spark receives the rule-assembled evidence package plus seven read-only
 tools over the whole record store and decides what else to check (e.g. the history of the same asset, earlier
-incidents in the room, meter readings around the fault date). Each call is validated and executed locally; records
+incidents in the room, meter readings around the fault date, which emergency lights and exit signs a faulty panel
+supplies). Each call is validated and executed locally; records
 get opaque aliases and names are redacted before anything is sent. Limits: 6 tool rounds, 16 lookups, 25 records per
 lookup. The final answer uses the same strict JSON schema and citation check; records found by lookups may be cited.
 The dashboard lists every lookup in order ("How Meta Muse Spark investigated"). If the API rejects the tool
@@ -146,6 +149,16 @@ dashboard overlay`. Results are stored per frame (no duplicate requests, resumab
 and run in the background after each new video review; `run_locate_findings.bat` (with a dry-run cost estimate)
 processes older items. "Not located" is a valid answer, not an error. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Electrical supply of life-safety equipment (from the building drawings)
+The scanned electrical and emergency-lighting drawings are read **on the author's computer** (`run_drawing_ocr.bat`,
+local OCR, no AI service). `run_draft_power_links.bat` turns the text into a draft table "which panel supplies which
+emergency lights, exit signs, fire pump, smoke control or fire alarm, on which floor"; the author checks every row
+against the drawing and confirms it. Only confirmed rows are used (rule EQ-D1 in RISK_RULES.md): a panel that supplies
+life-safety equipment is treated as critical, its alert says which floors lose emergency lighting if it fails and adds
+a battery test, it is linked to the fire-risk alert of those floors, and Meta Muse Spark can look it up with the tool
+`get_fire_safety_supply`. What reaches Muse Spark is floor, equipment type and count only - never panel labels,
+circuits or drawing content.
+
 ## Demo mode (names hidden)
 `run_dashboard_demo.bat` starts the same dashboard with building names replaced by "[name hidden]", shows only
 blurred copies of video frames (signs and labels found by SAM 3.1, faces found locally with OpenCV - SAM is never
@@ -167,7 +180,7 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **207 tests (205 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **219 tests (217 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
