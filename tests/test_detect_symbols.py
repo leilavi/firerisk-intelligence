@@ -108,3 +108,12 @@ def test_noisy_blurred_scan_with_smaller_symbols_still_counts_correctly(tmp_path
     res, _ = _mod("detect_symbols").process(tmp_path)
     page = res["TECH-DIAG_TEST_Exit_Lighting"]["pages"][0]["symbols"]
     assert (len(page["emergency_light"]), len(page["exit_sign"])) == (5, 3)
+
+
+def test_legend_line_found_when_ocr_splits_it_or_misreads_accents():
+    m = _mod("detect_symbols")
+    w = lambda s, x, wd=200: {"text": s, "score": 0.9, "box": [x, 100, x + wd, 125], "rotated": False}
+    assert m.legend_lines([w("ĐÈN CHIẾU", 100, 150), w("SÁNG SỰ CỐ", 262, 160)])["emergency_light"]["box"][0] == 100
+    assert "emergency_light" in m.legend_lines([w("ĐÉN CHIÊU SANG SƯ CÔ", 100)])
+    assert m.legend_lines([w("ĐÈN CHIẾU SÁNG SỰ CỐ LOẠI 2x3W TẠI CẦU THANG BỘ VÀ HÀNH LANG", 100, 900)]) == {}
+    assert m.legend_lines([w("CHIẾU SÁNG", 100)]) == {}
