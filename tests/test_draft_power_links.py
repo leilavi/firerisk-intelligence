@@ -56,15 +56,15 @@ def test_draft_rows_floors_panels_legend_and_numbers_only_output(tmp_path, capsy
     rows = [dict(zip(head, [c.value for c in r])) for r in wb["Links"].iter_rows(min_row=2)]
     by = {(r["floor"] or "", r["panel_label"] or "", r["feeds"]): r for r in rows}
     near_exit = by[("B1", "DB-TESTB1", "exit_sign")]
-    assert near_exit["count"] == 2                                     # near one + far one (only panel on page)
+    assert near_exit["count"] in (None, "") and near_exit["auto_count_hint"] == 2   # never pre-filled
     assert "panel label next to the symbol (1)" in near_exit["basis"] and "weaker" in near_exit["basis"]
     assert near_exit["asset_id"] == "P-TESTDB01" and "L1-03" in near_exit["circuits"]
-    assert by[("B1", "DB-TESTB1", "emergency_light")]["count"] == 1
+    assert by[("B1", "DB-TESTB1", "emergency_light")]["auto_count_hint"] == 1
     assert by[("B1", "MSB", "fire_pump")]["asset_id"] == "P-TESTMSB"
     unclear = by[("", "", "exit_sign")]
     assert "floor not clear" in unclear["basis"] and unclear["ocr_confidence"] == 0.62
     assert all(not r["confirmed"] for r in rows)                       # nothing confirmed automatically
-    assert sum(r["count"] for r in rows if r["feeds"] == "exit_sign") == 3   # legend phrase not counted
+    assert sum(r["auto_count_hint"] for r in rows if r["feeds"] == "exit_sign") == 3   # legend phrase not counted
     panels = {r[0].value: r for r in wb["Panels"].iter_rows(min_row=2)}
     assert set(panels) == {"DB-TESTB1", "MSB"}
 
@@ -86,8 +86,8 @@ def test_the_draft_is_unused_until_confirmed_and_round_trips_after(tmp_path, mon
     wb.save(tmp_path / "power_links.xlsx")
     pl = load(tmp_path / "power_links.xlsx", known_assets={"P-TESTDB01"})
     assert pl.problems == [] and len(pl.links) == 2
-    deps = {d["equipment"]: d["count"] for d in pl.dependents("P-TESTDB01")}
-    assert deps == {"exit_sign": 2, "emergency_light": 1}
+    deps = {d["equipment"]: d["count_known"] for d in pl.dependents("P-TESTDB01")}
+    assert deps == {"exit_sign": False, "emergency_light": False}       # count left empty = "number not recorded"
 
 
 def test_page_floor_is_left_empty_when_two_floors_are_named_equally():

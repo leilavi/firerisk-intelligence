@@ -204,7 +204,7 @@ def draft(ocr_files: list[Path], assets: dict[str, str], symbols: dict | None = 
     for (_, panel, typ), r in sorted(rows.items(), key=lambda kv: (FLOORS.index(kv[0][0]) if kv[0][0] in FLOORS else 9, kv[0][1], kv[0][2])):
         asset, _ = suggest_asset(panel, assets) if panel else ("", "")
         links.append({"confirmed": "", "floor": r["floor"], "panel_label": panel, "asset_id": asset, "feeds": typ,
-                      "count": r["count"], "fed_panel_label": "", "circuits": ", ".join(sorted(r["circuits"]))[:200], "source": ", ".join(sorted(r["pages"])),
+                      "count": "", "auto_count_hint": r["count"], "fed_panel_label": "", "circuits": ", ".join(sorted(r["circuits"]))[:200], "source": ", ".join(sorted(r["pages"])),
                       "basis": "; ".join(f"{b} ({n})" for b, n in r["bases"].most_common())
                                + ("" if r["floor"] else "; floor not clear on this page - fill in")
                                + ("; count = legend symbols found on the drawing (check symbols_review.html)"
@@ -270,11 +270,11 @@ def write_xlsx(path: Path, links: list[dict], panels: list[dict], assets: dict[s
     for c in ws[1]:
         c.font = Font(bold=True)
     n = max(ws.max_row + 50, 200)
-    for col, values in (("A", "Y,N"), ("B", "B1,F1,F2,F3,F4,Roof,Building"), ("E", ",".join(FEEDS))):
+    for col, values in (("A", "Y,N"), ("B", "B1,F1,F2,F3,F4,Roof,Building"), ("E", ",".join(FEEDS))):   # by COLUMNS order
         dv = DataValidation(type="list", formula1=f'"{values}"', allow_blank=True)
         ws.add_data_validation(dv)
         dv.add(f"{col}2:{col}{n}")
-    for col, wdt in zip("ABCDEFGHIJKL", (10, 8, 16, 16, 16, 7, 16, 12, 30, 60, 10, 30)):
+    for col, wdt in zip("ABCDEFGHIJKLM", (10, 8, 16, 16, 16, 7, 12, 16, 12, 30, 60, 10, 30)):
         ws.column_dimensions[col].width = wdt
     ws.freeze_panes = "A2"
     wp = wb.create_sheet("Panels")
@@ -289,7 +289,9 @@ def write_xlsx(path: Path, links: list[dict], panels: list[dict], assets: dict[s
     wh = wb.create_sheet("How to check")
     for line in [
         "1. For each row in Links, open the page named in 'source' (review.html shows what OCR read).",
-        "2. Correct floor, panel_label, feeds and count. Fill asset_id from the Assets sheet (once per panel is enough).",
+        "2. Correct floor, panel_label and feeds. Fill asset_id from the Assets sheet (once per panel is enough).",
+        "   'count' starts EMPTY on purpose: the automatic count ('auto_count_hint') misses symbols on scanned drawings.",
+        "   Write the count from the drawing, or leave it empty - the app then says 'number not recorded'.",
         "3. Downstream panels: add a row feeds = sub_panel with fed_panel_label = the panel it supplies.",
         "4. Write Y in 'confirmed' only when the row matches the drawing. Rows without Y are ignored by the app.",
         "5. Yellow rows need most attention: no panel or floor found, low OCR confidence, or a weak guess.",

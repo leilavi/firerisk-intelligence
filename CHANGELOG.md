@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Draft table: `count` is no longer pre-filled. The author's check of the real symbol search (2026-10-31 14:22) found many
+  emergency lights missed, so automatic counts go to `auto_count_hint` only; an empty count means "number not
+  recorded". Two further matching methods were tried on generated hard cases and rejected (misses or false matches).
 - Drawn symbols without text (2026-10-31): `scripts/detect_symbols.py` cuts each symbol from the drawing's legend
   ("GHI CHU": emergency light, exit sign, main panel), checks the cut-out, searches all pages (4 rotations, 0.85-1.17
   scale, speckle removed, overlaps and legend excluded) and writes `ocr/symbols.json` + `ocr/symbols_review.html`.
