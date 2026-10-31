@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 LINKS_FILE = Path(os.environ.get("FIRERISK_POWER_LINKS", ROOT_DIR / "data" / "private" / "drawings" / "power_links.xlsx"))
 SHEET = "Links"
-COLUMNS = ["confirmed", "floor", "panel_label", "asset_id", "feeds", "count", "fed_panel_label", "circuits",
+COLUMNS = ["confirmed", "floor", "panel_label", "asset_id", "feeds", "count", "auto_count_hint", "fed_panel_label", "circuits",
            "source", "basis", "ocr_confidence", "note"]
 FLOORS = ["B1", "F1", "F2", "F3", "F4", "Roof", "Building"]
 FEEDS = {"emergency_light": "emergency lights", "exit_sign": "exit signs", "fire_pump": "fire pump",

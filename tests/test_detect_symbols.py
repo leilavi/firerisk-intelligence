@@ -84,7 +84,8 @@ def test_draft_counts_emergency_lights_from_symbols_with_that_basis(tmp_path, mo
     head = [c.value for c in ws[1]]
     rows = [dict(zip(head, [c.value for c in r])) for r in ws.iter_rows(min_row=2)]
     em = [r for r in rows if r["feeds"] == "emergency_light"]
-    assert sum(r["count"] for r in em) == 5 and all(r["floor"] == "B1" for r in em)
+    assert sum(r["auto_count_hint"] for r in em) == 5 and all(r["floor"] == "B1" for r in em)
+    assert all(r["count"] in (None, "") for r in em)
     assert all("legend symbols found on the drawing" in r["basis"] for r in em)
 
 
