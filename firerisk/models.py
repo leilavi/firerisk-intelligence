@@ -89,6 +89,7 @@ class Alert:
     fields: dict = field(default_factory=dict)
     related_equipment: list[dict] = field(default_factory=list)   # equipment alerts linked with reasons
     video_context: list[dict] = field(default_factory=list)       # survey-video observations (AI vision, context only)
+    life_safety: dict = field(default_factory=dict)               # emergency lights / exit signs on the floor (drawings)
 
     def to_dict(self) -> dict:
         d = asdict(self)

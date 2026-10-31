@@ -35,6 +35,15 @@ FEEDS = {"emergency_light": "emergency lights", "exit_sign": "exit signs", "fire
          "other fire-safety equipment", "sub_panel": "downstream panel"}
 LIFE_SAFETY = {k for k in FEEDS if k != "sub_panel"}
 YES = {"y", "yes", "x", "1", "true", "co", "có", "ok"}
+# the mezzanine belongs to floor 1 (author, 2026-10-31); "Mai" = roof
+FLOOR_ALIASES = {"lung": "F1", "tanglung": "F1", "mezzanine": "F1", "m": "F1", "f1m": "F1", "mai": "Roof",
+                 "ham": "B1", "tangham": "B1", "basement": "B1", "rooftop": "Roof"}
+
+
+def _fold(v: str) -> str:
+    import unicodedata
+    s = unicodedata.normalize("NFD", v.replace("Đ", "D").replace("đ", "d"))
+    return "".join(c for c in s if unicodedata.category(c) != "Mn" and c.isalnum()).lower()
 
 
 def _s(v) -> str:
@@ -105,6 +114,30 @@ class PowerLinks:
                 d["count"] += l.count
         return sorted(out.values(), key=lambda d: (FLOORS.index(d["floor"]), d["equipment"], d["via"]))
 
+    def floor_inventory(self, floor: str) -> dict:
+        """All confirmed life-safety equipment on a floor, whether or not its supplying panel is known in the asset
+        register (simplified: type, count, supplying asset if known)."""
+        out: dict[str, dict] = {}
+        for l in self.links:
+            if l.feeds not in LIFE_SAFETY or not (l.floor == floor or floor == "Building"):
+                continue
+            d = out.setdefault(l.feeds, {"equipment": l.feeds, "equipment_label": FEEDS[l.feeds], "count": 0,
+                                         "count_known": True, "supplying_assets": set()})
+            if l.count is None:
+                d["count_known"] = False
+            else:
+                d["count"] += l.count
+            if l.asset_id:
+                d["supplying_assets"].add(l.asset_id)
+            for up in self.links:             # upstream panels that reach this one
+                if up.asset_id and up.feeds == "sub_panel" and l.panel and l.panel in self._downstream({up.panel})[0]:
+                    d["supplying_assets"].add(up.asset_id)
+        rows = [{**d, "supplying_assets": sorted(d["supplying_assets"])} for d in out.values()]
+        unknown = any(not r["supplying_assets"] for r in rows)
+        return {"floor": floor, "equipment": sorted(rows, key=lambda r: r["equipment"]),
+                "supplying_panel_known": bool(rows) and not unknown,
+                "basis": "building drawings; counts and links checked by a person"} if rows else {}
+
     def assets_supplying(self, floor: str | None = None) -> list[str]:
         ids = {l.asset_id for l in self.links if l.asset_id}
         return sorted(a for a in ids if any(not floor or d["floor"] == floor for d in self.dependents(a)))
@@ -136,7 +169,9 @@ def summary(links: PowerLinks, asset_id: str | None = None, floor: str | None = 
         if deps:
             rows.append({"asset_id": a, "supplies": [{k: d[k] for k in ("floor", "equipment", "count", "count_known", "via")}
                                                       for d in deps]})
-    return {"links": rows, "basis": "building drawings, each link checked by a person against the drawing",
+    inv = links.floor_inventory(floor) if floor else {}
+    return {"links": rows, **({"floor_inventory": inv} if inv else {}),
+            "basis": "building drawings, each link checked by a person against the drawing",
             "note": "Shows which life-safety equipment loses normal supply if this asset fails. Battery backup of the "
                     "equipment is not recorded."}
 
@@ -177,7 +212,8 @@ def load(path: Path | None = None, known_assets: set[str] | None = None) -> Powe
             res.rows_unconfirmed += 1
             continue
         bad = []
-        floor = next((f for f in FLOORS if f.lower() == _s(get(r, "floor")).lower()), None)
+        raw_floor = _s(get(r, "floor"))
+        floor = next((f for f in FLOORS if f.lower() == raw_floor.lower()), None) or FLOOR_ALIASES.get(_fold(raw_floor))
         if not floor:
             bad.append(f"floor must be one of {', '.join(FLOORS)}")
         feeds = _s(get(r, "feeds")).lower()

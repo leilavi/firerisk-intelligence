@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Floor inventory of life-safety equipment (2026-10-31): confirmed counts per floor are used even when the supplying
+  panel is not in the asset register - attached to each zone alert, sent to Meta Muse Spark in the package
+  (`life_safety_equipment_on_this_floor`, with "panel not known - do not guess") and returned by the tool; a change
+  re-analyses the zone once. Floor names "Lửng"/mezzanine count as F1, "Mái" as Roof. 3 new tests.
 - Draft table: `count` is no longer pre-filled. The author's check of the real symbol search (2026-10-31 14:22) found many
   emergency lights missed, so automatic counts go to `auto_count_hint` only; an empty count means "number not
   recorded". Two further matching methods were tried on generated hard cases and rejected (misses or false matches).

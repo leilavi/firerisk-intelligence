@@ -244,6 +244,11 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
              "evidence_ids": [alias(i) for i in next((ea.evidence_ids for ea in equipment_alerts or []
                                                       if ea.alert_id == r["equipment_alert_id"]), [])]}
             for n, r in enumerate(getattr(alert, "related_equipment", []) or [])],
+        **({"life_safety_equipment_on_this_floor": {
+            **{k: v for k, v in alert.life_safety.items() if k != "basis"},
+            "note": ("From the building drawings, checked by a person. If supplying_panel_known is false, which panel in "
+                     "the asset register feeds this equipment is not known - say so if it matters, do not guess.")}}
+           if getattr(alert, "life_safety", None) else {}),
         "survey_video_observations": [
             {"video": f"V{n + 1:02d}", "recorded_at": (v.get("recorded_at") or "unknown")[:10],
              "age_days": v.get("age_days"), "place": red.text(v.get("place") or ""),
@@ -358,7 +363,8 @@ def fingerprint(alert, evidence_index, equipment_alerts=None) -> str:
                "evidence": [ev(i) for i in sorted(set(alert.evidence_ids))],
                "context": sorted({json.dumps(ctx(i), default=str) for i in set(alert.context_ids)}),
                "related": rel, "related_evidence": [ev(i) for i in sorted(set(related_evidence_ids(alert, equipment_alerts)))],
-               "video": sorted((v["video_id"], v.get("analysis_created_at")) for v in getattr(alert, "video_context", []) or [])}
+               "video": sorted((v["video_id"], v.get("analysis_created_at")) for v in getattr(alert, "video_context", []) or []),
+               **({"life_safety": getattr(alert, "life_safety")} if getattr(alert, "life_safety", None) else {})}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:20]
 
 
