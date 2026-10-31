@@ -309,7 +309,8 @@ def main(argv: list[str]) -> int:
         return 1
     assets = load_assets()
     sym_path = folder / "ocr" / "symbols.json"
-    if not sym_path.exists() or sym_path.stat().st_mtime < max(f.stat().st_mtime for f in files):
+    newest_input = max([f.stat().st_mtime for f in files] + [Path(__file__).with_name("detect_symbols.py").stat().st_mtime])
+    if not sym_path.exists() or sym_path.stat().st_mtime < newest_input:     # new OCR or a newer symbol search
         print("Finding the legend symbols on the drawings (local, a few minutes) ...", flush=True)
         try:
             spec = importlib.util.spec_from_file_location("sym", Path(__file__).with_name("detect_symbols.py"))
