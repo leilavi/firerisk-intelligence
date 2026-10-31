@@ -152,10 +152,14 @@ def _iou(a, b) -> float:
     return inter / u if u else 0.0
 
 
+BEST = {"score": 0.0}       # highest correlation seen in the last search (diagnostics)
+
+
 def find(gray, tpl, exclude: list[list[int]]) -> list[dict]:
     import cv2
     import numpy as np
     hits = []
+    BEST["score"] = 0.0
     for rot in range(4):
         t = np.rot90(tpl, rot) if rot else tpl
         for s in SCALES:
@@ -164,6 +168,7 @@ def find(gray, tpl, exclude: list[list[int]]) -> list[dict]:
             if th >= gray.shape[0] or tw >= gray.shape[1]:
                 continue
             res = cv2.matchTemplate(gray, ts, cv2.TM_CCOEFF_NORMED)
+            BEST["score"] = max(BEST["score"], float(res.max()))
             # local maxima only (one candidate per symbol, not every pixel around it)
             k = np.ones((max(3, th // 2), max(3, tw // 2)), np.uint8)
             peaks = (res >= THRESHOLD) & (res >= cv2.dilate(res, k))
@@ -231,6 +236,8 @@ def process(folder: Path) -> tuple[dict, dict]:
             diag["pages_read"] += 1
             lines = {k: {**t, "box": [int(v * f) for v in t["box"]]} for k, t in legend_lines(p["texts"]).items()}
             diag["legend_lines_matched"] += len(lines)
+            for k, ln in lines.items():
+                diag.setdefault("legend_read_as", {}).setdefault(k, set()).add(_collapse(ln["text"])[:30])
             cut_boxes = []
             for kind, t in lines.items():
                 tpl, box = cut_symbol(img, t["box"])
@@ -240,6 +247,14 @@ def process(folder: Path) -> tuple[dict, dict]:
                 cut_boxes.append(box)
                 templates.setdefault(kind, (tpl, f))      # with the scale of the page it was cut from
             legend_by_page[p["page"]] = legend_area(lines, cut_boxes)
+        # closest OCR texts to each legend name (legend wording only, letters only) - to see how OCR read the legend
+        from difflib import SequenceMatcher
+        allc = {_collapse(t["text"]) for p in pages for t in p["texts"]} | {_collapse(l["text"]) for p in pages for l in text_lines(p["texts"])}
+        diag["closest_to_legend"] = {k: sorted(((round(SequenceMatcher(None, _collapse(ws[0]), c).ratio(), 2), c[:30])
+                                                for c in allc if 6 <= len(c) <= 40), reverse=True)[:3]
+                                     for k, ws in LEGEND.items()}
+        diag["legend_read_as"] = {k: sorted(v) for k, v in diag.get("legend_read_as", {}).items()}
+        diag["template_sizes"] = {k: list(v[0].shape) for k, v in templates.items()}
         file_res = {"file": data.get("file"), "templates": {k: list(v[0].shape) for k, v in templates.items()},
                     "not_found": {k: notes[k] for k in notes if k not in templates}, "pages": []}
         for p in pages:
@@ -251,6 +266,7 @@ def process(folder: Path) -> tuple[dict, dict]:
             for kind, (tpl, f0) in templates.items():
                 t2 = tpl if abs(f - f0) < 1e-6 else cv2.resize(tpl, None, fx=f / f0, fy=f / f0, interpolation=cv2.INTER_AREA)
                 found[kind] = [{**s, "box": [int(v / f) for v in s["box"]]} for s in find(img, t2, excl)]
+                diag.setdefault("best_match_score", {})[kind] = round(max(diag.get("best_match_score", {}).get(kind, 0), BEST["score"]), 2)
             file_res["pages"].append({"page": p["page"], "image": p["image"], "size": p["size"], "symbols": found})
         results[jf.stem] = file_res
         kind = _probe().classify_name(data.get("file", jf.name))
