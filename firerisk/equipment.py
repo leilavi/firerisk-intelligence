@@ -76,6 +76,7 @@ class EquipmentAlert:
     origin: str = "PORTED"
     fields: dict = field(default_factory=dict)
     fire_links: list[dict] = field(default_factory=list)   # [{fire_alert_id, reasons}]
+    power_dependents: list[dict] = field(default_factory=list)   # life-safety equipment it supplies (power_links)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -97,7 +98,9 @@ def _days(a: datetime, b: datetime) -> float:
 
 
 def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], now: datetime,
-                           register: dict | None = None) -> list[EquipmentAlert]:
+                           register: dict | None = None, power=None) -> list[EquipmentAlert]:
+    """`power`: confirmed drawing links (power_links.PowerLinks). Rule EQ-D1: equipment that supplies life-safety
+    equipment is treated as critical, like fire-safety equipment itself (skill §2C.A)."""
     register = register or {}
     recs = [e for e in evidence if e.kind in ("asset_service", "incident") and "test_record" not in e.flags]
     groups: dict[str, list[Evidence]] = defaultdict(list)
@@ -113,12 +116,15 @@ def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], n
         faults = sorted((e for e in items if _is_fault(e)), key=lambda e: e.timestamp or now)
         if not faults:
             continue
-        crit = _critical(asset, items)
+        deps = power.dependents(asset) if (power and asset) else []
+        crit_base = _critical(asset, items)
+        crit = crit_base or bool(deps)
+        why_crit = "" if crit_base or not deps else " - critical because it supplies life-safety equipment (rule EQ-D1)"
         rules: list[dict] = []
         open_ = [e for e in faults if e.is_open]
         if open_:
             sev = "warning" if crit else "watch"
-            basis = f"{len(open_)} open fault record(s) on {'critical ' if crit else ''}equipment (skill §2C.A)"
+            basis = f"{len(open_)} open fault record(s) on {'critical ' if crit else ''}equipment (skill §2C.A){why_crit}"
             overdue = [e for e in open_ if "overdue" in e.flags]
             rules.append({"rule": "EQ1_OPEN_FAULT", "severity": sev, "basis": basis,
                           "evidence_ids": [e.evidence_id for e in open_]})
@@ -139,13 +145,14 @@ def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], n
             sev = "warning" if crit else "watch"
             basis = (f"{len(dated)} fault records on the same equipment"
                      + (f", two within {REPEAT_WINDOW_DAYS} days" if repeated else ", fault returned after an earlier repair")
-                     + ("; one recorded a burnt/overheated motor" if burnt else "") + " (skill §2C.A, repeated faults)")
+                     + ("; one recorded a burnt/overheated motor" if burnt else "") + " (skill §2C.A, repeated faults)"
+                     + why_crit)
             rules.append({"rule": "EQ3_REPEATED_FAULT", "severity": sev, "basis": basis,
                           "evidence_ids": [e.evidence_id for e in dated]})
         if not rules:
             continue
         ev_ids = list(dict.fromkeys(i for r in rules for i in r["evidence_ids"]))
-        alerts.append(_make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, register=register))
+        alerts.append(_make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, register=register, deps=deps))
 
     for s in meter_sigs:   # R8 meter signals = equipment alerts for meters (skill §5A.8 levels unchanged)
         items = [e for e in evidence if e.evidence_id in set(s.evidence_ids)]
@@ -159,7 +166,7 @@ def build_equipment_alerts(evidence: list[Evidence], meter_sigs: list[Signal], n
 
 
 def _make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, meter_signal: Signal | None = None,
-          register: dict | None = None):
+          register: dict | None = None, deps: list[dict] | None = None):
     sev = max((r["severity"] for r in rules), key=_rank)
     index = {e.evidence_id: e for e in evidence}
     found = [index[i] for i in ev_ids if i in index]
@@ -186,7 +193,7 @@ def _make(key, asset, items, crit, rules, ev_ids, open_, evidence, now, meter_si
     a = EquipmentAlert(alert_id=alert_id, asset_id=asset, asset_name=name, zone=zone,
                        zone_label=ZONE_LABELS.get(zone or "", zone or "Building"), critical=crit, severity=sev,
                        title=headline, rules=rules, evidence_ids=ev_ids, first_seen=min(times) if times else None,
-                       last_seen=max(times) if times else None, open_items=len(open_))
+                       last_seen=max(times) if times else None, open_items=len(open_), power_dependents=list(deps or []))
     a.fields = equipment_fields(a, found, kind, meter_signal, now)
     return a
 
@@ -215,6 +222,17 @@ def equipment_fields(a: EquipmentAlert, items: list[Evidence], kind: str, meter_
             actions.append("Review the repeated faults together to find a common cause before the next repair")
         closure = "Repair record closed with the work described and the equipment checked in operation."
         unknowns = ["Cause of the fault (not verified)"]
+        if a.power_dependents:                    # rule EQ-D1: what loses normal supply, from confirmed drawing links
+            from .power_links import describe
+            floors = ", ".join(dict.fromkeys(d["floor"] for d in a.power_dependents))
+            consequence = (f"{consequence} It supplies life-safety equipment - {describe(a.power_dependents)} "
+                           "(building drawings, each link checked by a person); if it fails during a fire, this "
+                           "equipment loses normal supply.")
+            chain = ["Fault recorded", "Panel trips or fails", f"Life-safety equipment on {floors} loses normal supply",
+                     "Escape routes depend on battery backup, which is not recorded"]
+            actions.insert(1, f"Test the emergency lights and exit signs on {floors} on battery, as the building "
+                              "procedure allows, and record the result")
+            unknowns.append("Battery condition and autonomy of the supplied emergency lights and exit signs (not recorded)")
         if a.asset_id is None:
             unknowns.append("Equipment_ID not recorded on the incident")
         causes = []
@@ -243,7 +261,8 @@ def equipment_fields(a: EquipmentAlert, items: list[Evidence], kind: str, meter_
 
 
 def link_to_fire_alerts(eq_alerts: list[EquipmentAlert], fire_alerts, evidence_index: dict) -> None:
-    """Attach reasoned links equipment alert <-> fire-risk alert. Levels are not changed."""
+    """Attach reasoned links equipment alert <-> fire-risk alert. Levels are not changed. Since 2026-10-31 also: the
+    equipment supplies life-safety equipment on the alert's floor (confirmed drawing links, rule EQ-D1)."""
     feeds = {m: set(v) for m, v in METER_FEEDS.items()}
     for fa in fire_alerts:
         fa_ids = set(fa.evidence_ids)
@@ -260,6 +279,11 @@ def link_to_fire_alerts(eq_alerts: list[EquipmentAlert], fire_alerts, evidence_i
             if measured:
                 reasons.append(f"meter {ea.asset_id} measures {', '.join(sorted(measured))}, which is part of this "
                                f"fire-risk alert")
+            on_floor = [d for d in ea.power_dependents if d["floor"] == fa.zone or fa.zone == "Building"]
+            if on_floor:
+                from .power_links import describe
+                reasons.append(f"it supplies life-safety equipment on this floor ({describe(on_floor)}; building "
+                               f"drawings, checked by a person)")
             if reasons:
                 ea.fire_links.append({"fire_alert_id": fa.alert_id, "reasons": reasons})
                 related.append({"equipment_alert_id": ea.alert_id, "reasons": reasons, "severity": ea.severity})

@@ -37,6 +37,7 @@ class AnalysisResult:
     asset_register: dict[str, dict] = field(default_factory=dict)   # 'Asset' tab (context, display names)
     video_refs: list[dict] = field(default_factory=list)            # survey-video references from the register
     video_catalog: dict[str, dict] = field(default_factory=dict)    # videos known from Drive (listing / metadata)
+    power_links: object = None                                      # confirmed drawing links (power_links.PowerLinks)
 
 
 def _episode_evidence(ep: M.Episode) -> Evidence:
@@ -141,7 +142,11 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
     # linked to a fire-risk alert only with a stated reason; they never set or raise the fire-risk level.
     alerts = aggregate_alerts(fire_signals, index, now)
     enrich_alerts(alerts, signals, index, status, now)
-    equipment_alerts = build_equipment_alerts(evidence, meter_sigs, now, register)
+    from .config import ASSETS as _ASSETS, METERS as _METERS
+    from .power_links import current as _power_links
+    known = set(register) | set(_ASSETS) | set(_METERS) | {e.asset_id for e in evidence if e.asset_id}
+    power = _power_links(known)                         # confirmed drawing links only (rule EQ-D1)
+    equipment_alerts = build_equipment_alerts(evidence, meter_sigs, now, register, power=power)
     link_to_fire_alerts(equipment_alerts, alerts, index)
 
     dq = []
@@ -165,7 +170,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
         meter_calendars={m: [{"day": d.day.isoformat(), "value": d.value, "flag": d.flag, "spike": d.spike,
                               "median": d.median, "raw": d.raw} for d in cal] for m, cal in cals.items()},
         meter_episodes={m: [e.to_dict() for e in v] for m, v in eps.items()},
-        meter_issues=issues, source_status=status, data_quality=dq)
+        meter_issues=issues, source_status=status, data_quality=dq, power_links=power)
 
 
 DQ_FLAGS = {"test_record", "placeholder_text", "undated", "missing_timestamp", "invalid_reading", "duplicate_record_id",

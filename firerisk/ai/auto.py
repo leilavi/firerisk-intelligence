@@ -158,7 +158,8 @@ class AutoAnalyst:
         client = self.client_factory()
         now = datetime.now(LOCAL_TZ)
         if self.settings()["tools"]:     # Muse Spark decides what to look up; falls back to one call on any API error
-            rec = investigate_agentic(alert, res.signals, res.evidence, now, client, res.equipment_alerts, self.video_lookup)
+            rec = investigate_agentic(alert, res.signals, res.evidence, now, client, res.equipment_alerts, self.video_lookup,
+                                        getattr(res, "power_links", None))
         else:
             rec = investigate(alert, res.signals, res.evidence, now, client, res.equipment_alerts)
             rec["mode"] = "single_call"
