@@ -125,7 +125,7 @@ let S = null;
 async function loadStatus() {
   S = await api("/api/status");
   NAME_RES = (S.name_patterns || []).map((p) => new RegExp(p, "giu"));
-  $("#building").textContent = roman(S.building);
+  // building name not shown on screen (author, 2026-11-01): the header and the whole-building panel use generic titles
   if (S.demo_mode && !$("#demo-chip")) $("#freshness").insertAdjacentHTML("beforebegin", '<span class="hchip" id="demo-chip" title="Building names are hidden, frames are blurred copies and original videos are not shown"><i></i>Demo mode · names hidden</span>');
   maskNames(document.body);
   const issues = S.sources_down.length + S.sources_stale.length;
@@ -638,7 +638,7 @@ function renderCtx() {
   const all = sortIssues([...B.floors.flatMap((f) => f.issues), ...B.unassigned.issues]);
   if (!selFloor) {
     const sm = B.summary;
-    el.innerHTML = `<div class="ctxhead"><div><span class="kicker">Selected: whole building</span><h2>${esc(roman(S.building))}</h2></div><span class="fstate fs-${esc(sm.building_state)}">${ICON[sm.building_state] || ""}${esc(sm.building_state_label)}</span></div>
+    el.innerHTML = `<div class="ctxhead"><div><span class="kicker">Selected</span><h2>Whole building</h2></div><span class="fstate fs-${esc(sm.building_state)}">${ICON[sm.building_state] || ""}${esc(sm.building_state_label)}</span></div>
       <p class="small muted" style="margin:0 0 8px">${sm.issues_active} active issue(s): ${sm.risk_count} fire-safety risk(s) and ${sm.equipment_active} equipment alert(s), each with its own rule level. Select a floor to see only its issues.</p>
       <div class="kicker" style="margin:6px 0">Most important issues</div>
       <div class="icards">${all.slice(0, 7).map((i) => icard(i)).join("") || '<div class="empty">No active issue in the current records.</div>'}</div>

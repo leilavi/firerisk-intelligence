@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Dashboard no longer shows the building's name anywhere on screen, in normal or demo mode (author, 2026-11-01):
+  header subtitle "Fire-risk decision support", whole-building panel titled "Whole building".
 - Supply path of emergency lighting (2026-11-01, technician's statement via the author): `power_links.xlsx` gains two
   optional columns, `supply` (normal / backup) and `panel_kind` (generator, ats, floor_main_panel, floor_breaker, msb,
   distribution_panel). A standby link (generator -> ATS) is followed but reported as "standby supply": the generator's

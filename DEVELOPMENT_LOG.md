@@ -391,3 +391,4 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
   lights/exit signs through the ATS, linked the 2026-09-29 battery weakness to it and asked for a voltage log and an
   ATS auto-start test. It did not list the shared floor breaker as a separate point.
 * Tests: 235 collected, 233 pass, 2 skipped (full repository, 2026-11-01).
+* 18:57 author: remove the building name from the header and the whole-building panel - replaced by generic titles.

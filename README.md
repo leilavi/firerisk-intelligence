@@ -170,6 +170,7 @@ breaker trips or the floor panel is switched off, that floor's lights run on the
 have batteries, their autonomy and any discharge test are not recorded.
 
 ## Demo mode (names hidden)
+The building's name is never shown on screen (header and whole-building panel use generic titles, 2026-11-01).
 `run_dashboard_demo.bat` starts the same dashboard with building names replaced by "[name hidden]", shows only
 blurred copies of video frames (signs and labels found by SAM 3.1, faces found locally with OpenCV - SAM is never
 asked to find people - plus regions added by hand after a frame-by-frame review) and never plays the original videos. Original frames are not modified.
