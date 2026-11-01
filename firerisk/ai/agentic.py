@@ -357,4 +357,6 @@ def _cited(result: dict) -> list[str]:
         out += b.get("evidence_ids", [])
         for c in b.get("claims") or []:
             out += c.get("evidence_ids", [])
+    for st in (result.get("impact_story") or {}).get("steps", []):
+        out += st.get("evidence_ids", [])
     return out

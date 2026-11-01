@@ -17,7 +17,7 @@ from ..hazards.pathways import PATHWAYS
 from .muse import MuseClient, MuseError
 from .redact import Redactor
 
-PROMPT_VERSION = "investigation-v7"  # v7: agentic tool calling (ai/agentic.py) with this prompt + same schema; v6: structured, record-specific briefing (dates, mechanism, chain, 3 action groups, claim basis); v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
+PROMPT_VERSION = "investigation-v8"  # v8: impact_story (chain of effects across equipment, told in plain language); v7: agentic tool calling (ai/agentic.py) with this prompt + same schema; v6: structured, record-specific briefing (dates, mechanism, chain, 3 action groups, claim basis); v5: per-risk plain-English briefing; v4: English-only output  # v2: opaque evidence-ID aliases; v3: situation, scenarios, limitations,
                                      #     related equipment alerts in the package
 
 SYSTEM_PROMPT = """You are the reasoning engine of FireRisk Intelligence, a decision-support tool for building
@@ -74,6 +74,22 @@ Rules you must follow:
    Do not repeat the same idea across observed, why_it_matters and potential_consequence. If several records are
    related, say how they are related instead of listing them.
 12. If your AI priority differs from the rule level, explain the specific reason in risk_assessment.rationale.
+13. impact_story: the "butterfly effect" for a reader who knows nothing about building equipment. The package field
+   chain_of_effects lists, from the rule set, how a problem on one part of the building reaches other parts and finally
+   people (each link has a stated basis; links listed under not_established are NOT known). Tell it as one connected
+   story: which problem starts it, which other equipment it reaches and WHY (the link), what that equipment then
+   cannot do, what other recorded weaknesses lie on the same path (e.g. a dependency with its own fault), and what
+   it would mean for people. Explain any technical term in a few plain words the first time (e.g. "ATS - the switch
+   that changes the building over to the generator").
+   - headline: one sentence that names the start and the end of the chain.
+   - story: 4-8 short sentences, conditional wording ("could", "if"), specific dates and counts from the package.
+   - steps: 3-8 entries in order; each text is one plain sentence; basis "supported_by_records" (cite the records),
+     "link_from_rules" (a link from chain_of_effects, no record needed), "hypothesis" or "not_established";
+     evidence_ids only for records.
+   - not_established: the gaps that decide whether the chain could really happen (from the package; never fill them).
+   - If chain_of_effects is absent, still write the story from the records if two or more equipment items are
+     related; otherwise headline "No chain of effects beyond this equipment is recorded." and empty lists.
+   This is a possible sequence, never a prediction; do not add links that are not in the package or the records.
 Be concise: short sentences, no repetition between fields.
 Write in clear, plain English only (the dashboard is English). Translate Vietnamese record wording; keep equipment
 codes as written."""
@@ -81,6 +97,7 @@ codes as written."""
 _ID_LIST = {"type": "array", "items": {"type": "string"}}
 CERTAINTY = ["supported", "partly_supported", "insufficient_evidence"]
 CLAIM_BASIS = ["supported_by_records", "observed_in_video", "hypothesis", "not_established"]
+STORY_BASIS = ["supported_by_records", "link_from_rules", "hypothesis", "not_established"]
 INSUFFICIENT_TEXT = "Insufficient evidence to determine the potential consequence. Further inspection is required."
 
 
@@ -96,7 +113,7 @@ SCHEMA = {
         "additionalProperties": False,
         "required": ["summary", "situation", "observed_facts", "hypotheses", "scenarios", "escalation_pathway",
                      "risk_assessment", "missing_information", "recommended_actions", "limitations", "uncertainty",
-                     "risk_briefings"],
+                     "risk_briefings", "impact_story"],
         "properties": {
             "risk_briefings": {"type": "array", "items": {
                 "type": "object", "additionalProperties": False,
@@ -169,6 +186,17 @@ SCHEMA = {
                                "reason": {"type": "string"}, "evidence_ids": _ID_LIST,
                                "responsible_role": {"type": "string"}}}},
             "uncertainty": {"type": "string"},
+            "impact_story": {
+                "type": "object", "additionalProperties": False,
+                "required": ["headline", "story", "steps", "not_established"],
+                "properties": {
+                    "headline": {"type": "string"}, "story": {"type": "string"},
+                    "steps": {"type": "array", "items": {
+                        "type": "object", "additionalProperties": False, "required": ["text", "basis", "evidence_ids"],
+                        "properties": {"text": {"type": "string"},
+                                       "basis": {"type": "string", "enum": STORY_BASIS},
+                                       "evidence_ids": _ID_LIST}}},
+                    "not_established": {"type": "array", "items": {"type": "string"}}}},
         },
     },
 }
@@ -195,7 +223,11 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
     red = Redactor()
     rel_ids = [i for i in related_evidence_ids(alert, equipment_alerts)
                if i not in alert.evidence_ids and i not in alert.context_ids]
-    ids = list(alert.evidence_ids) + [c for c in alert.context_ids if c not in alert.evidence_ids] + rel_ids
+    from ..impact_chain import evidence_ids as chain_ids
+    chain = getattr(alert, "impact_chain", None) or {}
+    chain_only = [i for i in chain_ids(chain) if i not in alert.evidence_ids and i not in alert.context_ids
+                  and i not in rel_ids]
+    ids = list(alert.evidence_ids) + [c for c in alert.context_ids if c not in alert.evidence_ids] + rel_ids + chain_only
     items = [evidence_index[i] for i in ids if i in evidence_index]
     items.sort(key=lambda e: e.timestamp.isoformat() if e.timestamp else "")
     real_to_alias = {e.evidence_id: f"E{n:02d}" for n, e in enumerate(items, start=1)}
@@ -235,6 +267,7 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
                      "context_evidence_ids": [alias(i) for i in s.context_ids]}
                     for n, s in enumerate(sig_by_id[i] for i in alert.signal_ids if i in sig_by_id)],
         "evidence": [item(e, "related_equipment" if e.evidence_id in rel_ids else
+                          "chain_of_effects" if e.evidence_id in chain_only else
                           "context" if e.evidence_id in alert.context_ids and e.evidence_id not in alert.evidence_ids
                           else "finding") for e in items],
         "related_equipment_alerts": [
@@ -249,6 +282,7 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
             "note": ("From the building drawings, checked by a person. If supplying_panel_known is false, which panel in "
                      "the asset register feeds this equipment is not known - say so if it matters, do not guess.")}}
            if getattr(alert, "life_safety", None) else {}),
+        **({"chain_of_effects": _chain_for_model(chain, alias, red)} if chain.get("chains") else {}),
         "survey_video_observations": [
             {"video": f"V{n + 1:02d}", "recorded_at": (v.get("recorded_at") or "unknown")[:10],
              "age_days": v.get("age_days"), "place": red.text(v.get("place") or ""),
@@ -269,6 +303,23 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
     return package, red, {v: k for k, v in real_to_alias.items()}
 
 
+def _chain_for_model(chain: dict, alias, red) -> dict:
+    """The rule-built chain with record IDs replaced by aliases and record titles redacted."""
+    def cond(c):
+        return {"evidence_id": alias(c["evidence_id"]), "date": c["date"], "record": red.text(_clip(c["title"], 160)),
+                "unresolved": c["open"], **({"matched_by_name": True} if c.get("matched_by_name") else {})}
+    out = []
+    for c in chain.get("chains", []):
+        out.append({"starts_at": c["start_label"], "trigger_records": [cond(x) for x in c["trigger"]],
+                    "steps": [{"part": s["label"], "if_affected": s["if_affected"],
+                               "recorded_problems": [cond(x) for x in s["conditions"]],
+                               "also_depends_on": [{"part": d["label"], "why": d["why"], "basis": d["basis"],
+                                                    "recorded_problems": [cond(x) for x in d["conditions"]]}
+                                                   for d in s["depends_on"]],
+                               **({"link_to_next": s["to_next"]} if s["to_next"] else {})} for s in c["steps"]]})
+    return {"chains": out, "not_established": chain.get("not_established", []), "note": chain.get("note")}
+
+
 def map_back(result: dict, alias_to_real: dict, signal_map: dict | None = None) -> dict:
     """Replace aliases (E01...) in every evidence-ID list with the real evidence IDs. Unknown aliases are kept
     as-is so validation reports them."""
@@ -286,6 +337,8 @@ def map_back(result: dict, alias_to_real: dict, signal_map: dict | None = None) 
     for sc in result.get("scenarios", []):
         sc["supporting_evidence_ids"] = m(sc.get("supporting_evidence_ids"))
         sc["weakening_evidence_ids"] = m(sc.get("weakening_evidence_ids"))
+    for st in (result.get("impact_story") or {}).get("steps", []):
+        st["evidence_ids"] = m(st.get("evidence_ids"))
     for b in result.get("risk_briefings", []):
         b["evidence_ids"] = m(b.get("evidence_ids"))
         for c in b.get("claims") or []:
@@ -318,6 +371,11 @@ def validate(result: dict, valid_ids) -> dict:
     for sc in result.get("scenarios", []):
         sc["supporting_evidence_ids"] = clean(sc.get("supporting_evidence_ids"))
         sc["weakening_evidence_ids"] = clean(sc.get("weakening_evidence_ids"))
+    for st in (result.get("impact_story") or {}).get("steps", []):
+        st["evidence_ids"] = clean(st.get("evidence_ids"))
+        if st.get("basis") == "supported_by_records" and not st["evidence_ids"]:
+            st["basis"] = "hypothesis"                     # no valid record cited: not shown as record-supported
+            st["downgraded"] = True
     briefs, unknown_signals = [], []
     for b in result.get("risk_briefings", []):
         b["evidence_ids"] = clean(b.get("evidence_ids"))
@@ -364,7 +422,8 @@ def fingerprint(alert, evidence_index, equipment_alerts=None) -> str:
                "context": sorted({json.dumps(ctx(i), default=str) for i in set(alert.context_ids)}),
                "related": rel, "related_evidence": [ev(i) for i in sorted(set(related_evidence_ids(alert, equipment_alerts)))],
                "video": sorted((v["video_id"], v.get("analysis_created_at")) for v in getattr(alert, "video_context", []) or []),
-               **({"life_safety": getattr(alert, "life_safety")} if getattr(alert, "life_safety", None) else {})}
+               **({"life_safety": getattr(alert, "life_safety")} if getattr(alert, "life_safety", None) else {}),
+               **({"chain": getattr(alert, "impact_chain")} if getattr(alert, "impact_chain", None) else {})}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:20]
 
 

@@ -158,6 +158,17 @@ only; the assistant message with `tool_calls` is sent back unchanged, then one `
 | Final answer | Same history + "write the JSON" with the strict `FireRiskInvestigation` schema (no tools offered); IDs mapped back and validated against everything the model was shown |
 | Record | `mode: agentic`, `agent.trace` (round, tool, arguments, returned / total, new aliases, errors, reasoning notes), `records_looked_up`, `cited_beyond_package`, stop reason |
 | Fallback | HTTP 4xx, malformed or cut-off answer → single-call investigation (`mode: single_call`, `agentic_fallback.reason`); timeout / rate limit / 5xx / auth → recorded as failed (one call would fail the same way) |
-| Switch | `FIRERISK_AI_TOOLS=0` → single call only. Prompt version `investigation-v7` (one automatic re-analysis per alert after the update) |
+| Switch | `FIRERISK_AI_TOOLS=0` → single call only. Prompt version `investigation-v8` (adds `impact_story`; one automatic re-analysis per alert after the update) |
 The rule level stays authoritative; tools cannot change data, levels, alarms or equipment.
+
+## Chain of effects (NEW, 2026-11-01) — `firerisk/impact_chain.py`
+| Part | How |
+|---|---|
+| Graph | Nodes = parts of the building's systems (transformer, MSB, normal supply, ATS, generator, starter batteries, floor main panels, emergency lighting, blower, fire alarm, fire pump, smoke fans, basement fire, evacuation). Links state `why` and `basis`; `kind` = causes (a problem spreads) or needs (b needs a). Links that are not recorded are kept as gaps |
+| Power links | ATS / floor panel / lighting links are used only when the confirmed table `power_links.xlsx` is present |
+| Problems | Records of the whole data set that are open or a fault in the last 90 days; records without an Equipment_ID matched by the equipment name in the title (flagged "matched by name") |
+| Starts | Parts with a problem that are in the alert's records or its linked equipment alerts |
+| Chains | Longest path to the consequence for people, plus one alternative that branches early; up to 4 per alert; each step lists its own problems and those of the parts it depends on (2 links back) |
+| AI | `chain_of_effects` in the Muse Spark package (aliases, redacted titles); the records it cites are added to the package so they can be cited; `impact_story` validated like every other citation (unknown IDs removed, "record" steps without a valid record downgraded to hypothesis) |
+| API / UI | `impact_chain` in `/api/alerts/{id}` (record titles translated for display); story + step diagram in section 2 of the alert page and in the drawer |
 

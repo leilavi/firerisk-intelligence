@@ -830,6 +830,21 @@ def _window(cal: list[dict], start: str, end: str, pad: int = 7) -> list[dict]:
     return cal[max(0, i0 - pad): i1 + pad + 1]
 
 
+def _tx_chain(chain: dict) -> dict:
+    """Chain of effects with English record titles next to the originals (display only)."""
+    import copy
+    if not chain:
+        return {}
+    c = copy.deepcopy(chain)
+    for ch in c.get("chains", []):
+        conds = list(ch["trigger"])
+        for s in ch["steps"]:
+            conds += s["conditions"] + [x for d in s["depends_on"] for x in d["conditions"]]
+        for x in conds:
+            _tx(x, ("title",))
+    return c
+
+
 @app.get("/api/alerts/{alert_id}")
 def alert_detail(alert_id: str):
     res, a = _alert(alert_id)
@@ -882,6 +897,7 @@ def alert_detail(alert_id: str):
     for rx in rule_explanation:
         rx["context_evidence"] = [_tx(dict(x), ("title", "status")) for x in rx.get("context_evidence") or []]
     return {"alert": a.to_dict(), "summary": _alert_summary(a, res), "fields": _tx_fields(a.fields), "signals": sigs,
+            "impact_chain": _tx_chain(a.impact_chain),
             "ai_status": state.ai.status(a, res), "related_equipment": related, "rule_explanation": rule_explanation,
             "evidence": evidence, "timeline": timeline, "trends": trends,
             "meters": {m: {"meta": METERS.get(m), "calendar": res.meter_calendars.get(m, [])[-90:]} for m in meters},

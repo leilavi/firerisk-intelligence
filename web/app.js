@@ -728,10 +728,44 @@ function lifeSafety(ls, h = "h5") {
     ${ls.risk_note ? `<p class="small ls-note">${org("rule")}${esc(ls.risk_note)}</p>` : ""}
     <p class="tiny muted">${org("source")}Counts from the building drawings, supply path from the technician (${esc(ls.path_basis || ls.basis || "checked by a person")}). Panel labels stay on this computer.</p>`;
 }
+/* Chain of effects across equipment ("butterfly effect"). Story: Meta Muse Spark (impact_story, citing records);
+   diagram: rule set (impact_chain), each link with its basis; unknown links listed as not established. */
+const STORY_BASIS = { supported_by_records: "record", link_from_rules: "known link", hypothesis: "hypothesis", not_established: "not established" };
+function chainCond(c) {
+  return `<div class="cf-cond${c.open ? " open" : ""}"><span class="when">${c.date ? day(c.date) : "undated"}</span> ${tr(c, "title")}${c.open ? ' <span class="open">● unresolved</span>' : ""}${c.matched_by_name ? ' <span class="tiny muted" title="The record has no equipment code; it was matched by the equipment name in its title">(matched by name)</span>' : ""} ${chip(c.evidence_id)}</div>`;
+}
+function chainFlow(ch) {
+  return `<div class="cf">${ch.steps.map((s, i) => `
+    <div class="cf-node${s.conditions.length ? " hit" : ""}${i === ch.steps.length - 1 ? " end" : ""}">
+      <div class="cf-label">${esc(s.label)}</div>
+      <div class="cf-if small">${i === ch.steps.length - 1 ? "" : "If affected: "}${esc(s.if_affected)}</div>
+      ${s.conditions.map(chainCond).join("")}
+      ${s.depends_on.map((d) => `<div class="cf-dep"><b>${d.relation === "also_leads_here" ? "Another recorded problem that can lead here" : "Also depends on"}: ${esc(d.label)}</b> <span class="small">- ${esc(d.why)}</span>${d.conditions.map(chainCond).join("")}</div>`).join("")}
+    </div>
+    ${s.to_next ? `<div class="cf-arrow"><span class="cf-ar" aria-hidden="true">↓</span><span class="small">${esc(s.to_next.why)} <span class="tiny muted">(${esc(s.to_next.basis)})</span></span></div>` : ""}`).join("")}</div>`;
+}
+function chainSection(d, compact = false) {
+  const C = d.impact_chain || {}, inv = d.investigation, r = inv && inv.status === "ok" ? inv.result : null;
+  const st = r && r.impact_story;
+  const hasStory = st && st.headline && (st.steps?.length || st.story);
+  if (!C.chains?.length && !hasStory) return "";
+  const tag = inv && inv.api_mode === "test" ? org("test", "TEST · mock API") : org("ai");
+  const story = hasStory ? `<div class="aibox cf-story">
+      <div class="small muted">${tag}The story behind the alert · ${dt(inv.created_at)}${d.ai_status?.result_is_current ? "" : " · <b>made on older evidence</b>"}</div>
+      <p class="cf-head">${aiT(st.headline)}</p>
+      ${st.story ? `<p>${aiT(st.story)}</p>` : ""}
+      ${st.steps?.length ? `<ol class="cf-steps">${st.steps.map((x) => `<li>${aiT(x.text)} <span class="cf-b ${esc(x.basis)}">${esc(STORY_BASIS[x.basis] || x.basis)}</span> ${(x.evidence_ids || []).map(chip).join("")}</li>`).join("")}</ol>` : ""}
+      ${st.not_established?.length ? `<p class="small"><b>Not established:</b> ${st.not_established.map(aiT).join(" · ")}</p>` : ""}
+      <p class="tiny muted">Written by Meta Muse Spark from the records and the links below. A possible sequence, not a prediction.</p></div>`
+    : (C.chains?.length ? `<p class="small muted">${esc(d.ai_status?.label || "")}. The Meta Muse Spark story for this chain is not available yet; the links below come from the rule set.</p>` : "");
+  const flows = (C.chains || []).map((ch, n) => `<details class="cf-wrap"${n === 0 && !compact ? " open" : ""}><summary><b>Chain ${n + 1}:</b> ${esc(ch.start_label)} → ${esc(ch.steps[ch.steps.length - 1].label)} (${ch.steps.length} steps)</summary>${chainFlow(ch)}</details>`).join("");
+  const gaps = C.not_established?.length ? `<p class="small"><b>Links not recorded:</b> ${C.not_established.map(esc).join(" · ")}</p>` : "";
+  return `${story}${flows ? `<div class="small muted" style="margin:8px 0 4px">${org("rule")}How the parts are linked (each arrow states why and on what basis)</div>${flows}${gaps}` : ""}`;
+}
 function riskDetailInline(d, signalId) {
   const s = d.signals.find((x) => x.signal_id === signalId) || d.signals[0];
   const recs = d.evidence.filter((e) => s.evidence_ids.includes(e.evidence_id));
-  return `<h5>Source records</h5>${recs.map((e) => `<div class="small rrow"><span class="when">${day(e.timestamp)}</span><span>${tr(e, "title")} ${e.is_open ? '<span class="open">● unresolved</span>' : ""}<div class="muted">${org(e.origin)}${esc(e.source?.sheet_en || "")}${e.source?.row ? ` · row ${e.source.row}` : ""} · status: ${tr(e, "status") || "—"} ${chip(e.evidence_id)}</div></span></div>`).join("") || '<p class="muted small">No Data Available</p>'}
+  return `${chainSection(d, true) ? `<h5>Chain of effects across equipment</h5>${chainSection(d, true)}` : ""}<h5>Source records</h5>${recs.map((e) => `<div class="small rrow"><span class="when">${day(e.timestamp)}</span><span>${tr(e, "title")} ${e.is_open ? '<span class="open">● unresolved</span>' : ""}<div class="muted">${org(e.origin)}${esc(e.source?.sheet_en || "")}${e.source?.row ? ` · row ${e.source.row}` : ""} · status: ${tr(e, "status") || "—"} ${chip(e.evidence_id)}</div></span></div>`).join("") || '<p class="muted small">No Data Available</p>'}
     <h5>Possible chain of events</h5><ol class="chain">${s.fields.risk_chain.map((c) => `<li>${esc(c)}</li>`).join("")}</ol><p class="small muted">${org("rule")}A possible chain of events, not a prediction.</p>
     <h5>Recommended actions</h5><ul class="actions">${s.fields.preventive_actions.map((a, n) => `<li><span class="box" aria-hidden="true"></span><span>${n === 0 ? "<b>First:</b> " : ""}${esc(a)}</span></li>`).join("")}</ul>
     <p class="small"><b>Close when:</b> ${esc(s.fields.closure_condition || "—")}</p>
@@ -852,7 +886,8 @@ async function viewFire(id, focusRisk) {
     <p style="margin:10px 0 0">Equipment and rooms: ${F.affected_assets.map(([eid, name]) => `<button class="asset" data-asset="${esc(eid)}"><b>${esc(nm(name, null, eid))}</b><span class="muted small">${esc(eid)}</span></button>`).join("") || '<span class="muted">No equipment code in the records.</span>'}</p>
     ${insufficient ? '<div class="insuff">Not enough evidence to confirm. The records are signals, not a confirmed hazard.</div>' : `<p class="small muted">${org("rule")}${esc(F.assessment_text)}. No fire has been reported in these records.</p>`}`;
 
-  const s2 = `${risks.map((c) => { const s = sigById[c.signal_id]; return `<div class="whyblock"><h4>${esc(c.risk)}</h4><p>${esc(c.why_it_matters)}</p>
+  const cs = chainSection(d);
+  const s2 = `${cs ? `<div class="whyblock cf-block"><h4>Chain of effects across equipment</h4><p class="small muted">How a problem on one part of the building can reach other equipment and, in the end, people.</p>${cs}</div>` : ""}${risks.map((c) => { const s = sigById[c.signal_id]; return `<div class="whyblock"><h4>${esc(c.risk)}</h4><p>${esc(c.why_it_matters)}</p>
       <ol class="chain">${s.fields.risk_chain.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
       <p class="small muted">${org("rule")}Possible chain of events, not a prediction. Condition: ${esc(s.fields.trigger_condition)} Consequence if not handled: ${esc(s.fields.consequence)}</p>
       ${s.fields.possible_causes?.length ? `<details><summary>Possible causes listed by the rules (not verified)</summary><ul class="small">${s.fields.possible_causes.map((pc) => `<li>${esc(pc.cause)} <span class="muted">(${basisTxt(pc.basis)})</span></li>`).join("")}</ul></details>` : ""}</div>`; }).join("")}

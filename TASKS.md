@@ -41,6 +41,9 @@
 - [x] Author: run `run_tool_calling_check.bat` (PASS 2026-10-30 18:57).
 - [x] Author: restart `run_dashboard` (19:05; 2 agentic investigations ok at 19:06) so the alerts are re-analysed with tool calling; Claude checks the result from the PC database.
 
+- [x] Claude: chain of effects + Muse Spark impact story, live on B1 (2026-11-01 19:49).
+- [ ] Demo video: open with the B1 story (water in the electrical room -> generator batteries -> escape lighting).
+
 ## Rule (author, 2026-10-30)
 Every change or new feature updates README.md, PROJECT_STATUS.md, CHANGELOG.md and, when affected, ARCHITECTURE.md,
 HACKATHON_COMPLIANCE.md and FEATURE_ORIGIN_MATRIX.md **in the same commit**. Never submit with outdated content.

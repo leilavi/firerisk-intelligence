@@ -87,6 +87,13 @@ Equipment alert ↔ fire-risk alert link reasons: shared record, same equipment,
 is part of the fire-risk alert, or (EQ-D1) the asset supplies life-safety equipment on the alert's floor (normal or standby supply, stated separately). A fault with no fire-hazard meaning (e.g. an air-conditioner sensor fault) stays an
 equipment alert only.
 
+## Chain of effects (NEW, 2026-11-01) — `firerisk/impact_chain.py`
+Explains, without changing any level, how a recorded problem can reach other equipment and people. Links and their
+basis are listed in the module (asset relations of the rule set, confirmed drawing table, technician statement of
+2026-11-01, general hazard mechanisms). A "problem" is an open record or a fault in the last 90 days. Not recorded
+(fire pump and smoke fan supply, batteries of the light fittings) is shown as not established. A possible sequence,
+not a prediction.
+
 ## Muse Spark (NEW) — never sets a level
 The rule level is authoritative. Muse Spark gives its own priority with a rationale, shown next to the rule level.
 Automatic analysis: every fire-risk alert at or above `FIRERISK_AI_MIN_LEVEL` (default Watch) whose evidence

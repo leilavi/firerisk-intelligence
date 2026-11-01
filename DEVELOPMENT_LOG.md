@@ -391,6 +391,10 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
   lights/exit signs through the ATS, linked the 2026-09-29 battery weakness to it and asked for a voltage log and an
   ATS auto-start test. It did not list the shared floor breaker as a separate point.
 * Tests: 235 collected, 233 pass, 2 skipped (full repository, 2026-11-01).
+* 19:19 author: the alert does not show how equipment A relates to B and what C can then cause ("butterfly effect").
+  19:25 decided: rule-built chain first, then Meta Muse Spark tells it as a story. `impact_chain.py`, prompt v8
+  (`impact_story`), dashboard section. Live 19:49: B1 story in agentic mode, 50 s, 7 steps, 0 invalid citations;
+  counts in the story checked (135 = 69 + 66; B1 19). Tests 240 (238 pass, 2 skipped).
 * 19:12 author could not find the emergency-lighting data on the dashboard (it was only sent to Muse Spark): added the
   section "Emergency lights and exit signs on this floor" to the fire-risk alert drawer and page; checked on the PC (B1).
 * 18:57 author: remove the building name from the header and the whole-building panel - replaced by generic titles.

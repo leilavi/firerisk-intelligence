@@ -1,0 +1,34 @@
+{
+  "what": "First live Meta Muse Spark impact story (chain of effects across equipment) for alert ZONE-B1",
+  "run_at": "2026-11-01T19:49:51+07:00",
+  "where": "author's PC, real building data (records cited by internal IDs that are kept private: they contain staff user names)",
+  "prompt_version": "investigation-v8",
+  "mode": "agentic (tool calling)",
+  "seconds": 50.09,
+  "validation": {"invalid_evidence_ids": 0, "unsupported_facts": 0, "unknown_signals": 0, "ok": true},
+  "rule_chains_given_to_the_model": [
+    "Transformer and its room (MBA) > Main switchboard (MSB) > Normal power supply > ATS [also depends on: generator starter batteries, recorded problem] > Floor main panels > Emergency lights and exit signs > People evacuating",
+    "Transformer and its room (MBA) > Main switchboard (MSB) > Smoke or fire in basement B1 > Fire alarm / heat detection (2 recorded problems) > People evacuating",
+    "Wastewater air blower AB-01A > Smoke or fire in basement B1 > Fire alarm / heat detection > People evacuating",
+    "Generator starter batteries > Standby generator > ATS > Floor main panels > Emergency lights and exit signs > People evacuating"
+  ],
+  "impact_story": {
+    "headline": "Water in the B1 electrical rooms could cut power and, if the generator fails, leave escape lighting on unknown batteries.",
+    "story": "Water through cracked walls entered the MBA and MSB rooms on 20 September and again in heavy rain on 8 October and is still open. If water causes a short, the building could lose grid power distributed by the MSB. The ATS should switch floors to the standby generator, but that generator had degraded starter batteries recorded on 29 September and three grid outages occurred in early October. If the generator does not start, 19 B1 exit fittings and 135 building-wide rely on their own batteries whose condition is not recorded. A basement fire from the seized blower or electrical short would then also need the heat detection that faulted twice in October to warn people in time.",
+    "steps": [
+      {"basis": "supported_by_records", "records_cited": 2, "text": "Transformer and MSB rooms in B1 had water seepage on 20 September and again on 8 October during heavy rain, still open."},
+      {"basis": "link_from_rules", "records_cited": 0, "text": "The main switchboard is fed by the transformer, so a fault in either can cut grid power to the building."},
+      {"basis": "link_from_rules", "records_cited": 0, "text": "ATS is the switch that changes the building over to the generator when grid power is lost."},
+      {"basis": "supported_by_records", "records_cited": 1, "text": "The generator starter batteries were recorded as degraded on 29 September with no replacement receipt shown."},
+      {"basis": "link_from_rules", "records_cited": 0, "text": "Floor panels feed emergency lights and exit signs through a shared control breaker, with no separate emergency circuit."},
+      {"basis": "supported_by_records", "records_cited": 3, "text": "On the same basement path, heat detection faulted twice in October and blower AB-01A is seized with a prior burnt motor."},
+      {"basis": "link_from_rules", "records_cited": 0, "text": "Without normal and generator supply, lights stay on only with their own small batteries, then escape routes can go dark."}
+    ],
+    "not_established": [
+      "Which supply feeds the fire pump, and whether it is on the generator, is not recorded.",
+      "Which supply feeds the smoke exhaust fans, and whether they are on the generator, is not recorded.",
+      "Whether the emergency lights and exit signs have built-in batteries, their autonomy and any discharge test are not recorded."
+    ]
+  },
+  "reviewer_note": "Counts checked against power_links.xlsx: 135 = 69 emergency lights + 66 exit signs on all floors; B1 = 12 + 7 = 19. A possible sequence, not a prediction."
+}
