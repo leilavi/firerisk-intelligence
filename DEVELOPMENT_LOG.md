@@ -377,3 +377,17 @@ assuming. Sanitized summary saved to evidence/.
 Commits `33d9fd4` and `c9e0c74` were made with the author's personal e-mail as git author by mistake. Both were
 re-authored to `Claude <noreply@anthropic.com>` (the identity used for this session's earlier commits) and force-pushed;
 file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empty). New hashes: `92d5bce`, `29e806d`.
+
+## 2026-11-01 18:31–19:30 — Supply path of emergency lighting; verify colour
+* Author relayed the technician: emergency lights and exit signs are fed over 2Cx2.5mm² cable from the floor control
+  breaker (CP) inside each floor's own main panel (not in the asset register); the standby generator feeds those panels
+  through the ATS; whether the fittings have batteries or a discharge test is not known.
+* `power_links.py`: optional columns `supply` (backup) and `panel_kind`; standby links reported separately; floor
+  inventory gets a label-free supply path, "no dedicated emergency circuit" and a risk note. 13 rows added to the real
+  table (25/25 used). Generator P-BG.TTC017 recorded as standby supply only.
+* Dashboard: "findings to verify" marker on the survey illustration moved from yellow (Warning) to magenta, dashed.
+* Live 18:45 on the author's PC: 25/25 rows loaded; ZONE-B1 re-analysed (agentic, 11 lookups, 63 s). Muse Spark
+  called `get_fire_safety_supply` for P-BG.TTC017, described the generator as standby supply of the B1 emergency
+  lights/exit signs through the ATS, linked the 2026-09-29 battery weakness to it and asked for a voltage log and an
+  ATS auto-start test. It did not list the shared floor breaker as a separate point.
+* Tests: 235 collected, 233 pass, 2 skipped (full repository, 2026-11-01).

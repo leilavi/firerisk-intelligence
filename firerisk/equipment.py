@@ -223,13 +223,26 @@ def equipment_fields(a: EquipmentAlert, items: list[Evidence], kind: str, meter_
         closure = "Repair record closed with the work described and the equipment checked in operation."
         unknowns = ["Cause of the fault (not verified)"]
         if a.power_dependents:                    # rule EQ-D1: what loses normal supply, from confirmed drawing links
-            from .power_links import describe
+            from .power_links import VIA_STANDBY, describe
             floors = ", ".join(dict.fromkeys(d["floor"] for d in a.power_dependents))
-            consequence = (f"{consequence} It supplies life-safety equipment - {describe(a.power_dependents)} "
-                           "(building drawings, each link checked by a person); if it fails during a fire, this "
-                           "equipment loses normal supply.")
-            chain = ["Fault recorded", "Panel trips or fails", f"Life-safety equipment on {floors} loses normal supply",
-                     "Escape routes depend on battery backup, which is not recorded"]
+            normal = [d for d in a.power_dependents if d["via"] != VIA_STANDBY]
+            standby = [d for d in a.power_dependents if d["via"] == VIA_STANDBY]
+            if normal:
+                consequence = (f"{consequence} It supplies life-safety equipment - {describe(normal)} "
+                               "(building drawings, each link checked by a person); if it fails during a fire, this "
+                               "equipment loses normal supply.")
+                chain = ["Fault recorded", "Panel trips or fails", f"Life-safety equipment on {floors} loses normal supply",
+                         "Escape routes depend on battery backup, which is not recorded"]
+            if standby:
+                consequence = (f"{consequence} It is the standby supply, through the ATS, of the life-safety equipment "
+                               f"on {', '.join(dict.fromkeys(d['floor'] for d in standby))} "
+                               f"({sum(d['count'] for d in standby)} emergency lights and exit signs recorded; technician "
+                               "statement, checked by a person); if it is unavailable during a grid outage, this "
+                               "equipment runs on its own batteries only.")
+                if not normal:
+                    chain = ["Fault recorded", "Generator unavailable", "Grid outage",
+                             f"Emergency lights and exit signs on {floors} run on battery only",
+                             "Battery autonomy is not recorded"]
             actions.insert(1, f"Test the emergency lights and exit signs on {floors} on battery, as the building "
                               "procedure allows, and record the result")
             unknowns.append("Battery condition and autonomy of the supplied emergency lights and exit signs (not recorded)")
@@ -281,9 +294,15 @@ def link_to_fire_alerts(eq_alerts: list[EquipmentAlert], fire_alerts, evidence_i
                                f"fire-risk alert")
             on_floor = [d for d in ea.power_dependents if d["floor"] == fa.zone or fa.zone == "Building"]
             if on_floor:
-                from .power_links import describe
-                reasons.append(f"it supplies life-safety equipment on this floor ({describe(on_floor)}; building "
-                               f"drawings, checked by a person)")
+                from .power_links import VIA_STANDBY, describe
+                normal = [d for d in on_floor if d["via"] != VIA_STANDBY]
+                standby = [d for d in on_floor if d["via"] == VIA_STANDBY]
+                if normal:
+                    reasons.append(f"it supplies life-safety equipment on this floor ({describe(normal)}; building "
+                                   f"drawings, checked by a person)")
+                if standby:
+                    reasons.append(f"it is the standby supply (through the ATS) of the life-safety equipment on this "
+                                   f"floor ({describe(standby)}; technician statement, checked by a person)")
             if reasons:
                 ea.fire_links.append({"fire_alert_id": fa.alert_id, "reasons": reasons})
                 related.append({"equipment_alert_id": ea.alert_id, "reasons": reasons, "severity": ea.severity})

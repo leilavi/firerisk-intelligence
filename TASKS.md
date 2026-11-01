@@ -25,7 +25,9 @@
 - [x] Author: OCR of the 2 drawings run on the PC (2026-10-30).
 - [x] Claude: draft table + rule EQ-D1 + 7th Muse Spark tool `get_fire_safety_supply` + status on the dashboard (2026-10-31).
 - [ ] Author: `run_draft_power_links.bat`, check `power_links_draft.xlsx` (yellow rows first), confirm rows, save as `power_links.xlsx`.
-- [ ] Claude: after confirmation, check counts, re-run the B1 investigation live and look at what Muse Spark looked up.
+- [x] Author: counts per floor (2026-10-31) and supply path from the technician (2026-11-01) confirmed in `power_links.xlsx`.
+- [x] Claude: B1 re-analysed live 2026-11-01 18:45 - Muse Spark looked up the generator's standby link itself (see PROJECT_STATUS).
+- [ ] Ask the technician: do the emergency lights / exit signs have built-in batteries, autonomy, periodic discharge test? Asset codes for the floor main panels and the ATS.
 - [ ] (superseded) local drawing extractor + simplified zone summary, filled on the author's computer (floor/zone → fire-safety equipment types, feeding panel; no dimensions, cable routes or equipment details); app links electrical faults to the fire-safety equipment of the same zone.
 
 - [x] Claude: unified dark dashboard with AI Risk Briefing and floor markers (0.8).

@@ -13,6 +13,13 @@ What the rules do with confirmed links (deterministic, documented in RISK_RULES.
     emergency lighting / exit signs on battery;
   * it is linked to the fire-risk alert of every floor it supplies, with that reason.
 
+Supply path (technician, 2026-11-01): each floor has its own main panel (not in the asset register); the floor
+control breaker (CP) inside it feeds the floor's emergency lights and exit signs over a 2Cx2.5mm2 cable - no
+dedicated emergency circuit. The standby generator feeds every floor main panel through the ATS. Rows can say this
+with two optional columns: `supply` = backup on a link that is only used during a grid outage (generator -> ATS), and
+`panel_kind` (generator, ats, floor_main_panel, floor_breaker, msb, distribution_panel) so the path can be described
+without panel labels. A standby link is reported as such: it never makes the asset the NORMAL supply of the floor.
+
 What leaves the computer (data owner's condition 2): only the simplified summary from `summary()` - floor, equipment
 type, count, direct or through a downstream panel. Panel labels, circuit codes, pages and notes from the drawings
 stay private and are never put into an AI request, an API response for demo mode or a log.
@@ -28,12 +35,17 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 LINKS_FILE = Path(os.environ.get("FIRERISK_POWER_LINKS", ROOT_DIR / "data" / "private" / "drawings" / "power_links.xlsx"))
 SHEET = "Links"
 COLUMNS = ["confirmed", "floor", "panel_label", "asset_id", "feeds", "count", "auto_count_hint", "fed_panel_label", "circuits",
-           "source", "basis", "ocr_confidence", "note"]
+           "source", "basis", "ocr_confidence", "note", "supply", "panel_kind"]
 FLOORS = ["B1", "F1", "F2", "F3", "F4", "Roof", "Building"]
 FEEDS = {"emergency_light": "emergency lights", "exit_sign": "exit signs", "fire_pump": "fire pump",
          "smoke_control": "smoke control fans", "fire_alarm": "fire alarm panel", "other_fire_safety":
          "other fire-safety equipment", "sub_panel": "downstream panel"}
 LIFE_SAFETY = {k for k in FEEDS if k != "sub_panel"}
+SUPPLY = {"": "normal", "normal": "normal", "backup": "backup", "standby": "backup", "du phong": "backup", "dự phòng": "backup"}
+PANEL_KINDS = {"generator": "standby generator", "ats": "automatic transfer switch (ATS)",
+               "floor_main_panel": "floor main panel", "floor_breaker": "floor control breaker (CP)",
+               "msb": "main switchboard", "distribution_panel": "distribution panel"}
+VIA_DIRECT, VIA_DOWN, VIA_STANDBY = "direct", "through a downstream panel", "standby supply (generator through the ATS)"
 YES = {"y", "yes", "x", "1", "true", "co", "có", "ok"}
 # the mezzanine belongs to floor 1 (author, 2026-10-31); "Mai" = roof
 FLOOR_ALIASES = {"lung": "F1", "tanglung": "F1", "mezzanine": "F1", "m": "F1", "f1m": "F1", "mai": "Roof",
@@ -64,6 +76,8 @@ class Link:
     feeds: str
     count: int | None
     fed_panel: str        # normalised, only for feeds == sub_panel
+    supply: str = "normal"   # "backup": used only during a grid outage (generator -> ATS)
+    kind: str = ""           # panel_kind of `panel` (generic, may leave the computer)
 
 
 @dataclass
@@ -78,6 +92,42 @@ class PowerLinks:
     # --- lookups -------------------------------------------------------------------------------
     def panels_of_asset(self, asset_id: str) -> set[str]:
         return {l.panel for l in self.links if l.asset_id and l.asset_id == asset_id and l.panel}
+
+    def _reach(self, panels: set[str]) -> dict[str, bool]:
+        """Every panel reached from `panels` through sub_panel links -> True when reached ONLY through a standby
+        (backup) link. A normal path wins over a standby one. Cycle-safe."""
+        best: dict[str, bool] = {p: False for p in panels}
+        todo = list(panels)
+        while todo:
+            p = todo.pop()
+            for l in self.links:
+                if l.feeds == "sub_panel" and l.panel == p and l.fed_panel:
+                    flag = best[p] or l.supply == "backup"
+                    if l.fed_panel not in best or (best[l.fed_panel] and not flag):
+                        best[l.fed_panel] = flag
+                        todo.append(l.fed_panel)
+        return best
+
+    def kind_of(self, panel: str) -> str:
+        return next((l.kind for l in self.links if l.panel == panel and l.kind), "")
+
+    def upstream_path(self, panel: str) -> list[dict]:
+        """Generic supply path above a panel, nearest first: [{kind, label, asset_id, supply}]. No panel labels."""
+        out, seen, cur = [], {panel}, panel
+        while True:
+            ups = [l for l in self.links if l.feeds == "sub_panel" and l.fed_panel == cur and l.panel not in seen]
+            if not ups:
+                return out
+            # follow the normal supply first; a standby feed is listed as such
+            ups.sort(key=lambda l: l.supply == "backup")
+            for l in ups[1:]:
+                out.append({"kind": self.kind_of(l.panel), "label": PANEL_KINDS.get(self.kind_of(l.panel), "panel"),
+                            "asset_id": l.asset_id, "supply": l.supply})
+            l = ups[0]
+            seen.add(l.panel)
+            out.append({"kind": self.kind_of(l.panel), "label": PANEL_KINDS.get(self.kind_of(l.panel), "panel"),
+                        "asset_id": l.asset_id, "supply": l.supply})
+            cur = l.panel
 
     def _downstream(self, panels: set[str]) -> tuple[set[str], set[str]]:
         """(all panels reached through sub_panel links, panels reached only through another panel). Cycle-safe."""
@@ -96,16 +146,17 @@ class PowerLinks:
         if not asset_id:
             return []
         own_panels = self.panels_of_asset(asset_id)
-        all_panels, indirect = self._downstream(own_panels) if own_panels else (set(), set())
+        reach = self._reach(own_panels) if own_panels else {}
         out: dict[tuple, dict] = {}
         for l in self.links:
             if l.feeds not in LIFE_SAFETY:
                 continue
             direct = (l.asset_id == asset_id) or (l.panel and l.panel in own_panels)
-            via_down = bool(l.panel) and l.panel in indirect
+            via_down = bool(l.panel) and l.panel in reach and l.panel not in own_panels
             if not (direct or via_down):
                 continue
-            key = (l.floor, l.feeds, "direct" if direct else "through a downstream panel")
+            via = VIA_DIRECT if direct else (VIA_STANDBY if reach.get(l.panel) else VIA_DOWN)
+            key = (l.floor, l.feeds, via)
             d = out.setdefault(key, {"floor": l.floor, "equipment": l.feeds, "equipment_label": FEEDS[l.feeds],
                                      "count": 0, "count_known": True, "via": key[2]})
             if l.count is None:
@@ -118,25 +169,70 @@ class PowerLinks:
         """All confirmed life-safety equipment on a floor, whether or not its supplying panel is known in the asset
         register (simplified: type, count, supplying asset if known)."""
         out: dict[str, dict] = {}
+        light_panels: list[str] = []
         for l in self.links:
             if l.feeds not in LIFE_SAFETY or not (l.floor == floor or floor == "Building"):
                 continue
             d = out.setdefault(l.feeds, {"equipment": l.feeds, "equipment_label": FEEDS[l.feeds], "count": 0,
-                                         "count_known": True, "supplying_assets": set()})
+                                         "count_known": True, "supplying_assets": set(), "standby_assets": set()})
             if l.count is None:
                 d["count_known"] = False
             else:
                 d["count"] += l.count
             if l.asset_id:
                 d["supplying_assets"].add(l.asset_id)
-            for up in self.links:             # upstream panels that reach this one
-                if up.asset_id and up.feeds == "sub_panel" and l.panel and l.panel in self._downstream({up.panel})[0]:
-                    d["supplying_assets"].add(up.asset_id)
-        rows = [{**d, "supplying_assets": sorted(d["supplying_assets"])} for d in out.values()]
+            if l.panel and l.panel not in light_panels:
+                light_panels.append(l.panel)
+            for up in self.links:             # upstream panels that reach this one (normal or standby only)
+                if up.asset_id and up.feeds == "sub_panel" and l.panel:
+                    r = self._reach({up.panel})
+                    if l.panel in r and l.panel != up.panel:
+                        d["standby_assets" if r[l.panel] else "supplying_assets"].add(up.asset_id)
+        if not out:
+            return {}
+        rows = [{**d, "supplying_assets": sorted(d["supplying_assets"]), "standby_assets": sorted(d["standby_assets"])}
+                for d in out.values()]
+        for r in rows:                       # keep the old shape when nothing is on standby
+            if not r["standby_assets"]:
+                del r["standby_assets"]
         unknown = any(not r["supplying_assets"] for r in rows)
-        return {"floor": floor, "equipment": sorted(rows, key=lambda r: r["equipment"]),
-                "supplying_panel_known": bool(rows) and not unknown,
-                "basis": "building drawings; counts and links checked by a person"} if rows else {}
+        res = {"floor": floor, "equipment": sorted(rows, key=lambda r: r["equipment"]),
+               "supplying_panel_known": not unknown,
+               "basis": "building drawings; counts and links checked by a person"}
+        if floor != "Building" and light_panels:
+            path = self.supply_path(light_panels[0])
+            if path:
+                res.update(path)
+        return res
+
+    def supply_path(self, panel: str) -> dict:
+        """Generic description of how a floor's emergency lights and exit signs are supplied (no labels)."""
+        kind = self.kind_of(panel)
+        ups = self.upstream_path(panel)
+        if not ups and not kind:
+            return {}
+        normal = [u for u in ups if u["supply"] != "backup"]
+        standby = [u for u in ups if u["supply"] == "backup"]
+        def name(u):
+            return u["label"] + (f" ({u['asset_id']})" if u["asset_id"] else " (not in the asset register)")
+        steps = [name(u) for u in reversed(normal)] + [PANEL_KINDS.get(kind, "panel")]
+        out = {"supply_path": " -> ".join(steps) + " -> emergency lights and exit signs",
+               "dedicated_emergency_circuit": False if kind == "floor_breaker" else None,
+               "standby_supply": ("; ".join(name(u) for u in reversed(standby)) + " feeds the path on grid outage")
+                                 if standby else None,
+               "path_basis": "technician statement 2026-11-01, checked by a person"}
+        notes = []
+        if kind == "floor_breaker":
+            notes.append("The emergency lights and exit signs of this floor are on the floor control breaker, not on "
+                         "a dedicated emergency circuit: if that breaker trips or the floor panel is switched off "
+                         "for maintenance, all of them run on their own batteries.")
+        if standby:
+            notes.append("On a grid outage the standby generator re-supplies the floor panel through the ATS; the "
+                         "lights only need their batteries for the changeover, unless the generator or ATS fails.")
+        notes.append("Whether the fittings have built-in batteries, their autonomy and any periodic discharge test "
+                     "are not recorded.")
+        out["risk_note"] = " ".join(notes)
+        return {k: v for k, v in out.items() if v is not None}
 
     def assets_supplying(self, floor: str | None = None) -> list[str]:
         ids = {l.asset_id for l in self.links if l.asset_id}
@@ -154,7 +250,9 @@ def describe(deps: list[dict]) -> str:
     by_floor: dict[str, list[str]] = {}
     for d in deps:
         n = f"{d['count']} {d['equipment_label']}" if d["count_known"] else f"{d['equipment_label']} (number not recorded)"
-        if d["via"] != "direct":
+        if d["via"] == VIA_STANDBY:
+            n += " (standby supply through the ATS)"
+        elif d["via"] != VIA_DIRECT:
             n += " via a downstream panel"
         by_floor.setdefault(d["floor"], []).append(n)
     return "; ".join(f"{f}: {', '.join(v)}" for f, v in by_floor.items())
@@ -171,9 +269,9 @@ def summary(links: PowerLinks, asset_id: str | None = None, floor: str | None = 
                                                       for d in deps]})
     inv = links.floor_inventory(floor) if floor else {}
     return {"links": rows, **({"floor_inventory": inv} if inv else {}),
-            "basis": "building drawings, each link checked by a person against the drawing",
-            "note": "Shows which life-safety equipment loses normal supply if this asset fails. Battery backup of the "
-                    "equipment is not recorded."}
+            "basis": "building drawings and the technician's statement, each link checked by a person",
+            "note": "Shows which life-safety equipment loses normal supply if this asset fails; links marked 'standby "
+                    "supply' only matter during a grid outage. Battery backup of the equipment is not recorded."}
 
 
 def load(path: Path | None = None, known_assets: set[str] | None = None) -> PowerLinks:
@@ -234,6 +332,13 @@ def load(path: Path | None = None, known_assets: set[str] | None = None) -> Powe
             bad.append("give the panel label or the asset_id")
         if asset and known_assets is not None and asset not in known_assets:
             bad.append(f"asset_id {asset} is not in the asset register")
+        raw_supply = _s(get(r, "supply")).lower()
+        supply = SUPPLY.get(raw_supply)
+        if supply is None:
+            bad.append("supply must be empty, normal or backup")
+        kind = _s(get(r, "panel_kind")).lower()
+        if kind and kind not in PANEL_KINDS:
+            bad.append(f"panel_kind must be one of {', '.join(PANEL_KINDS)}")
         fed = norm_label(get(r, "fed_panel_label"))
         if feeds == "sub_panel" and not fed:
             bad.append("feeds = sub_panel needs fed_panel_label")
@@ -245,7 +350,7 @@ def load(path: Path | None = None, known_assets: set[str] | None = None) -> Powe
             res.problems.append({"row": i, "problem": "; ".join(bad)})
             continue
         res.links.append(Link(row=i, floor=floor, panel=panel, asset_id=asset, feeds=feeds, count=count,
-                              fed_panel=fed if feeds == "sub_panel" else ""))
+                              fed_panel=fed if feeds == "sub_panel" else "", supply=supply, kind=kind))
     # one panel label mapped to two different assets is a contradiction: drop those rows rather than guess
     owner: dict[str, set] = {}
     for l in res.links:
@@ -256,6 +361,14 @@ def load(path: Path | None = None, known_assets: set[str] | None = None) -> Powe
         for l in [l for l in res.links if l.panel in clash]:
             res.problems.append({"row": l.row, "problem": "this panel label is linked to two different asset_ids"})
         res.links = [l for l in res.links if l.panel not in clash]
+    # a panel's kind needs to be written once only
+    kinds: dict[str, str] = {}
+    for l in res.links:
+        if l.panel and l.kind:
+            kinds.setdefault(l.panel, l.kind)
+    for l in res.links:
+        if l.panel and not l.kind:
+            l.kind = kinds.get(l.panel, "")
     # carry the asset of a panel to its other rows (a panel's asset_id needs to be written once only)
     for l in res.links:
         if l.panel and not l.asset_id and l.panel in owner and len(owner[l.panel]) == 1:

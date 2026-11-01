@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Supply path of emergency lighting (2026-11-01, technician's statement via the author): `power_links.xlsx` gains two
+  optional columns, `supply` (normal / backup) and `panel_kind` (generator, ats, floor_main_panel, floor_breaker, msb,
+  distribution_panel). A standby link (generator -> ATS) is followed but reported as "standby supply": the generator's
+  alert says the floors' emergency lights and exit signs run on battery only if it is unavailable during a grid
+  outage, and never that they lose normal supply. The floor inventory adds a label-free `supply_path`,
+  `dedicated_emergency_circuit` (false: lights on the floor control breaker), `standby_supply` and a `risk_note`
+  (breaker trip or maintenance shutdown puts the whole floor on batteries; battery data not recorded). A normal path
+  wins over a standby one. Real table: 13 rows added (6 floor main panels, ATS, generator). 5 new tests.
+- Survey illustration: "findings to verify" changed from yellow (the Warning colour) to magenta with a dashed outline,
+  legend "(not a risk level)"; new token `--verify`.
 - Floor inventory of life-safety equipment (2026-10-31): confirmed counts per floor are used even when the supplying
   panel is not in the asset register - attached to each zone alert, sent to Meta Muse Spark in the package
   (`life_safety_equipment_on_this_floor`, with "panel not known - do not guess") and returned by the tool; a change

@@ -161,6 +161,14 @@ a battery test, it is linked to the fire-risk alert of those floors, and Meta Mu
 `get_fire_safety_supply`. What reaches Muse Spark is floor, equipment type and count only - never panel labels,
 circuits or drawing content.
 
+Supply path (technician, 2026-11-01): each floor has its own main panel; the floor control breaker (CP) inside it feeds
+the floor's emergency lights and exit signs over a 2Cx2.5mm² cable, with no dedicated emergency circuit; the standby
+generator re-supplies every floor main panel through the ATS. The app records this path (floor main panels and ATS are
+not in the asset register, so no asset code is invented), marks the generator as the **standby** supply of all
+emergency lights and exit signs (never as their normal supply), and tells Muse Spark the remaining exposure: if a floor
+breaker trips or the floor panel is switched off, that floor's lights run on their batteries - and whether the fittings
+have batteries, their autonomy and any discharge test are not recorded.
+
 ## Demo mode (names hidden)
 `run_dashboard_demo.bat` starts the same dashboard with building names replaced by "[name hidden]", shows only
 blurred copies of video frames (signs and labels found by SAM 3.1, faces found locally with OpenCV - SAM is never
@@ -182,8 +190,8 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **230 tests (228 pass, 2 skipped** when the private real-data snapshot is absent; last run
-2026-10-30). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
+`python -m pytest -q` — **235 tests (233 pass, 2 skipped** when the private real-data snapshot is absent; last run
+2026-11-01). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
 app; the two alert systems and automatic analysis (no duplicate calls, failures, fallback, level unchanged); survey

@@ -236,3 +236,73 @@ def test_investigation_package_carries_the_floor_inventory_and_reanalyses_once(t
     assert ls["equipment"][0]["count"] == 12 and ls["supplying_panel_known"] is False
     assert "TESTSECRET" not in json.dumps(pkg)
     assert fingerprint(alert, {}) != fp0 and fingerprint(alert, {}) == fingerprint(alert, {})
+
+
+# --- supply path confirmed by the technician (2026-11-01) --------------------------------------------------
+def _building_rows():
+    rows = []
+    for f, el, ex in (("B1", 12, 7), ("F2", 10, 7)):
+        rows += [row(floor=f, panel_label=f"MAIN-{f}", feeds="sub_panel", fed_panel_label=f"CP-{f}", count="",
+                     panel_kind="floor_main_panel"),
+                 row(floor=f, panel_label="ATS", feeds="sub_panel", fed_panel_label=f"MAIN-{f}", count="", panel_kind="ats"),
+                 row(floor=f, panel_label=f"CP-{f}", feeds="emergency_light", count=el, panel_kind="floor_breaker"),
+                 row(floor=f, panel_label=f"CP-{f}", feeds="exit_sign", count=ex)]
+    rows.append(row(floor="B1", panel_label="GEN", asset_id="P-GEN", feeds="sub_panel", fed_panel_label="ATS", count="",
+                    supply="backup", panel_kind="generator"))
+    return rows
+
+
+def test_floor_supply_path_names_the_shared_breaker_and_the_standby_generator_without_labels(tmp_path):
+    pl = load(write_links(tmp_path / "l.xlsx", _building_rows()), known_assets={"P-GEN"})
+    assert pl.problems == []
+    inv = pl.floor_inventory("B1")
+    assert inv["supply_path"] == ("automatic transfer switch (ATS) (not in the asset register) -> floor main panel "
+                                  "(not in the asset register) -> floor control breaker (CP) -> emergency lights and exit signs")
+    assert inv["dedicated_emergency_circuit"] is False
+    assert inv["standby_supply"].startswith("standby generator (P-GEN)")
+    assert "batteries" in inv["risk_note"] and "not recorded" in inv["risk_note"]
+    # the generator is a STANDBY supply: it does not make the floor's normal supplying panel known
+    assert inv["supplying_panel_known"] is False
+    assert all(e["standby_assets"] == ["P-GEN"] for e in inv["equipment"])
+    s = json.dumps(summary(pl, floor="B1"))
+    for secret in ("MAIN-B1", "MAINB1", "CP-B1", "CPB1", '"ATS"'):
+        assert secret not in s
+
+
+def test_generator_dependents_are_marked_standby_and_reach_every_floor(tmp_path):
+    from firerisk.power_links import VIA_STANDBY
+    pl = load(write_links(tmp_path / "l.xlsx", _building_rows()))
+    deps = pl.dependents("P-GEN")
+    assert {d["floor"] for d in deps} == {"B1", "F2"} and all(d["via"] == VIA_STANDBY for d in deps)
+    assert sum(d["count"] for d in deps) == 12 + 7 + 10 + 7
+    assert "standby supply through the ATS" in describe(deps)
+
+
+def test_a_normal_path_wins_over_a_standby_one(tmp_path):
+    pl = load(write_links(tmp_path / "l.xlsx", [
+        row(panel_label="GEN", asset_id="P-GEN", feeds="sub_panel", fed_panel_label="DB", supply="backup", count=""),
+        row(panel_label="GEN", feeds="sub_panel", fed_panel_label="DB2", count=""),
+        row(panel_label="DB2", feeds="sub_panel", fed_panel_label="DB", count=""),
+        row(panel_label="DB", feeds="emergency_light", count=3)]))
+    assert pl.dependents("P-GEN")[0]["via"] == "through a downstream panel"
+
+
+def test_supply_and_panel_kind_are_validated(tmp_path):
+    pl = load(write_links(tmp_path / "l.xlsx", [row(panel_label="X", supply="maybe"), row(panel_label="Y", panel_kind="box"),
+                                                row(panel_label="Z", supply="dự phòng", panel_kind="ATS")]))
+    assert [p["row"] for p in pl.problems] == [2, 3] and pl.links[0].supply == "backup" and pl.links[0].kind == "ats"
+
+
+def test_generator_fault_states_the_standby_consequence_and_links_to_each_floor(tmp_path):
+    from types import SimpleNamespace
+    from firerisk.equipment import build_equipment_alerts, link_to_fire_alerts
+    now = datetime(2026, 11, 1, 9, tzinfo=LOCAL_TZ)
+    pl = load(write_links(tmp_path / "l.xlsx", _building_rows()))
+    a = build_equipment_alerts([_fault("TEST-G", "P-GEN", 2, now)], [], now, power=pl)[0]
+    c = a.fields["consequence"]
+    assert "standby supply, through the ATS" in c and "B1, F2" in c and "36 emergency lights and exit signs" in c
+    assert "loses normal supply" not in c
+    assert any("battery only" in step for step in a.fields["risk_chain"])
+    b1 = SimpleNamespace(alert_id="ZONE-B1", zone="B1", evidence_ids=[], related_equipment=[])
+    link_to_fire_alerts([a], [b1], {})
+    assert "standby supply (through the ATS)" in b1.related_equipment[0]["reasons"][0]
