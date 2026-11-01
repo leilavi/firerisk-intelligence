@@ -170,5 +170,6 @@ The rule level stays authoritative; tools cannot change data, levels, alarms or 
 | Starts | Parts with a problem that are in the alert's records or its linked equipment alerts |
 | Chains | Longest path to the consequence for people, plus one alternative that branches early; up to 4 per alert; each step lists its own problems and those of the parts it depends on (2 links back) |
 | AI | `chain_of_effects` in the Muse Spark package (aliases, redacted titles); the records it cites are added to the package so they can be cited; `impact_story` validated like every other citation (unknown IDs removed, "record" steps without a valid record downgraded to hypothesis) |
+| Whole building | The "Building" alert's chains start from the records of every fire-risk alert; `/api/building` → `building_chain` (chains + latest Meta Muse Spark story) shown in the Overview whole-building panel |
 | API / UI | `impact_chain` in `/api/alerts/{id}` (record titles translated for display); story + step diagram in section 2 of the alert page and in the drawer |
 

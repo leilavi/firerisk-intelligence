@@ -152,7 +152,7 @@ def run_analysis(snapshot_dir: Path, now: datetime | None = None) -> AnalysisRes
         a.life_safety = power.floor_inventory(a.zone) if power and power.links else {}
     from .impact_chain import build as _impact_chain
     for a in alerts:                                    # chain of effects across equipment (deterministic)
-        a.impact_chain = _impact_chain(a, index, equipment_alerts, now, power)
+        a.impact_chain = _impact_chain(a, index, equipment_alerts, now, power, alerts)
 
     dq = []
     for meter, iss in issues.items():

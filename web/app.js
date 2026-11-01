@@ -633,6 +633,17 @@ let lastNarrow = window.innerWidth < 720;
 window.addEventListener("resize", () => { const n = window.innerWidth < 720; if (n !== lastNarrow && $("#bmap")) { lastNarrow = n; renderMap(); } });
 
 /* ---------- contextual panel ---------- */
+/* Whole-building chain of effects: Meta Muse Spark story (if any) + the rule-built chains as one line each. */
+function buildingChainCard(bc) {
+  if (!bc) return "";
+  const st = bc.story;
+  return `<div class="aibox cf-story bchain">
+    <div class="kicker" style="margin:0 0 4px">Chain of effects across the building</div>
+    ${st ? `<div class="small muted">${org("ai")}${dt(st.created_at)}</div><p class="cf-head">${esc(st.headline)}</p>${st.story ? `<p class="small">${esc(st.story)}</p>` : ""}`
+      : `<p class="small muted">The Meta Muse Spark story is not available yet; the chains below come from the rule set.</p>`}
+    <ul class="bc-list small">${bc.chains.map((c) => `<li>${org("rule")}${c.steps.map(esc).join(' <span class="cf-ar">→</span> ')}</li>`).join("")}</ul>
+    <p style="margin:6px 0 0"><a href="#/fire/${encodeURIComponent(bc.alert_id)}">See each step, why it is linked and the records →</a></p></div>`;
+}
 function renderCtx() {
   const el = $("#ctx");
   const all = sortIssues([...B.floors.flatMap((f) => f.issues), ...B.unassigned.issues]);
@@ -640,6 +651,7 @@ function renderCtx() {
     const sm = B.summary;
     el.innerHTML = `<div class="ctxhead"><div><span class="kicker">Selected</span><h2>Whole building</h2></div><span class="fstate fs-${esc(sm.building_state)}">${ICON[sm.building_state] || ""}${esc(sm.building_state_label)}</span></div>
       <p class="small muted" style="margin:0 0 8px">${sm.issues_active} active issue(s): ${sm.risk_count} fire-safety risk(s) and ${sm.equipment_active} equipment alert(s), each with its own rule level. Select a floor to see only its issues.</p>
+      ${buildingChainCard(B.building_chain)}
       <div class="kicker" style="margin:6px 0">Most important issues</div>
       <div class="icards">${all.slice(0, 7).map((i) => icard(i)).join("") || '<div class="empty">No active issue in the current records.</div>'}</div>
       ${all.length > 7 ? `<p class="small muted" style="margin:8px 0 0">${all.length - 7} more: <a href="#/fire">Fire Safety Risks</a> · <a href="#/equipment">Equipment &amp; Systems</a></p>` : ""}`;

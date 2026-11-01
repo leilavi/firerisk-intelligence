@@ -450,6 +450,24 @@ def _floor_state(risks: list[dict], records: int) -> str:
     return "no_active_alert" if records else "not_assessed"
 
 
+def _building_chain(res, active) -> dict | None:
+    """Chain of effects for the whole building: the whole-building alert's chains (they start from every floor's
+    records) and its Meta Muse Spark story, if any. None when no chain is recorded."""
+    a = next((x for x in active if x.zone == "Building" and (x.impact_chain or {}).get("chains")), None) or \
+        next((x for x in sorted(active, key=lambda x: -_rank(x.severity)) if (x.impact_chain or {}).get("chains")), None)
+    if not a:
+        return None
+    inv = state.store.latest_investigation(a.alert_id, only_ok=True)
+    st = ((inv or {}).get("result") or {}).get("impact_story") or {}
+    chains = a.impact_chain["chains"]
+    return {"alert_id": a.alert_id, "zone": a.zone,
+            "chains": [{"start_label": c["start_label"], "end_label": c["steps"][-1]["label"],
+                        "steps": [s["label"] for s in c["steps"]]} for c in chains],
+            "story": {"headline": _ai_text(st.get("headline")), "story": _ai_text(st.get("story")),
+                      "created_at": (inv or {}).get("created_at")} if st.get("headline") else None,
+            "not_established": a.impact_chain.get("not_established", [])}
+
+
 @app.get("/api/building")
 def building():
     """Building Risk Map: one entry per floor plus whole-building risks, and the building summary.
@@ -496,6 +514,7 @@ def building():
         overall_all_label = "Assessment Incomplete" if not_assessed else "No Active Alert"
     return {
         "generated_at": res.generated_at.isoformat(), "floors": floors,
+        "building_chain": _building_chain(res, active),
         "unassigned": {"label": "Location not recorded", "issues": unassigned},
         "summary": {
             "overall": overall, "overall_label": FLOOR_STATE_LABEL.get(overall, SEVERITY_LABEL.get(overall, overall)),

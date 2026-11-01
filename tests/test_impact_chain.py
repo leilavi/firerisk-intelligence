@@ -112,3 +112,18 @@ def test_muse_spark_gets_the_chain_with_aliases_and_its_story_is_validated(tmp_p
     st = result["impact_story"]["steps"]
     assert st[0]["evidence_ids"] == ["TEST-BATT"] and st[1]["basis"] == "hypothesis" and st[1]["downgraded"]
     assert v["invalid_evidence_ids"] == ["E99"]
+
+
+def test_whole_building_alert_shows_chains_from_every_floor_and_the_announcement_fault(tmp_path):
+    pl = load(write_links(tmp_path / "l.xlsx", _building_rows()))
+    seep = ev("TEST-SEEP", "incident", 24, "P-BG.TTC046", "MSB water")
+    pa = ev("TEST-PA", "incident", 5, None, "Hệ thống loa thông báo không hoạt động")
+    idx = _index(seep, pa)
+    b1 = alert(["TEST-SEEP"])
+    bw = alert(["TEST-PA"], zone="Building")
+    ch = build(bw, idx, [], NOW, pl, [b1, bw])
+    starts = {c["start"] for c in ch["chains"]}
+    assert {"msb", "pa_system"} <= starts
+    lights = next(s for c in ch["chains"] for s in c["steps"] if s["node"] == "escape_lighting")
+    assert "B1 19" in lights["label"] and "F2 17" in lights["label"]
+    assert {c["start"] for c in build(b1, idx, [], NOW, pl, [b1, bw])["chains"]} == {"msb"}   # floor view unchanged

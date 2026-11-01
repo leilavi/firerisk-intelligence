@@ -6,6 +6,11 @@
   link with its basis; unknown links listed. Meta Muse Spark tells it as a story (`impact_story`, prompt
   `investigation-v8`), each step cited and validated. Dashboard: story + step diagram in section 2 of the alert page
   and in the drawer. Live on the author's PC 19:49 (ZONE-B1, 0 invalid citations). 5 new tests.
+- Whole-building chain (2026-11-01, author: "the fire-risk alert level is the whole building, not only B1"): the
+  whole-building alert's chains start from every fire-risk alert's records; new part "public-address / evacuation
+  announcement system"; every problem gets its own chain before alternatives; contained chains dropped. Overview
+  whole-building panel shows the Meta Muse Spark story and the chains (`building_chain` in `/api/building`). Live
+  20:05. 1 new test.
 - Fire-risk alert (drawer and full page): new section "Emergency lights and exit signs on this floor" - counts, normal
   supply path, no dedicated emergency circuit, standby supply, battery "not recorded" and the rule's risk note
   (2026-11-01; before, this was only sent to Meta Muse Spark).

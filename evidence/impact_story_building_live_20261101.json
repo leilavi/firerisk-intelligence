@@ -1,0 +1,20 @@
+{
+  "what": "First live Meta Muse Spark whole-building impact story (alert ZONE-Building; chains start from every fire-risk alert's records)",
+  "run_at": "2026-11-01T20:05:53+07:00",
+  "where": "author's PC, real building data (record IDs kept private: they contain staff user names)",
+  "prompt_version": "investigation-v8",
+  "validation_ok": true,
+  "rule_chains_given_to_the_model": [
+    "Transformer and its room (MBA) > Main switchboard (MSB) > Normal power supply > ATS > Floor main panels > Emergency lights and exit signs (135: B1 19, F1 33, F2 17, F3 17, F4 35, Roof 14) > People evacuating",
+    "Generator starter batteries > Standby generator > ATS > Floor main panels > Emergency lights and exit signs > People evacuating",
+    "Transformer and its room (MBA) > Main switchboard (MSB) > Smoke or fire in basement B1 > Fire alarm / heat detection > People evacuating",
+    "Wastewater air blower AB-01A > Smoke or fire in basement B1 > Fire alarm / heat detection > People evacuating",
+    "Public-address / evacuation announcement system > People evacuating"
+  ],
+  "impact_story": {
+    "headline": "Water in the basement electrical rooms could cut grid power, and weak backup plus weak warning systems could leave people evacuating in the dark.",
+    "story": "Water leaking into the basement transformer and switchboard rooms could cause a short circuit or loss of grid power. If grid fails, the building depends on the generator, but its starter batteries were flagged as weak on 29 September. If the generator does not start, floor panels and normal lighting stop. Emergency lights and 66 exit signs would then rely only on their own batteries, whose condition is not recorded. At the same time, the announcement system that tells shoppers to leave had failed in September and basement heat detection faulted twice in October, so a basement fire could be detected late and announced late.",
+    "steps_by_basis": {"supported_by_records": 3, "link_from_rules": 4}
+  },
+  "reviewer_note": "66 exit signs = sum of the confirmed table. A possible sequence, not a prediction."
+}

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 RECENT_DAYS = 90
-MAX_CHAINS = 4
+MAX_CHAINS = 5
 
 BASIS = {
     "config": "asset relation in the rule set",
@@ -80,6 +80,8 @@ NODES = {n.key: n for n in [
          ("P-BG.TTC072",), ("bom chua chay", "bom pccc", "be nuoc pccc")),
     Node("smoke_fans", "Smoke exhaust fans (basement)", "Smoke may stay in the basement.", ("P-BG.TTC005",),
          ("hut khoi", "quat hut")),
+    Node("pa_system", "Public-address / evacuation announcement system", "People on the other floors may not be "
+         "told to leave in time.", (), ("loa", "phat thanh")),
     Node("basement_fire", "Smoke or fire in basement B1", "People in and above the basement are exposed to smoke.",
          outcome=False),
     Node("evacuation", "People evacuating the building", "Escape is slower or more dangerous.", outcome=True),
@@ -108,6 +110,8 @@ LINKS = [
     Link("basement_fire", "fire_pump", "Fighting the fire needs the fire pump and the fire water tank.", "mechanism"),
     Link("basement_fire", "smoke_fans", "Smoke in the basement has to be extracted by these fans.", "mechanism"),
     Link("basement_fire", "evacuation", "People have to leave the building.", "mechanism"),
+    Link("pa_system", "evacuation", "People on every floor are told to leave by announcements; without them the "
+         "evacuation of the upper floors can start late.", "mechanism"),
     Link("fire_alarm", "evacuation", "A late alarm leaves less time to get out.", "mechanism"),
     Link("smoke_fans", "evacuation", "Smoke on escape routes makes evacuation slower and more dangerous.", "mechanism"),
     # not recorded: shown as gaps, never followed as if known
@@ -162,8 +166,10 @@ def _links(power_ok: bool) -> list[Link]:
     return [l for l in LINKS if power_ok or (l.a, l.b) not in NEEDS_POWER_TABLE]
 
 
-def build(alert, evidence_index: dict, equipment_alerts, now: datetime, power=None) -> dict:
-    """Chains of effects for one fire-risk alert (empty dict when no part of the graph has a recorded problem)."""
+def build(alert, evidence_index: dict, equipment_alerts, now: datetime, power=None, all_alerts=None) -> dict:
+    """Chains of effects for one fire-risk alert (empty dict when no part of the graph has a recorded problem).
+    For the whole-building alert ("Building") the chains start from the records of EVERY fire-risk alert: a problem
+    in one floor's technical room can reach every floor, and that is what the building view must show."""
     power_ok = bool(power and getattr(power, "links", None))
     links = _links(power_ok)
     # problems per node, from the whole record set (a dependency's problem matters even if it is not in the alert)
@@ -179,7 +185,10 @@ def build(alert, evidence_index: dict, equipment_alerts, now: datetime, power=No
     # where the chains start: parts with a problem that this alert is about (its records or linked equipment)
     ids = set(alert.evidence_ids) | set(getattr(alert, "context_ids", []) or [])
     by_id = {e.alert_id: e for e in equipment_alerts or []}
-    for r in getattr(alert, "related_equipment", []) or []:
+    scope = [alert] + ([a for a in all_alerts or [] if a is not alert] if alert.zone == "Building" else [])
+    for a in scope[1:]:
+        ids |= set(a.evidence_ids) | set(getattr(a, "context_ids", []) or [])
+    for r in [r for a in scope for r in (getattr(a, "related_equipment", []) or [])]:
         ea = by_id.get(r.get("equipment_alert_id"))
         if ea:
             ids |= set(ea.evidence_ids)
@@ -217,8 +226,10 @@ def build(alert, evidence_index: dict, equipment_alerts, now: datetime, power=No
         n = NODES[k]
         label = n.label
         if k == "escape_lighting" and light_total:
-            label = (f"{label} ({light_total} on all floors" + (f", {zone_total} on {alert.zone}" if zone_total else "")
-                     + ")")
+            per_floor = ", ".join(f"{f} {sum(e['count'] for e in power.floor_inventory(f).get('equipment', []))}"
+                                  for f in ("B1", "F1", "F2", "F3", "F4", "Roof") if power.floor_inventory(f))
+            label = (f"{label} ({light_total} on all floors" + (f", {zone_total} on {alert.zone}" if zone_total else
+                     f": {per_floor}" if alert.zone == "Building" else "") + ")")
         side = []          # other parts this step depends on (up to 2 links back) that have their own recorded problem
         todo, seen_up = ([] if n.outcome else [(k, 0)]), set(path)
         while todo:
@@ -240,31 +251,37 @@ def build(alert, evidence_index: dict, equipment_alerts, now: datetime, power=No
                 "depends_on": side, "not_established": gaps,
                 "to_next": {"why": link.why, "basis": BASIS[link.basis]} if link else None}
 
-    chains, used = [], []
-    covered: set = set()
+    def split(p, main):
+        return next((i for i, (x, y) in enumerate(zip(p, main)) if x != y), min(len(p), len(main)))
+
+    # first one chain per part with a problem (the longest path), then alternatives that branch early
+    mains, alts_all, covered = [], [], set()
     for k, hit in starts:
         if k in covered:                            # already shown as a step of an earlier chain
             continue
         ps = sorted(paths(k, {k}), key=lambda p: (-len(p), p))
-        # the longest path, plus one that leaves the start by a different first link (a different kind of effect)
-        def split(p, main):
-            return next((i for i, (x, y) in enumerate(zip(p, main)) if x != y), min(len(p), len(main)))
-        alts = sorted(ps[1:], key=lambda p: (split(p, ps[0]), -len(p))) if ps else []
-        picked = ps[:1] + [p for p in alts if split(p, ps[0]) <= 2 and len(set(p) - set(ps[0])) >= 2][:1]
-        for p in picked:
-            if any(set(p) <= set(q) for q in used):
-                continue
-            used.append(p)
-            covered |= set(p)
-            chains.append({"start": k, "start_label": NODES[k].label, "trigger": hit[:3],
-                           "steps": [node_view(x, p[i + 1] if i + 1 < len(p) else None, p) for i, x in enumerate(p)]})
-        if len(chains) >= MAX_CHAINS:
-            break
+        if not ps:
+            continue
+        mains.append((k, hit, ps[0]))
+        covered |= set(ps[0])
+        alts = sorted(ps[1:], key=lambda p: (split(p, ps[0]), -len(p)))
+        alt = [p for p in alts if split(p, ps[0]) <= 2 and len(set(p) - set(ps[0])) >= 2][:1]
+        alts_all += [(k, hit, p) for p in alt]
+        covered |= set(alt[0]) if alt else set()
+    cands = mains + alts_all
+    # drop a chain that is fully contained in another one (e.g. "fire alarm -> evacuation" inside a longer chain)
+    cands = [c for n, c in enumerate(cands)
+             if not any(n != m and set(c[2]) < set(o[2]) or (n > m and set(c[2]) == set(o[2]))
+                        for m, o in enumerate(cands))]
+    cands.sort(key=lambda c: (-len(c[2]), -sum(x["open"] for x in c[1])))
+    chains = [{"start": k, "start_label": NODES[k].label, "trigger": hit[:3],
+               "steps": [node_view(x, p[i + 1] if i + 1 < len(p) else None, p) for i, x in enumerate(p)]}
+              for k, hit, p in cands[:MAX_CHAINS]]
     gaps = sorted({g["why"] for c in chains for s in c["steps"] for g in s["not_established"]})
     if power_ok:
         gaps.append("Whether the emergency lights and exit signs have built-in batteries, their autonomy and any "
                     "discharge test are not recorded.")
-    return {"chains": chains[:MAX_CHAINS], "not_established": gaps,
+    return {"chains": chains, "not_established": gaps,
             "note": "A possible sequence of effects built from recorded links, not a prediction. Each link states "
                     "its basis; links that are not recorded are listed as not established.",
             "basis": "rules + asset relations + confirmed drawing table + technician statement"}
