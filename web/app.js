@@ -713,6 +713,21 @@ function briefDl(b) {
   const rows = [["Observed", b.observed], ["Why it matters", b.why_it_matters], ["Potential consequence", b.potential_consequence], ["Not established", b.uncertainty], ["First action", b.first_action]].filter(([, f]) => f?.text);
   return `<h5>Summary · <span class="aist ${esc(b.ai.code)}">${esc(b.ai.label)}</span></h5><dl class="dsum">${rows.map(([k, f]) => `<dt>${k}</dt><dd>${fieldTxt(f)}</dd>`).join("")}</dl>`;
 }
+/* Emergency lights and exit signs of the alert's floor (confirmed table power_links.xlsx: counts by the author from the
+   drawings, supply path from the technician). Shows only what is recorded; unknowns are stated. */
+function lifeSafety(ls, h = "h5") {
+  if (!ls || !ls.equipment?.length) return "";
+  const eq = ls.equipment.map((e) => `<b>${e.count_known ? e.count : "?"}</b> ${esc(e.equipment_label)}`).join(" · ");
+  const rows = [["On this floor", eq]];
+  if (ls.supply_path) rows.push(["Normal supply", esc(ls.supply_path)]);
+  if (ls.dedicated_emergency_circuit === false) rows.push(["Dedicated emergency circuit", "No - on the floor control breaker"]);
+  if (ls.standby_supply) rows.push(["Standby supply", esc(ls.standby_supply)]);
+  rows.push(["Battery in the fittings", "Not recorded (built-in battery, autonomy, discharge test)"]);
+  return `<${h} class="${h === "h3" ? "sub" : ""}" style="${h === "h3" ? "margin-top:14px" : ""}">Emergency lights and exit signs on this floor</${h}>
+    <dl class="dsum">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${ls.risk_note ? `<p class="small ls-note">${org("rule")}${esc(ls.risk_note)}</p>` : ""}
+    <p class="tiny muted">${org("source")}Counts from the building drawings, supply path from the technician (${esc(ls.path_basis || ls.basis || "checked by a person")}). Panel labels stay on this computer.</p>`;
+}
 function riskDetailInline(d, signalId) {
   const s = d.signals.find((x) => x.signal_id === signalId) || d.signals[0];
   const recs = d.evidence.filter((e) => s.evidence_ids.includes(e.evidence_id));
@@ -720,6 +735,7 @@ function riskDetailInline(d, signalId) {
     <h5>Possible chain of events</h5><ol class="chain">${s.fields.risk_chain.map((c) => `<li>${esc(c)}</li>`).join("")}</ol><p class="small muted">${org("rule")}A possible chain of events, not a prediction.</p>
     <h5>Recommended actions</h5><ul class="actions">${s.fields.preventive_actions.map((a, n) => `<li><span class="box" aria-hidden="true"></span><span>${n === 0 ? "<b>First:</b> " : ""}${esc(a)}</span></li>`).join("")}</ul>
     <p class="small"><b>Close when:</b> ${esc(s.fields.closure_condition || "—")}</p>
+    ${lifeSafety(d.alert.life_safety)}
     ${d.related_equipment.length ? `<h5>Related equipment alerts</h5>${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span>${esc(nm(x.asset_name, x.asset_name_en, x.asset_id || "Equipment"))}<br><span class="small muted">Why linked: ${x.reasons.map((r) => esc(roman(r))).join("; ")}</span></span></a>`).join("")}` : ""}
     ${d.survey_videos.length ? `<h5>Survey videos of this zone · Meta Muse Spark observations</h5>${videoContext(d.survey_videos, true)}` : ""}
     <h5>Meta Muse Spark analysis</h5>${aiFull(d, s.signal_id)}`;
@@ -847,6 +863,7 @@ async function viewFire(id, focusRisk) {
     ${d.trends.length ? `<h3 class="sub" style="margin-top:14px">Meter readings around each anomaly</h3><p class="small muted">${org("derived")}Daily consumption from real readings, 7 days before and after.</p>${d.trends.slice(0, 2).map(trendChart).join("")}` : ""}
     <h3 class="sub" style="margin-top:14px">Survey videos of this zone (${d.survey_videos.length})</h3>${videoContext(d.survey_videos)}
     ${d.survey_video_refs?.length ? `<p class="small">${d.survey_video_refs.length} more video(s) of this zone are listed on Drive but not on this computer yet. <a href="#/media">See status</a>.</p>` : ""}
+    ${lifeSafety(d.alert.life_safety, "h3")}
     <h3 class="sub" style="margin-top:14px">Linked equipment alerts (${d.related_equipment.length})</h3>
     ${d.related_equipment.map((x) => `<a class="mini" href="#/equipment/${encodeURIComponent(x.alert_id)}">${lvl(x.severity)}<span><b>${esc(nm(x.asset_name, x.asset_name_en, "Equipment (name translation pending)"))}</b> · ${esc(nm(x.headline, x.headline_en, "Equipment alert"))}<br><span class="small muted">${org("rule")}Why linked: ${x.reasons.map((r) => esc(roman(r))).join("; ")}</span></span></a>`).join("") || '<p class="muted small">No equipment alert is linked to this risk.</p>'}
     ${context.length ? `<details><summary>Records that may weaken the alert (${context.length})</summary><p class="small muted">Latest daily checklists and scheduled generator runs. A passed checklist does not prove the issue is gone.</p>${context.map(evRow).join("")}</details>` : ""}

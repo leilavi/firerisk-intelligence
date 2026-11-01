@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Fire-risk alert (drawer and full page): new section "Emergency lights and exit signs on this floor" - counts, normal
+  supply path, no dedicated emergency circuit, standby supply, battery "not recorded" and the rule's risk note
+  (2026-11-01; before, this was only sent to Meta Muse Spark).
 - Dashboard no longer shows the building's name anywhere on screen, in normal or demo mode (author, 2026-11-01):
   header subtitle "Fire-risk decision support", whole-building panel titled "Whole building".
 - Supply path of emergency lighting (2026-11-01, technician's statement via the author): `power_links.xlsx` gains two

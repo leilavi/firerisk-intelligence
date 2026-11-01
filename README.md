@@ -158,7 +158,7 @@ emergency lights, exit signs, fire pump, smoke control or fire alarm, on which f
 against the drawing and confirms it. Only confirmed rows are used (rule EQ-D1 in RISK_RULES.md): a panel that supplies
 life-safety equipment is treated as critical, its alert says which floors lose emergency lighting if it fails and adds
 a battery test, it is linked to the fire-risk alert of those floors, and Meta Muse Spark can look it up with the tool
-`get_fire_safety_supply`. What reaches Muse Spark is floor, equipment type and count only - never panel labels,
+`get_fire_safety_supply`; each fire-risk alert shows a section "Emergency lights and exit signs on this floor". What reaches Muse Spark is floor, equipment type and count only - never panel labels,
 circuits or drawing content.
 
 Supply path (technician, 2026-11-01): each floor has its own main panel; the floor control breaker (CP) inside it feeds
