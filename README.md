@@ -191,7 +191,7 @@ water in the basement electrical rooms -> weak generator batteries -> 135 emerge
 floors -> plus the announcement-system and heat-detection faults). Status: **live 2026-11-01 19:49** on the author's PC: ZONE-B1 story written by Meta Muse Spark in agentic mode (50 s, 7 steps, 0 invalid citations) - water seepage in the MBA/MSB rooms -> grid loss -> ATS -> generator with weak starter batteries (29 Sep) -> 135 emergency lights and exit signs on their own batteries; public summary `evidence/impact_story_live_20261101.json`.
 
 ## Demo mode (names hidden)
-The building's name is never shown on screen (header and whole-building panel use generic titles, 2026-11-01).
+The building's name is never shown on screen (header and whole-building panel use generic titles, 2026-11-01). In demo mode the staff user names inside asset-log record IDs (`asset:Repair-<user>-064`) are hidden too.
 `run_dashboard_demo.bat` starts the same dashboard with building names replaced by "[name hidden]", shows only
 blurred copies of video frames (signs and labels found by SAM 3.1, faces found locally with OpenCV - SAM is never
 asked to find people - plus regions added by hand after a frame-by-frame review) and never plays the original videos. Original frames are not modified.
@@ -212,7 +212,7 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **241 tests (239 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **242 tests (240 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-11-01). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web

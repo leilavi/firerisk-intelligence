@@ -73,6 +73,10 @@ def _fold(s: str) -> str:
 GENERIC = {"plaza", "building", "tower", "center", "centre", "data", "the", "mall", "office"}
 
 
+# Record IDs of the asset log embed the staff member's user name ("asset:Repair-<user>-064"): hidden in demo mode.
+STAFF_IN_RECORD_ID = r"(?<=asset:[A-Za-z]+-)[^\s\-]+(?=-[A-Za-z0-9]+)"
+
+
 def name_patterns(site: dict | None = None) -> list[str]:
     """JavaScript-compatible regex sources (case-insensitive) for the building's names, built from the private
     site_config.json: the full names, the distinctive words in either order, and the branch prefix."""

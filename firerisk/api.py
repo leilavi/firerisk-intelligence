@@ -37,7 +37,7 @@ from .engine import AnalysisResult, run_analysis
 from .hazards.pathways import PATHWAYS
 from .media import media_inventory
 from .drive_videos import DriveVideoSync, drive_video_items, video_settings
-from .demo import DEMO_BUILDING, demo_frame_path, demo_mode, name_patterns
+from .demo import DEMO_BUILDING, STAFF_IN_RECORD_ID, demo_frame_path, demo_mode, name_patterns
 from .localize import FRAMES_DIR, Localizer, sam_settings
 from .sam import SamClient
 from .video import VIDEO_PROMPT_VERSION, INBOX_DIR, OLD_VIDEO_DAYS, VideoStore, extract_frame
@@ -289,7 +289,7 @@ def status():
     abnormal_assets = _abnormal_assets(res)
     demo = demo_mode()
     return {"building": DEMO_BUILDING if demo else BUILDING_NAME, "version": __version__,
-            "demo_mode": demo, "name_patterns": name_patterns() if demo else [], "generated_at": res.generated_at.isoformat(),
+            "demo_mode": demo, "name_patterns": (name_patterns() + [STAFF_IN_RECORD_ID]) if demo else [], "generated_at": res.generated_at.isoformat(),
             "run_id": state.run_id, "sources": _sources_en(res.source_status), "alert_counts": dict(counts),
             "active_alerts": len(active), "serious_alerts": len(serious),
             "abnormal_equipment": len(abnormal_assets),

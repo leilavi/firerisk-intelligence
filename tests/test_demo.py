@@ -222,3 +222,18 @@ def test_local_face_detector_runs_offline_on_a_frame(tmp_path):
     _jpeg(p)
     boxes, det = local_face_boxes(p)
     assert det == FACE_DETECTOR and boxes == []                            # a plain test pattern has no face
+
+
+def test_demo_hides_staff_user_names_inside_record_ids():
+    """The pattern runs in the browser (JavaScript lookbehind), so it is checked with node when available."""
+    import json, shutil, subprocess
+    import pytest
+    from firerisk.demo import STAFF_IN_RECORD_ID
+    if not shutil.which("node"):
+        pytest.skip("node not installed")
+    samples = ["asset:Repair-testuser.30-064", "asset:Mainte-tuser-034", "inc:BLD----T10_140", "P-BG.TTC017"]
+    js = (f"const r=new RegExp({json.dumps(STAFF_IN_RECORD_ID)},'giu');"
+          f"console.log(JSON.stringify({json.dumps(samples)}.map(s=>s.replace(r,'[name hidden]'))))")
+    out = json.loads(subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout)
+    assert out == ["asset:Repair-[name hidden]-064", "asset:Mainte-[name hidden]-034", "inc:BLD----T10_140",
+                   "P-BG.TTC017"]

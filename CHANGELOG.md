@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Demo mode hides the staff user name inside asset-log record IDs (`asset:Repair-<user>-064`), which the chain of
+  effects shows as record chips (2026-11-01, before recording the video). 1 new test (uses node when installed).
 - Chain of effects across equipment (2026-11-01, author's request: "explain the butterfly effect"):
   `firerisk/impact_chain.py` builds, without AI, how a problem on one part reaches other equipment and people, each
   link with its basis; unknown links listed. Meta Muse Spark tells it as a story (`impact_story`, prompt
