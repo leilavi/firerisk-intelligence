@@ -130,8 +130,8 @@ def test_rule_eq_d1_treats_a_panel_supplying_emergency_lighting_as_critical_only
     assert "rule EQ-D1" in a.rules[0]["basis"]
     f = a.fields
     assert "B1: 6 emergency lights, 2 exit signs" in f["consequence"]
-    assert any("on battery" in x and "B1" in x for x in f["preventive_actions"])
-    assert any("Battery" in u for u in f["unknowns"])
+    assert any("on battery" in x and "B1" in x and "15-minute" in x for x in f["preventive_actions"])
+    assert any("battery autonomy" in u and "15 minutes" in u for u in f["unknowns"])
     assert "DB" not in f["consequence"]                                  # no drawing label in the alert text
 
 
@@ -260,7 +260,9 @@ def test_floor_supply_path_names_the_shared_breaker_and_the_standby_generator_wi
                                   "(not in the asset register) -> floor control breaker (CP) -> emergency lights and exit signs")
     assert inv["dedicated_emergency_circuit"] is False
     assert inv["standby_supply"].startswith("standby generator (P-GEN)")
-    assert "batteries" in inv["risk_note"] and "not recorded" in inv["risk_note"]
+    assert "EVERY floor" in inv["risk_note"] and "about 2 hours when new" in inv["risk_note"]
+    assert "at least 15 minutes" in inv["risk_note"] and "operations team statement, 2026-11-02" in inv["risk_note"]
+    assert inv["battery"].startswith("Built-in battery") and "15-minute" in inv["battery_limit"]
     # the generator is a STANDBY supply: it does not make the floor's normal supplying panel known
     assert inv["supplying_panel_known"] is False
     assert all(e["standby_assets"] == ["P-GEN"] for e in inv["equipment"])
@@ -300,9 +302,11 @@ def test_generator_fault_states_the_standby_consequence_and_links_to_each_floor(
     pl = load(write_links(tmp_path / "l.xlsx", _building_rows()))
     a = build_equipment_alerts([_fault("TEST-G", "P-GEN", 2, now)], [], now, power=pl)[0]
     c = a.fields["consequence"]
-    assert "standby supply, through the ATS" in c and "B1, F2" in c and "36 emergency lights and exit signs" in c
+    assert "standby supply, through the one ATS" in c and "B1, F2" in c and "36 emergency lights and exit signs" in c
     assert "loses normal supply" not in c
     assert any("battery only" in step for step in a.fields["risk_chain"])
+    assert any("15-minute monthly test" in step for step in a.fields["risk_chain"])
+    assert "one ATS of the whole building" in c and "about 2 hours when new" in c
     b1 = SimpleNamespace(alert_id="ZONE-B1", zone="B1", evidence_ids=[], related_equipment=[])
     link_to_fire_alerts([a], [b1], {})
     assert "standby supply (through the ATS)" in b1.related_equipment[0]["reasons"][0]

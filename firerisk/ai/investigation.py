@@ -293,7 +293,8 @@ def build_package(alert, signals, evidence_index, now: datetime, equipment_alert
                   for l in alert.links if not (l["types"] == ["same_zone_time_window"])][:80],
         "known_data_limits": [
             "Daily checklists keep only the latest result per checklist (no history in the source).",
-            "The list of loads connected to the standby generator is not recorded.",
+            "Operations team (2026-11-02): one ATS switches the whole building to the standby generator; the "
+            "circuit-by-circuit list of its loads is not checked on the drawings.",
             "No temperature, smoke or gas sensor telemetry is available; only manual logs and meters.",
             "Photos referenced by the logs are not yet accessible to this system.",
         ],

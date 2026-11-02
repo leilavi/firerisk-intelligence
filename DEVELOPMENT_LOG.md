@@ -403,3 +403,17 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
 * 19:12 author could not find the emergency-lighting data on the dashboard (it was only sent to Muse Spark): added the
   section "Emergency lights and exit signs on this floor" to the fire-risk alert drawer and page; checked on the PC (B1).
 * 18:57 author: remove the building name from the header and the whole-building panel - replaced by generic titles.
+
+## 2026-11-02 09:02–09:40 — One shared ATS; built-in light batteries
+* Author (operations team) answered the two open questions: one ATS for the whole building, the generator supplies
+  the whole building; lights have built-in batteries (~2 h new, older vary); monthly test = normal power off for
+  15 minutes, dark fittings repaired, re-batteried or replaced.
+* Consequence for the story: the earlier wording "battery not recorded" was wrong, and the chain must not suggest the
+  lights go dark as soon as the generator fails. New wording: lights run on their own batteries; the risk is a long
+  outage on older fittings whose real autonomy is unknown (the test proves 15 minutes), and the single ATS is one point
+  that reaches all 6 floors, the smoke fans and the fire pump at once.
+* `power_links.py` (`LIGHT_BATTERY`, `STANDBY_SCOPE`, `battery_note`), `impact_chain.py` (operator basis, ATS links to
+  fire pump / smoke fans, fire pump -> evacuation, new gaps), `equipment.py`, `ai/investigation.py`, `web/app.js`.
+* Tests: 243 collected, 241 pass, 2 skipped (cloud workspace, private snapshot absent).
+* Live re-analysis pending: the facts are in the analysis fingerprint, so the next dashboard run on the author's PC
+  re-writes the stories.

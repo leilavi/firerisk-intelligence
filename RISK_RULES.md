@@ -82,7 +82,7 @@ One alert per equipment item or meter. Independent of fire-risk alerts; the fire
 | EQ2 Overdue | Open repair past its expected completion date (skill §10.4 "Quá hạn") | One level up, but not above Warning: an overdue date alone does not show a serious consequence (skill §7) |
 | EQ3 Repeated faults | ≥ 2 dated fault records with two within 90 days, or a fault that returned after an earlier repair, and recent (90 days) or still open | Warning on critical equipment, otherwise Watch |
 | EQ4 Meter finding | R8 meter signal | Skill §5A.8 level unchanged |
-| EQ-D1 Supplies life-safety equipment (NEW, 2026-10-31) | The asset supplies emergency lights, exit signs, fire pump, smoke control or fire alarm, directly or through downstream panels, according to a **confirmed** row of `data/private/drawings/power_links.xlsx` (drawing link checked by a person) | The asset counts as critical equipment for EQ1/EQ3 (skill §2C.A: fire-safety equipment is critical) - Warning instead of Watch. The alert names the floors, equipment types and counts it supplies and adds a battery test of the emergency lighting. Unconfirmed or invalid rows are never used. A link marked `supply = backup` (standby generator -> ATS, technician 2026-11-01) is reported as standby supply: the generator's alert states that the lights run on battery only if it is unavailable during a grid outage |
+| EQ-D1 Supplies life-safety equipment (NEW, 2026-10-31) | The asset supplies emergency lights, exit signs, fire pump, smoke control or fire alarm, directly or through downstream panels, according to a **confirmed** row of `data/private/drawings/power_links.xlsx` (drawing link checked by a person) | The asset counts as critical equipment for EQ1/EQ3 (skill §2C.A: fire-safety equipment is critical) - Warning instead of Watch. The alert names the floors, equipment types and counts it supplies and adds a battery test of the emergency lighting. Unconfirmed or invalid rows are never used. A link marked `supply = backup` (standby generator -> ATS, technician 2026-11-01) is reported as standby supply: the generator's alert states that the lights run on battery only if it is unavailable during a grid outage. Since 2026-11-02 (operations team) it also states the battery facts (~2 h when new; monthly test 15 min) and asks to check the last monthly test and test older fittings for longer |
 Equipment alert ↔ fire-risk alert link reasons: shared record, same equipment, the meter measures equipment that
 is part of the fire-risk alert, or (EQ-D1) the asset supplies life-safety equipment on the alert's floor (normal or standby supply, stated separately). A fault with no fire-hazard meaning (e.g. an air-conditioner sensor fault) stays an
 equipment alert only.
@@ -90,9 +90,11 @@ equipment alert only.
 ## Chain of effects (NEW, 2026-11-01) — `firerisk/impact_chain.py`
 Explains, without changing any level, how a recorded problem can reach other equipment and people. Links and their
 basis are listed in the module (asset relations of the rule set, confirmed drawing table, technician statement of
-2026-11-01, general hazard mechanisms). A "problem" is an open record or a fault in the last 90 days. Not recorded
-(fire pump and smoke fan supply, batteries of the light fittings) is shown as not established. A possible sequence,
-not a prediction.
+2026-11-01, operations team statement of 2026-11-02, general hazard mechanisms). A "problem" is an open record or a
+fault in the last 90 days. Operations team, 2026-11-02: one ATS feeds every floor, the fire pump and the smoke fans on
+generator power (fire pump / smoke fan circuits not checked on the drawings - stated); light fittings have built-in
+batteries (~2 h when new), tested monthly for 15 minutes - so the real autonomy of older fittings is shown as not
+established. A possible sequence, not a prediction.
 
 ## Muse Spark (NEW) — never sets a level
 The rule level is authoritative. Muse Spark gives its own priority with a rationale, shown next to the rule level.

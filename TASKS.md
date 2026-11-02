@@ -27,7 +27,9 @@
 - [ ] Author: `run_draft_power_links.bat`, check `power_links_draft.xlsx` (yellow rows first), confirm rows, save as `power_links.xlsx`.
 - [x] Author: counts per floor (2026-10-31) and supply path from the technician (2026-11-01) confirmed in `power_links.xlsx`.
 - [x] Claude: B1 re-analysed live 2026-11-01 18:45 - Muse Spark looked up the generator's standby link itself (see PROJECT_STATUS).
-- [ ] Ask the technician: do the emergency lights / exit signs have built-in batteries, autonomy, periodic discharge test? Asset codes for the floor main panels and the ATS.
+- [x] Author (2026-11-02): one ATS for the whole building; fittings have built-in batteries (~2 h new, older vary), monthly 15-minute power-off test, dark fittings repaired/replaced. Recorded in `power_links.py`.
+- [ ] Author: restart `run_dashboard` so Meta Muse Spark re-writes the B1 and whole-building stories with the new facts; Claude checks them (0 invalid citations) before the video is re-recorded.
+- [ ] Optional: where are the monthly test results kept (sheet / paper)? If in a sheet, the app can read them. Asset codes for the floor main panels and the ATS.
 - [ ] (superseded) local drawing extractor + simplified zone summary, filled on the author's computer (floor/zone → fire-safety equipment types, feeding panel; no dimensions, cable routes or equipment details); app links electrical faults to the fire-safety equipment of the same zone.
 
 - [x] Claude: unified dark dashboard with AI Risk Briefing and floor markers (0.8).
@@ -42,7 +44,7 @@
 - [x] Author: restart `run_dashboard` (19:05; 2 agentic investigations ok at 19:06) so the alerts are re-analysed with tool calling; Claude checks the result from the PC database.
 
 - [x] Claude: chain of effects + Muse Spark impact story, live on B1 (2026-11-01 19:49).
-- [ ] Demo video: open with the B1 story (water in the electrical room -> generator batteries -> escape lighting).
+- [ ] Demo video: open with the B1 story (water in the electrical room -> generator batteries -> one shared ATS -> escape lighting on its own batteries: ~2 h new, 15-minute monthly test). Re-check scene narration against the re-written story.
 
 ## Rule (author, 2026-10-30)
 Every change or new feature updates README.md, PROJECT_STATUS.md, CHANGELOG.md and, when affected, ARCHITECTURE.md,

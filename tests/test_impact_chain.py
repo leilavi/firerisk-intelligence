@@ -49,8 +49,9 @@ def test_seepage_in_the_msb_room_reaches_the_escape_lighting_and_shows_the_weak_
     lights = next(s for s in c["steps"] if s["node"] == "escape_lighting")
     assert "36 on all floors" in lights["label"] and "19 on B1" in lights["label"]
     assert all(s["to_next"] for s in c["steps"][:-1]) and c["steps"][-1]["to_next"] is None
-    assert any("fire pump" in g for g in ch["not_established"])
-    assert any("batteries" in g for g in ch["not_established"])
+    assert any("fire pump" in g and "not checked on the drawings" in g for g in ch["not_established"])
+    assert any("15 minutes" in g and "battery" in g for g in ch["not_established"])       # operations team, 2026-11-02
+    assert "only one ATS" in ats["if_affected"] and "2 hours" in lights["if_affected"]
     assert set(evidence_ids(ch)) == {"TEST-SEEP", "TEST-BATT"}
 
 
@@ -127,3 +128,22 @@ def test_whole_building_alert_shows_chains_from_every_floor_and_the_announcement
     lights = next(s for c in ch["chains"] for s in c["steps"] if s["node"] == "escape_lighting")
     assert "B1 19" in lights["label"] and "F2 17" in lights["label"]
     assert {c["start"] for c in build(b1, idx, [], NOW, pl, [b1, bw])["chains"]} == {"msb"}   # floor view unchanged
+
+
+def test_one_ats_for_the_whole_building_is_a_shared_link_to_lights_smoke_fans_and_fire_pump(tmp_path):
+    """Operations team, 2026-11-02: one ATS for all 6 floors, the generator supplies the whole building."""
+    from firerisk.impact_chain import LINKS, BASIS
+    pl = load(write_links(tmp_path / "l.xlsx", _building_rows()))
+    batt = ev("TEST-BATT", "asset_service", 3, "P-BG.TTC217", "Bình ắc quy yếu, cần thay",
+              values={"service_type": "Repair needed"})
+    ch = build(alert(["TEST-BATT"]), _index(batt), [], NOW, pl)
+    after_ats = {c["steps"][[s["node"] for s in c["steps"]].index("ats") + 1]["node"]
+                 for c in ch["chains"] if "ats" in [s["node"] for s in c["steps"]]}
+    assert "floor_panels" in after_ats
+    from_ats = {l.b: l for l in LINKS if l.a == "ats"}
+    assert set(from_ats) == {"floor_panels", "fire_pump", "smoke_fans"}
+    assert all(BASIS[l.basis] == "operations team statement, 2026-11-02" for l in from_ats.values())
+    assert "all 6 floors at once" in from_ats["floor_panels"].why
+    # without the confirmed table none of these building-specific links is used, and they stay as gaps
+    ch0 = build(alert(["TEST-BATT"]), _index(batt), [], NOW, None)
+    assert not any(s["node"] == "ats" for c in ch0.get("chains", []) for s in c["steps"])

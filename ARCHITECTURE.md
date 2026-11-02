@@ -164,7 +164,7 @@ The rule level stays authoritative; tools cannot change data, levels, alarms or 
 ## Chain of effects (NEW, 2026-11-01) — `firerisk/impact_chain.py`
 | Part | How |
 |---|---|
-| Graph | Nodes = parts of the building's systems (transformer, MSB, normal supply, ATS, generator, starter batteries, floor main panels, emergency lighting, blower, fire alarm, fire pump, smoke fans, basement fire, evacuation). Links state `why` and `basis`; `kind` = causes (a problem spreads) or needs (b needs a). Links that are not recorded are kept as gaps |
+| Graph | Nodes = parts of the building's systems (transformer, MSB, normal supply, ATS, generator, starter batteries, floor main panels, emergency lighting, blower, fire alarm, fire pump, smoke fans, basement fire, evacuation). Links state `why` and `basis` (rule set, drawings, technician 2026-11-01, operations team 2026-11-02); `kind` = causes (a problem spreads) or needs (b needs a). Building-specific power links (one ATS -> floor panels, fire pump, smoke fans) are used only with the confirmed table; otherwise they stay gaps |
 | Power links | ATS / floor panel / lighting links are used only when the confirmed table `power_links.xlsx` is present |
 | Problems | Records of the whole data set that are open or a fault in the last 90 days; records without an Equipment_ID matched by the equipment name in the title (flagged "matched by name") |
 | Starts | Parts with a problem that are in the alert's records or its linked equipment alerts |

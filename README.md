@@ -169,8 +169,14 @@ the floor's emergency lights and exit signs over a 2Cx2.5mm² cable, with no ded
 generator re-supplies every floor main panel through the ATS. The app records this path (floor main panels and ATS are
 not in the asset register, so no asset code is invented), marks the generator as the **standby** supply of all
 emergency lights and exit signs (never as their normal supply), and tells Muse Spark the remaining exposure: if a floor
-breaker trips or the floor panel is switched off, that floor's lights run on their batteries - and whether the fittings
-have batteries, their autonomy and any discharge test are not recorded.
+breaker trips or the floor panel is switched off, that floor's lights run on their batteries.
+
+Operations team, 2026-11-02: there is **one ATS for the whole building** (all six floors) and the standby generator
+supplies the whole building; the fittings have **built-in batteries** (about 2 hours when new, older ones vary), tested
+every month by switching normal power off for 15 minutes (a fitting that goes dark is repaired, gets a new battery or
+is replaced). The app states these facts with their basis (`LIGHT_BATTERY`, `STANDBY_SCOPE` in `power_links.py`) and
+keeps the limit visible: the 15-minute test proves at least 15 minutes, not how long each older fitting really lasts,
+and the app does not read the test results yet.
 
 ## Chain of effects across equipment ("butterfly effect")
 A reader who does not know building equipment needs to see why a problem on one part matters for another part and,
@@ -178,8 +184,11 @@ in the end, for people. `firerisk/impact_chain.py` builds this for each fire-ris
 of the building's systems where every link states why two parts are related and on what basis (asset relations in
 the rule set, the confirmed drawing table, the technician's statement, or a general hazard mechanism). From each part
 with a recorded problem it follows the links to the consequence for people and shows, on the way, the other parts it
-depends on and their own recorded problems (e.g. the generator's starter batteries). Links that are not recorded (which
-supply feeds the fire pump or the smoke fans) are listed as not established, never assumed.
+depends on and their own recorded problems (e.g. the generator's starter batteries). Since 2026-11-02 the single ATS
+is shown as a shared link: on generator power it is the path to every floor's emergency lights, the smoke exhaust fans
+and the fire pump (operations team statement; the fire pump and smoke fan circuits are not checked on the drawings and
+are listed as such). What is not recorded - the real battery autonomy of older light fittings - is listed as not
+established, never assumed.
 
 Meta Muse Spark receives the chain with the cited records and writes the **story behind the alert** (`impact_story`):
 a headline, 4-8 plain sentences and the steps, each marked "record" (with citations, validated), "known link",
@@ -212,8 +221,8 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **242 tests (240 pass, 2 skipped** when the private real-data snapshot is absent; last run
-2026-11-01). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
+`python -m pytest -q` — **243 tests (241 pass, 2 skipped** when the private real-data snapshot is absent; last run
+2026-11-02). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
 app; the two alert systems and automatic analysis (no duplicate calls, failures, fallback, level unchanged); survey

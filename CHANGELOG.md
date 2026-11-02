@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Standby power and light batteries (2026-11-02, operations team via the author): ONE ATS switches the whole building
+  (all 6 floors) to the standby generator; emergency lights and exit signs have built-in batteries (about 2 h when new,
+  older ones vary), tested monthly by switching power off for 15 minutes. Kept in one place (`LIGHT_BATTERY`,
+  `STANDBY_SCOPE` in `power_links.py`). Chain of effects: the ATS is a shared link to every floor's lights, the smoke
+  fans and the fire pump (their circuits marked "not checked on the drawings"); the light step says ~2 h when new and
+  that the 15-minute test does not show real autonomy. Generator alert: consequence and chain updated, action "check
+  the last monthly 15-minute test; test older fittings for longer". Dashboard battery row shows the facts instead of
+  "not recorded". AI package: generator-load limit re-worded. 1 new test, 3 updated.
 - Demo mode hides the staff user name inside asset-log record IDs (`asset:Repair-<user>-064`), which the chain of
   effects shows as record chips (2026-11-01, before recording the video). 1 new test (uses node when installed).
 - Chain of effects across equipment (2026-11-01, author's request: "explain the butterfly effect"):

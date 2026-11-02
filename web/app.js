@@ -734,11 +734,11 @@ function lifeSafety(ls, h = "h5") {
   if (ls.supply_path) rows.push(["Normal supply", esc(ls.supply_path)]);
   if (ls.dedicated_emergency_circuit === false) rows.push(["Dedicated emergency circuit", "No - on the floor control breaker"]);
   if (ls.standby_supply) rows.push(["Standby supply", esc(ls.standby_supply)]);
-  rows.push(["Battery in the fittings", "Not recorded (built-in battery, autonomy, discharge test)"]);
+  rows.push(["Battery in the fittings", ls.battery ? `${esc(ls.battery)}${ls.battery_limit ? ` <span class="muted">${esc(ls.battery_limit)}</span>` : ""}` : "Not recorded (built-in battery, autonomy, discharge test)"]);
   return `<${h} class="${h === "h3" ? "sub" : ""}" style="${h === "h3" ? "margin-top:14px" : ""}">Emergency lights and exit signs on this floor</${h}>
     <dl class="dsum">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
     ${ls.risk_note ? `<p class="small ls-note">${org("rule")}${esc(ls.risk_note)}</p>` : ""}
-    <p class="tiny muted">${org("source")}Counts from the building drawings, supply path from the technician (${esc(ls.path_basis || ls.basis || "checked by a person")}). Panel labels stay on this computer.</p>`;
+    <p class="tiny muted">${org("source")}Counts from the building drawings, supply path and batteries from the technician and the operations team (${esc(ls.path_basis || ls.basis || "checked by a person")}). Panel labels stay on this computer.</p>`;
 }
 /* Chain of effects across equipment ("butterfly effect"). Story: Meta Muse Spark (impact_story, citing records);
    diagram: rule set (impact_chain), each link with its basis; unknown links listed as not established. */

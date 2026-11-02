@@ -31,6 +31,7 @@ BASIS = {
     "role": "equipment role (rule set)",
     "mechanism": "general hazard mechanism (rule set)",
     "technician": "technician's statement, 2026-11-01",
+    "operator": "operations team statement, 2026-11-02",
     "drawings": "building drawings, counts checked by a person",
     "not_recorded": "not recorded",
 }
@@ -67,11 +68,13 @@ NODES = {n.key: n for n in [
          ("may phat",)),
     Node("gen_batteries", "Generator starter batteries", "The generator may not start when it is needed.",
          ("P-BG.TTC217",), ("ac quy", "acquy", "binh ac")),
-    Node("ats", "Automatic transfer switch (ATS)", "Generator power does not reach the floor panels."),
+    Node("ats", "Automatic transfer switch (ATS) - one for the whole building", "There is only one ATS: if it fails, "
+         "generator power reaches no floor at all."),
     Node("floor_panels", "Floor main panels (one per floor)", "The floor's circuits, including its emergency lights, "
          "lose supply."),
-    Node("escape_lighting", "Emergency lights and exit signs", "They stay lit only on their own batteries, and the "
-         "condition of those batteries is not recorded."),
+    Node("escape_lighting", "Emergency lights and exit signs", "They switch to their built-in batteries: about 2 hours "
+         "when new, less on older fittings. The monthly test cuts power for only 15 minutes, so how long each fitting "
+         "really lasts is not known."),
     Node("xlnt_blower", "Wastewater air blower AB-01A (plant room, B1)", "A seized motor that is run again can "
          "overheat.", ("P-BG.TTC167", "P-BG.TTC028", "P-BG.TTC226"), ("may thoi khi", "xlnt")),
     Node("fire_alarm", "Fire alarm / heat detection (basement)", "A fire in the basement may be detected late.",
@@ -93,16 +96,17 @@ LINKS = [
     Link("msb", "grid_supply", "The main switchboard distributes grid power to the whole building.", "role"),
     Link("msb", "basement_fire", "Water or a fault inside a switchboard can cause a short circuit, which can start a "
          "fire in the electrical room.", "mechanism"),
-    Link("grid_supply", "ats", "When grid power is lost, the ATS switches the floor main panels to the standby "
-         "generator.", "technician"),
+    Link("grid_supply", "ats", "When grid power is lost, one ATS switches the whole building to the standby "
+         "generator.", "operator"),
     Link("gen_batteries", "generator", "The generator is started by these batteries.", "config", kind="needs"),
-    Link("generator", "ats", "During a grid outage the generator is the only supply, through the ATS.", "technician",
-         kind="needs"),
-    Link("ats", "floor_panels", "The ATS feeds the main panel of every floor.", "technician"),
+    Link("generator", "ats", "During a grid outage the generator is the only supply of the whole building, through "
+         "the one ATS.", "operator", kind="needs"),
+    Link("ats", "floor_panels", "The same ATS feeds the main panel of every floor (B1 to the roof), so a failure "
+         "there reaches all 6 floors at once.", "operator"),
     Link("floor_panels", "escape_lighting", "Each floor's emergency lights and exit signs are fed from the floor "
          "control breaker inside the floor main panel - there is no dedicated emergency circuit.", "technician"),
-    Link("escape_lighting", "evacuation", "Without these lights, escape routes and exits can be dark or hard to find.",
-         "mechanism"),
+    Link("escape_lighting", "evacuation", "In a long outage, fittings whose batteries run down - more likely on older "
+         "ones - leave escape routes and exits dark or hard to find.", "mechanism"),
     Link("xlnt_blower", "basement_fire", "An overloaded or seized motor heats up; a burnt motor has already been "
          "recorded on this blower.", "mechanism"),
     Link("basement_fire", "fire_alarm", "A fire in the basement has to be detected by this system before people are "
@@ -114,15 +118,22 @@ LINKS = [
          "evacuation of the upper floors can start late.", "mechanism"),
     Link("fire_alarm", "evacuation", "A late alarm leaves less time to get out.", "mechanism"),
     Link("smoke_fans", "evacuation", "Smoke on escape routes makes evacuation slower and more dangerous.", "mechanism"),
-    # not recorded: shown as gaps, never followed as if known
-    Link("grid_supply", "fire_pump", "Which supply feeds the fire pump, and whether it is on the generator, is not "
-         "recorded.", "not_recorded", confirmed=False),
-    Link("grid_supply", "smoke_fans", "Which supply feeds the smoke exhaust fans, and whether they are on the "
-         "generator, is not recorded.", "not_recorded", confirmed=False),
+    Link("fire_pump", "evacuation", "Without fire water the fire can grow and smoke can reach the escape routes.",
+         "mechanism"),
+    # the generator supplies the whole building (operations team), so the fire pump and the smoke fans are behind the
+    # same ATS during an outage; their exact circuits are not checked on the drawings
+    Link("ats", "fire_pump", "On generator power the fire pump is supplied through the same ATS (whole building, "
+         "operations team; its circuit is not checked on the drawings).", "operator"),
+    Link("ats", "smoke_fans", "On generator power the smoke exhaust fans are supplied through the same ATS (whole "
+         "building, operations team; their circuit is not checked on the drawings).", "operator"),
 ]
-# links that only exist when the confirmed drawing/technician table says so
+# building-specific power links: only used when the confirmed drawing table is present (no table = no building data)
 NEEDS_POWER_TABLE = {("ats", "floor_panels"), ("floor_panels", "escape_lighting"), ("grid_supply", "ats"),
-                     ("generator", "ats")}
+                     ("generator", "ats"), ("ats", "fire_pump"), ("ats", "smoke_fans")}
+# without the table these stay visible as gaps, never followed as if known
+GAPS_WITHOUT_TABLE = ["Which supply feeds the fire pump, and whether it is on the generator, is not recorded.",
+                      "Which supply feeds the smoke exhaust fans, and whether they are on the generator, is not "
+                      "recorded."]
 
 
 def _fold(s: str) -> str:
@@ -279,12 +290,18 @@ def build(alert, evidence_index: dict, equipment_alerts, now: datetime, power=No
               for k, hit, p in cands[:MAX_CHAINS]]
     gaps = sorted({g["why"] for c in chains for s in c["steps"] for g in s["not_established"]})
     if power_ok:
-        gaps.append("Whether the emergency lights and exit signs have built-in batteries, their autonomy and any "
-                    "discharge test are not recorded.")
+        from .power_links import LIGHT_BATTERY
+        gaps += ["How long each older emergency light and exit sign really lasts on its battery: the monthly test "
+                 f"cuts power for {LIGHT_BATTERY['monthly_test_minutes']} minutes only, and its results are not read "
+                 "by the app yet.",
+                 "The circuits of the fire pump and the smoke exhaust fans behind the ATS are not checked on the "
+                 "drawings."]
+    else:
+        gaps += GAPS_WITHOUT_TABLE
     return {"chains": chains, "not_established": gaps,
             "note": "A possible sequence of effects built from recorded links, not a prediction. Each link states "
                     "its basis; links that are not recorded are listed as not established.",
-            "basis": "rules + asset relations + confirmed drawing table + technician statement"}
+            "basis": "rules + asset relations + confirmed drawing table + technician and operations team statements"}
 
 
 def evidence_ids(chain: dict) -> list[str]:

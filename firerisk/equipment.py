@@ -223,29 +223,34 @@ def equipment_fields(a: EquipmentAlert, items: list[Evidence], kind: str, meter_
         closure = "Repair record closed with the work described and the equipment checked in operation."
         unknowns = ["Cause of the fault (not verified)"]
         if a.power_dependents:                    # rule EQ-D1: what loses normal supply, from confirmed drawing links
-            from .power_links import VIA_STANDBY, describe
+            from .power_links import LIGHT_BATTERY, OPERATOR_BASIS, VIA_STANDBY, describe
             floors = ", ".join(dict.fromkeys(d["floor"] for d in a.power_dependents))
             normal = [d for d in a.power_dependents if d["via"] != VIA_STANDBY]
             standby = [d for d in a.power_dependents if d["via"] == VIA_STANDBY]
+            test_min, new_h = LIGHT_BATTERY["monthly_test_minutes"], LIGHT_BATTERY["autonomy_new_hours"]
             if normal:
                 consequence = (f"{consequence} It supplies life-safety equipment - {describe(normal)} "
                                "(building drawings, each link checked by a person); if it fails during a fire, this "
                                "equipment loses normal supply.")
                 chain = ["Fault recorded", "Panel trips or fails", f"Life-safety equipment on {floors} loses normal supply",
-                         "Escape routes depend on battery backup, which is not recorded"]
+                         f"Escape routes depend on the fittings' built-in batteries (about {new_h} h when new; the "
+                         f"monthly test proves {test_min} min)"]
             if standby:
-                consequence = (f"{consequence} It is the standby supply, through the ATS, of the life-safety equipment "
-                               f"on {', '.join(dict.fromkeys(d['floor'] for d in standby))} "
+                consequence = (f"{consequence} It is the standby supply, through the one ATS of the whole building, of "
+                               f"the life-safety equipment on {', '.join(dict.fromkeys(d['floor'] for d in standby))} "
                                f"({sum(d['count'] for d in standby)} emergency lights and exit signs recorded; technician "
-                               "statement, checked by a person); if it is unavailable during a grid outage, this "
-                               "equipment runs on its own batteries only.")
+                               f"statement and {OPERATOR_BASIS}, checked by a person); if it is unavailable during a "
+                               "grid outage, this equipment runs on its own built-in batteries only - about "
+                               f"{new_h} hours when new, less on older fittings.")
                 if not normal:
-                    chain = ["Fault recorded", "Generator unavailable", "Grid outage",
+                    chain = ["Fault recorded", "Generator does not start", "Grid outage",
                              f"Emergency lights and exit signs on {floors} run on battery only",
-                             "Battery autonomy is not recorded"]
-            actions.insert(1, f"Test the emergency lights and exit signs on {floors} on battery, as the building "
-                              "procedure allows, and record the result")
-            unknowns.append("Battery condition and autonomy of the supplied emergency lights and exit signs (not recorded)")
+                             f"In an outage longer than the {test_min}-minute monthly test, older fittings may go dark"]
+            actions.insert(1, f"Check the last monthly {test_min}-minute test of the emergency lights and exit signs "
+                              f"on {floors} on battery; test the older fittings for longer, as the building procedure "
+                              "allows, and record the result")
+            unknowns.append(f"Real battery autonomy of the older emergency lights and exit signs (the monthly test "
+                            f"lasts {test_min} minutes; results not read by the app)")
         if a.asset_id is None:
             unknowns.append("Equipment_ID not recorded on the incident")
         causes = []
@@ -302,7 +307,8 @@ def link_to_fire_alerts(eq_alerts: list[EquipmentAlert], fire_alerts, evidence_i
                                    f"drawings, checked by a person)")
                 if standby:
                     reasons.append(f"it is the standby supply (through the ATS) of the life-safety equipment on this "
-                                   f"floor ({describe(standby)}; technician statement, checked by a person)")
+                                   f"floor ({describe(standby)}; one ATS for the whole building; technician and operations team "
+                                   f"statements, checked by a person)")
             if reasons:
                 ea.fire_links.append({"fire_alert_id": fa.alert_id, "reasons": reasons})
                 related.append({"equipment_alert_id": ea.alert_id, "reasons": reasons, "severity": ea.severity})

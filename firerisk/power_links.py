@@ -15,7 +15,9 @@ What the rules do with confirmed links (deterministic, documented in RISK_RULES.
 
 Supply path (technician, 2026-11-01): each floor has its own main panel (not in the asset register); the floor
 control breaker (CP) inside it feeds the floor's emergency lights and exit signs over a 2Cx2.5mm2 cable - no
-dedicated emergency circuit. The standby generator feeds every floor main panel through the ATS. Rows can say this
+dedicated emergency circuit. The standby generator feeds every floor main panel through the ATS. Operations team,
+2026-11-02: ONE ATS for all 6 floors, the generator supplies the whole building; the fittings have built-in batteries
+(~2 h when new, older ones vary), tested monthly by switching power off for 15 minutes (LIGHT_BATTERY). Rows can say this
 with two optional columns: `supply` = backup on a link that is only used during a grid outage (generator -> ATS), and
 `panel_kind` (generator, ats, floor_main_panel, floor_breaker, msb, distribution_panel) so the path can be described
 without panel labels. A standby link is reported as such: it never makes the asset the NORMAL supply of the floor.
@@ -46,7 +48,34 @@ PANEL_KINDS = {"generator": "standby generator", "ats": "automatic transfer swit
                "floor_main_panel": "floor main panel", "floor_breaker": "floor control breaker (CP)",
                "msb": "main switchboard", "distribution_panel": "distribution panel"}
 VIA_DIRECT, VIA_DOWN, VIA_STANDBY = "direct", "through a downstream panel", "standby supply (generator through the ATS)"
-YES = {"y", "yes", "x", "1", "true", "co", "có", "ok"}
+
+# Facts stated by the building's operations team (the author), 2026-11-02. Kept in ONE place so every text that uses
+# them (alerts, chain of effects, AI package, dashboard) says the same thing. Not taken from the drawings.
+OPERATOR_BASIS = "operations team statement, 2026-11-02"
+STANDBY_SCOPE = {
+    "single_ats": True,            # one ATS for every floor (B1, F1 incl. mezzanine, F2, F3, F4, Roof)
+    "whole_building": True,        # the standby generator supplies the whole building through that ATS
+    "text": "One ATS switches the whole building (all 6 floors) to the standby generator on a grid outage.",
+    "basis": OPERATOR_BASIS,
+}
+LIGHT_BATTERY = {
+    "built_in": True,
+    "autonomy_new_hours": 2,       # approximate, new fittings
+    "monthly_test_minutes": 15,    # normal power switched off for 15 minutes every month
+    "text": ("Built-in battery in every fitting: about 2 hours when new; older fittings vary and are not measured one "
+             "by one. Monthly test: normal power off for 15 minutes; a fitting that goes dark is repaired, gets a new "
+             "battery or is replaced."),
+    "limit": ("The monthly 15-minute test shows that a fitting lasts at least 15 minutes, not how long it really lasts; "
+              "the app does not read the test results yet."),
+    "basis": OPERATOR_BASIS,
+}
+
+
+def battery_note() -> str:
+    return f"{LIGHT_BATTERY['text']} {LIGHT_BATTERY['limit']} ({OPERATOR_BASIS})"
+
+
+YES ={"y", "yes", "x", "1", "true", "co", "có", "ok"}
 # the mezzanine belongs to floor 1 (author, 2026-10-31); "Mai" = roof
 FLOOR_ALIASES = {"lung": "F1", "tanglung": "F1", "mezzanine": "F1", "m": "F1", "f1m": "F1", "mai": "Roof",
                  "ham": "B1", "tangham": "B1", "basement": "B1", "rooftop": "Roof"}
@@ -220,17 +249,19 @@ class PowerLinks:
                "dedicated_emergency_circuit": False if kind == "floor_breaker" else None,
                "standby_supply": ("; ".join(name(u) for u in reversed(standby)) + " feeds the path on grid outage")
                                  if standby else None,
-               "path_basis": "technician statement 2026-11-01, checked by a person"}
+               "battery": LIGHT_BATTERY["text"],
+               "battery_limit": LIGHT_BATTERY["limit"],
+               "path_basis": f"technician statement 2026-11-01 and {OPERATOR_BASIS}, checked by a person"}
         notes = []
         if kind == "floor_breaker":
             notes.append("The emergency lights and exit signs of this floor are on the floor control breaker, not on "
                          "a dedicated emergency circuit: if that breaker trips or the floor panel is switched off "
                          "for maintenance, all of them run on their own batteries.")
         if standby:
-            notes.append("On a grid outage the standby generator re-supplies the floor panel through the ATS; the "
-                         "lights only need their batteries for the changeover, unless the generator or ATS fails.")
-        notes.append("Whether the fittings have built-in batteries, their autonomy and any periodic discharge test "
-                     "are not recorded.")
+            notes.append("On a grid outage one ATS switches the whole building to the standby generator; the lights "
+                         "then need their batteries only for the changeover. If the generator does not start or the "
+                         "ATS fails, the lights of EVERY floor run on their own batteries at the same time.")
+        notes.append(battery_note())
         out["risk_note"] = " ".join(notes)
         return {k: v for k, v in out.items() if v is not None}
 
@@ -269,9 +300,12 @@ def summary(links: PowerLinks, asset_id: str | None = None, floor: str | None = 
                                                       for d in deps]})
     inv = links.floor_inventory(floor) if floor else {}
     return {"links": rows, **({"floor_inventory": inv} if inv else {}),
-            "basis": "building drawings and the technician's statement, each link checked by a person",
+            "basis": f"building drawings, the technician's statement and the {OPERATOR_BASIS}, each link checked by a "
+                     "person",
+            "standby_scope": STANDBY_SCOPE["text"],
+            "light_batteries": f"{LIGHT_BATTERY['text']} {LIGHT_BATTERY['limit']}",
             "note": "Shows which life-safety equipment loses normal supply if this asset fails; links marked 'standby "
-                    "supply' only matter during a grid outage. Battery backup of the equipment is not recorded."}
+                    "supply' only matter during a grid outage."}
 
 
 def load(path: Path | None = None, known_assets: set[str] | None = None) -> PowerLinks:
