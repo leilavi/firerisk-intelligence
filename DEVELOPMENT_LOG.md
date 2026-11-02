@@ -420,3 +420,8 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
 * 10:20–12:30 demo video v3: the alert page showed the citation check only when it failed; it now also shows a
   passed check (section 4). Live 10:13/10:14 on the author's PC: B1 and whole-building stories re-written by Meta
   Muse Spark with the shared-ATS and light-battery facts, 0 invalid citations.
+* 12:08–13:06 demo video v3 recorded on the author's PC (5 takes; the recorder now waits until Meta Muse Spark has
+  analysed the current evidence, so the screen never shows "made on older evidence"). Final take 12:37, 0 errors.
+  Narration of scenes 6 and 8 follows the analysis shown on screen (lookups: switchboard and transformer histories and
+  the basement emergency-lighting supply; actions: inspect the switchboard rooms, load-test the starter batteries,
+  test the basement heat-detection loop). Meta Muse Voice Transcribe on the voice-over: scene starts within 0.3 s.

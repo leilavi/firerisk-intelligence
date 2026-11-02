@@ -44,7 +44,8 @@
 - [x] Author: restart `run_dashboard` (19:05; 2 agentic investigations ok at 19:06) so the alerts are re-analysed with tool calling; Claude checks the result from the PC database.
 
 - [x] Claude: chain of effects + Muse Spark impact story, live on B1 (2026-11-01 19:49).
-- [ ] Demo video: open with the B1 story (water in the electrical room -> generator batteries -> one shared ATS -> escape lighting on its own batteries: ~2 h new, 15-minute monthly test). Re-check scene narration against the re-written story.
+- [x] Demo video v3 (2026-11-02 13:06): 8 scenes, 2:59, recorded automatically from the real dashboard in demo mode after Meta Muse Spark re-analysed the current evidence (12:29, 0 invalid citations); narration checked against the screen and with Meta Muse Voice Transcribe. Kept in the private folder.
+- [ ] Author: approve video v3, upload it (YouTube unlisted), put the link in the submission form and README.
 
 ## Rule (author, 2026-10-30)
 Every change or new feature updates README.md, PROJECT_STATUS.md, CHANGELOG.md and, when affected, ARCHITECTURE.md,
