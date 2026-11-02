@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Alert page, section 4: the citation check that runs on every Meta Muse Spark analysis is now shown also when it
+  passes ("Citations checked: N distinct records cited, each found in the building records · none removed"); before,
+  it was shown only when citations had been removed (2026-11-02, found while preparing the demo video).
 - Standby power and light batteries (2026-11-02, operations team via the author): ONE ATS switches the whole building
   (all 6 floors) to the standby generator; emergency lights and exit signs have built-in batteries (about 2 h when new,
   older ones vary), tested monthly by switching power off for 15 minutes. Kept in one place (`LIGHT_BATTERY`,

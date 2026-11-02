@@ -537,6 +537,22 @@ function aiFull(d, signalId) {
 /* How Meta Muse Spark investigated (agentic mode): the lookups it chose, in order, exactly as recorded. */
 const TOOL_TXT = { list_assets: "Listed assets and meters", get_asset_history: "Asset history", search_records: "Searched records",
   get_meter_readings: "Meter readings", get_equipment_alerts: "Equipment alerts", get_video_findings: "Survey-video findings" };
+/* Citation check result (validate() in ai/investigation.py runs on every analysis; shown here also when it passes). */
+function citeCheck(inv, r) {
+  const v = inv.validation;
+  if (!v) return "";
+  const ids = new Set();
+  const add = (l) => (l || []).forEach((i) => ids.add(i));
+  (r.observed_facts || []).forEach((f) => add(f.evidence_ids));
+  (r.hypotheses || []).forEach((h) => { add(h.supporting_evidence_ids); add(h.contradicting_evidence_ids); });
+  (r.escalation_pathway || []).forEach((x) => add(x.evidence_ids));
+  (r.recommended_actions || []).forEach((x) => add(x.evidence_ids));
+  (r.scenarios || []).forEach((x) => { add(x.supporting_evidence_ids); add(x.weakening_evidence_ids); });
+  ((r.impact_story || {}).steps || []).forEach((x) => add(x.evidence_ids));
+  (r.risk_briefings || []).forEach((b) => { add(b.evidence_ids); (b.claims || []).forEach((c) => add(c.evidence_ids)); });
+  const bad = (v.invalid_evidence_ids || []).length;
+  return `<p class="small cite-ok">${org("rule")}<b>Citations checked:</b> ${ids.size} distinct record${ids.size === 1 ? "" : "s"} cited, each found in the building records${bad ? `; ${bad} citation(s) to records that do not exist were removed` : " · none removed"}.</p>`;
+}
 function agentTrace(inv) {
   if (inv?.mode !== "agentic" && !inv?.agentic_fallback) return "";
   if (inv.mode !== "agentic") return `<p class="tiny muted">Tool-calling investigation was not possible (${esc(inv.agentic_fallback.reason)}); this analysis was made in one call with the rule-assembled evidence.</p>`;
@@ -922,6 +938,7 @@ async function viewFire(id, focusRisk) {
     ${r && !st.result_is_current ? `<div class="warnbox">This analysis (${dt(inv.created_at)}) was made on older evidence.${st.code === "running" ? " A new analysis is running." : ""}</div>` : ""}
     ${r ? `<div class="aibox"><div class="small muted">${esc(inv.model)} · ${dt(inv.created_at)} · ${esc(inv.seconds)} s · ${esc(inv.trigger === "auto" ? "automatic" : "on request")}</div>
       ${inv.validation?.ok === false ? `<div class="warnbox">${inv.validation.invalid_evidence_ids?.length ? `Removed ${inv.validation.invalid_evidence_ids.length} citation(s) to records that do not exist. ` : ""}${inv.validation.unsupported_facts?.length ? `${inv.validation.unsupported_facts.length} statement(s) without a valid source are marked unsupported.` : ""}</div>` : ""}
+      ${citeCheck(inv, r)}
       <h3 class="sub">Meta Muse Spark interpretation</h3><p>${aiT(r.situation || r.summary)}</p>
       <p class="small">Meta Muse Spark priority ${lvl(r.risk_assessment.ai_priority)} · official rule severity ${lvl(a.severity)} — ${r.risk_assessment.agrees_with_rule_severity ? "agrees" : "differs; the rule severity stays"}. ${aiT(r.risk_assessment.rationale)}</p>
       ${agentTrace(inv)}

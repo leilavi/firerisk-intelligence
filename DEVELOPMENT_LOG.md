@@ -417,3 +417,6 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
 * Tests: 243 collected, 241 pass, 2 skipped (cloud workspace, private snapshot absent).
 * Live re-analysis pending: the facts are in the analysis fingerprint, so the next dashboard run on the author's PC
   re-writes the stories.
+* 10:20–12:30 demo video v3: the alert page showed the citation check only when it failed; it now also shows a
+  passed check (section 4). Live 10:13/10:14 on the author's PC: B1 and whole-building stories re-written by Meta
+  Muse Spark with the shared-ATS and light-battery facts, 0 invalid citations.
