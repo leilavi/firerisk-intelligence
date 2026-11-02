@@ -425,3 +425,11 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
   Narration of scenes 6 and 8 follows the analysis shown on screen (lookups: switchboard and transformer histories and
   the basement emergency-lighting supply; actions: inspect the switchboard rooms, load-test the starter batteries,
   test the basement heat-detection loop). Meta Muse Voice Transcribe on the voice-over: scene starts within 0.3 s.
+
+## 2026-11-02 13:41–19:10 — Demo video, final
+* Author found v3 too fast; v4 slowed the pacing; v5 rebuilt from a reviewed storyboard: power topology drawn as
+  confirmed (grid and generator meet at the one ATS), Muse Spark observation → frame → SAM 3.1 order, real blurred
+  survey frames instead of stock footage, "two" removed from "starter batteries", grey for unknowns.
+* Take 15:15 on the author's PC: 0 errors, analysis of 12:29 current. SAM 3.1 located the cable in 1 of 3 frames;
+  the video shows that frame and says so. Final MP4 2:59.0, −15.5 LUFS. A Vietnamese-subtitle copy was made for the
+  author's review only.

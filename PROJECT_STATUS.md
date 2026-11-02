@@ -1,4 +1,4 @@
-# Project status — 2026-11-02 09:30 (UTC+7)
+# Project status — 2026-11-02 19:10 (UTC+7)
 
 "Live" = run with the real Meta Model API / Google Drive on the author's PC. Numbers below were read from the PC
 database on 2026-10-30.
@@ -14,6 +14,7 @@ database on 2026-10-30.
 | Muse Spark survey-video review (`survey-video-v2`) | **Live**: all 14 videos reviewed, 34 findings with timestamps; uploaded copies deleted | PC database `video_analyses` |
 | SAM 3.1 visual localization | **Live**: 511 frame results (299 located, 212 not located, 0 errors); background run after each new review; overlays on the dashboard | `evidence/sam_*.json`, PC database `video_finding_locations` |
 | Demo mode (names hidden, blurred frames) | Done; 165 frames reviewed by eye, 7 regions added by hand | `run_dashboard_demo.bat`, `DEVELOPMENT_LOG.md` |
+| Demo video (final, v5) | **Done** 2026-11-02 15:45: 2:59, 1920×1080, H.264/AAC, 8 scenes recorded from the real dashboard in demo mode (take 15:15, 0 errors; Meta Muse Spark analysis current before recording); QA: every claim matched to the screen; Meta Muse Voice Transcribe not run on this version. Video file kept private; link goes on the submission page | `docs/demo-video/`, `scripts/demo_video/` |
 | Dashboard (Overview, Risk Briefing, Building Risk Map, Survey Video Findings, detail pages) | Done; checked on the author's PC 2026-10-29 | Playwright tests, live check |
 | Single inspection photos (Muse Spark image input) | Implemented, **not run live** — no photos available | `firerisk/media.py` |
 | Sensor telemetry (temperature / smoke / gas) | **Not available** — no feed connected; stated in the dashboard and README | — |

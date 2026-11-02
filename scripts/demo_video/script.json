@@ -1,0 +1,34 @@
+[
+[
+"s1",
+"Water in an electrical room. Weak generator batteries. A broken announcement system. A faulty heat detector. Four separate incidents. But they all lead to the same place: the people evacuating. This is the butterfly effect."
+],
+[
+"s2",
+"This is FireRisk Intelligence, built during this hackathon on Meta Muse Spark and SAM 3.1. It connects what a building already records: logs, meters, assets and survey videos."
+],
+[
+"s3",
+"First, a rule engine links the records through known relationships. Grid power and the backup generator meet at a single transfer switch. From there, power reaches all six floors, and every floor's emergency lights."
+],
+[
+"s4",
+"Then Meta Muse Spark investigates, and tells the story. On October eighth, water was recorded in the switchboard rooms. It is still unresolved. A short could cut the grid supply. The generator must then start, but its starter batteries were reported degraded on September twenty-ninth. If it fails, one hundred thirty-five emergency lights and exit signs fall back on their own batteries. Newer ones last about two hours. For older ones, the real runtime is unknown: the monthly test lasts only fifteen minutes."
+],
+[
+"s5",
+"Every arrow states why two parts are connected, and on what basis. Every finding opens its source record. What cannot be verified is marked unknown. No speculation. Only evidence."
+],
+[
+"s6",
+"Muse Spark does not just summarize. It chooses its own lookups, like the emergency lighting supply of the basement. Every citation is checked, and invalid ones are removed. The official risk level stays with the rules."
+],
+[
+"s7",
+"Muse Spark also reviewed fourteen survey videos. SAM 3.1 outlines each finding in the frame, and the app links it to that floor's alert. Video is supporting evidence, not proof."
+],
+[
+"s8",
+"The manager gets clear next steps: inspect the switchboard rooms for water, and load-test the generator batteries. Decision support, not a replacement for certified fire safety systems. FireRisk Intelligence. Because building risks rarely happen in isolation."
+]
+]

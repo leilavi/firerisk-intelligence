@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Demo video (2026-11-02): final 2:59 video recorded from the real dashboard in demo mode; storyboard, production
+  report, QA report and English subtitles in `docs/demo-video/`; recording/editing scripts in `scripts/demo_video/`.
 - Alert page, section 4: the citation check that runs on every Meta Muse Spark analysis is now shown also when it
   passes ("Citations checked: N distinct records cited, each found in the building records · none removed"); before,
   it was shown only when citations had been removed (2026-11-02, found while preparing the demo video).

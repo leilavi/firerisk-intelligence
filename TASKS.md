@@ -45,7 +45,9 @@
 
 - [x] Claude: chain of effects + Muse Spark impact story, live on B1 (2026-11-01 19:49).
 - [x] Demo video v3 (2026-11-02 13:06): 8 scenes, 2:59, recorded automatically from the real dashboard in demo mode after Meta Muse Spark re-analysed the current evidence (12:29, 0 invalid citations); narration checked against the screen and with Meta Muse Voice Transcribe. Kept in the private folder.
-- [ ] Author: approve video v3, upload it (YouTube unlisted), put the link in the submission form and README.
+- [x] Demo video v5 final (2026-11-02 15:45): slower pacing, correct power topology, real blurred survey frames, SAM 3.1 box/mask sequence; storyboard, production and QA reports in `docs/demo-video/`.
+- [ ] Author: upload `FireRisk_Intelligence_Demo_Final.mp4` (YouTube unlisted), paste the link in the submission form, open it in a private window (R-13).
+- [ ] Optional: run `transcribe_v5.bat` (Meta Muse Voice Transcribe on the final voice-over).
 
 ## Rule (author, 2026-10-30)
 Every change or new feature updates README.md, PROJECT_STATUS.md, CHANGELOG.md and, when affected, ARCHITECTURE.md,
@@ -53,5 +55,5 @@ HACKATHON_COMPLIANCE.md and FEATURE_ORIGIN_MATRIX.md **in the same commit**. Nev
 
 ## Later
 - [x] Public GitHub repo created and history pushed (2026-10-27), checked for data/secrets.
-- [ ] Demo script (≤ 3 min) showing only new work; record video without staff names.
+- [x] Demo script (≤ 3 min) showing only new work; video recorded in demo mode without staff names (2026-11-02).
 - [ ] Final compliance review.

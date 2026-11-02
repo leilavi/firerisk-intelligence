@@ -11,6 +11,12 @@ risk-alert skill. See [What is new](#what-is-new-in-the-hackathon) below.
 > AI output is labelled as hypothesis. It does not replace certified fire systems or qualified professionals,
 > and it never controls alarms or suppression equipment.
 
+## Demo video
+2:59, English narration and subtitles: link on the submission page (YouTube, unlisted). Recorded automatically from
+the real dashboard in demo mode (names hidden, blurred survey frames); every click is a real click in the app.
+Storyboard, production report and QA checks (each claim matched to what the screen shows):
+[docs/demo-video/](docs/demo-video/); recording and editing scripts: [scripts/demo_video/](scripts/demo_video/).
+
 ## The problem
 A building's logs already contain early fire-risk signals, but they are spread across systems and look minor
 on their own: a water-seepage report in the switchboard room, a heat-detector module fault, a jammed blower
