@@ -17,3 +17,6 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Sample mode (fictional building, re-created on every start)
+data/sample/

@@ -127,6 +127,10 @@ async function loadStatus() {
   NAME_RES = (S.name_patterns || []).map((p) => new RegExp(p, "giu"));
   // building name not shown on screen (author, 2026-11-01): the header and the whole-building panel use generic titles
   if (S.demo_mode && !$("#demo-chip")) $("#freshness").insertAdjacentHTML("beforebegin", '<span class="hchip" id="demo-chip" title="Building names are hidden, frames are blurred copies and original videos are not shown"><i></i>Demo mode · names hidden</span>');
+  if (S.sample_mode && !$("#sample-banner")) {   // fictional building for judges / fresh clones (firerisk/sample.py)
+    $("#freshness").insertAdjacentHTML("beforebegin", '<span class="hchip sample" id="sample-chip" title="Every record is invented; the analysis on screen is computed live from them"><i></i>SAMPLE DATA · fictional building</span>');
+    document.body.insertAdjacentHTML("afterbegin", `<div id="sample-banner" class="samplebar"><b>Sample mode.</b> "Acme Riverside Plaza" is a fictional building: every record, number and name is invented (the real building's data is private). Alerts, levels, timelines, chains of effects and actions are computed live by the rule engine from these records. ${S.ai_configured ? "Meta Muse Spark analyses them live with your API key." : "No Meta Model API key is configured, so no Meta Muse Spark analysis is shown; add your key (setup_api_key.bat or MODEL_API_KEY in .env) and restart to see it live. Recorded live runs on the real building: demo video and <code>evidence/</code>."}</div>`);
+  }
   maskNames(document.body);
   const issues = S.sources_down.length + S.sources_stale.length;
   const sy = S.sync || {};

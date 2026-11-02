@@ -19,7 +19,11 @@ LOCAL_TZ = timezone(timedelta(hours=7), name="UTC+07:00")
 import json as _json
 from pathlib import Path as _Path
 
-_SITE_FILE = _Path(__file__).resolve().parent.parent / "data" / "private" / "site_config.json"
+import os as _os
+
+# FIRERISK_SITE_CONFIG: sample mode (firerisk/sample.py) points this at the fictional building's file.
+_SITE_FILE = _Path(_os.environ.get("FIRERISK_SITE_CONFIG") or
+                  _Path(__file__).resolve().parent.parent / "data" / "private" / "site_config.json")
 _SITE = _json.loads(_SITE_FILE.read_text(encoding="utf-8")) if _SITE_FILE.exists() else {}
 
 BUILDING_NAME = _SITE.get("building_name", "Demo building")

@@ -289,7 +289,8 @@ def status():
     abnormal_assets = _abnormal_assets(res)
     demo = demo_mode()
     return {"building": DEMO_BUILDING if demo else BUILDING_NAME, "version": __version__,
-            "demo_mode": demo, "name_patterns": (name_patterns() + [STAFF_IN_RECORD_ID]) if demo else [], "generated_at": res.generated_at.isoformat(),
+            "demo_mode": demo, "sample_mode": os.environ.get("FIRERISK_SAMPLE_MODE") == "1",
+            "ai_configured": cfg.configured, "name_patterns": (name_patterns() + [STAFF_IN_RECORD_ID]) if demo else [], "generated_at": res.generated_at.isoformat(),
             "run_id": state.run_id, "sources": _sources_en(res.source_status), "alert_counts": dict(counts),
             "active_alerts": len(active), "serious_alerts": len(serious),
             "abnormal_equipment": len(abnormal_assets),

@@ -1,6 +1,9 @@
 # Tasks
 
 ## Next
+- [x] Claude: sample mode with a fictional building so judges can open the dashboard from a fresh clone (2026-11-02).
+- [x] Claude: remove the building abbreviation from old commits (history rewrite 4, author's consent, 2026-11-02).
+- [ ] Author: optional - run `run_dashboard_sample.bat` once on the PC (with the key, Meta Muse Spark analyses the fictional records live).
 - [x] Author: install + dashboard + first live Muse investigation (2026-10-27 14:19).
 - [x] Claude: read investigation from PC DB, saved evidence (public summary / private full), added opaque evidence-ID aliases (prompt v2).
 - [x] Author: one-time Drive setup (`setup_drive_sync.bat`, incl. the read-only appsscript.json) — then the app reads the sheet, the Asset tab and all 8 videos by itself. Set the zone of the 3 videos the register does not place.

@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- Sample mode (2026-11-02): `python -m firerisk.sample` (`run_dashboard_sample.bat`, `run_dashboard_sample.sh`) opens
+  the dashboard on a fictional building, *Acme Riverside Plaza*, so judges and anyone cloning the repo can use the app
+  without the private data. Records invented and written to `data/sample/` (git-ignored); alerts, levels, chains of
+  effects and actions computed by the real engine; Meta Muse Spark only with the user's own key; never reads
+  `data/private/`. Sample banner and chip on every page; `sample_mode`/`ai_configured` in `/api/status`;
+  `FIRERISK_SITE_CONFIG` setting. Branch `baseline` added on GitHub (same commit as `baseline-pre-hackathon`) so the
+  README link and `git diff baseline main` work. 5 new tests.
 - History rewrite (2026-11-02, author's consent): an abbreviation of the real building, used as an example in two
   code comments of `firerisk/demo.py` since 2026-10-29, replaced with a made-up name in every commit from that day on;
   dates and messages kept, commit hashes changed; hashes cited in the docs updated. Disclosed in README.

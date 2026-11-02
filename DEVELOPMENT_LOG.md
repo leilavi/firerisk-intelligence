@@ -443,3 +443,17 @@ file contents and commit dates are unchanged (`git diff c9e0c74 6574cf0` is empt
   cited in README, this log and `docs/demo-video/PRODUCTION_REPORT.md` updated. Force-pushed to `main`.
 * Limit: GitHub may keep the old commits reachable by their full hash for some time; they are no longer part of
   any branch.
+
+## 2026-11-02 19:35–20:40 — Sample mode for judges
+* Author asked what judges see when they clone the repo: nothing, because the real data is private. Added sample
+  mode: `firerisk/sample.py` writes a fictional building (Acme Riverside Plaza) in the real column layout and starts
+  the normal dashboard on it; all data paths redirected to `data/sample/`, Drive sync and demo mode off.
+* Scenario designed so the rules have something to connect: +60% load on the main and switchboard meters for 4
+  days, hot switchboard busbar (2 earlier repairs), water seeping into the switchboard room, failed starter battery
+  after a grid outage, fire-alarm loop fault, smoke-fan fault, jammed blower with a burn-out history, floor-3 PA fault.
+  Rule engine result in the cloud workspace: B1 High Risk (R1, R2, R3, R4, R6, R8), F3 Warning (R7), 10 equipment
+  alerts, 25 of 25 supply rows used, no data-quality issues, no browser errors on the 7 pages.
+* No Meta API key in the cloud workspace, so Muse Spark was not run on the sample; the dashboard states that no Meta
+  AI analysis exists. With a key it runs live on the fictional records.
+* Branch `baseline` pushed (same commit `b79223f` as `baseline-pre-hackathon`) - the README link pointed to it.
+* Tests: 248 collected, 246 pass, 2 skipped.

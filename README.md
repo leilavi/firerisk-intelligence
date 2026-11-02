@@ -17,6 +17,33 @@ the real dashboard in demo mode (names hidden, blurred survey frames); every cli
 Storyboard, production report and QA checks (each claim matched to what the screen shows):
 [docs/demo-video/](docs/demo-video/); recording and editing scripts: [scripts/demo_video/](scripts/demo_video/).
 
+## Try it: sample mode (fictional building, no private data needed)
+The real building's records are private and are not in this repository (see [Data](#data)), so a fresh clone has
+nothing to analyse. **Sample mode** starts the same dashboard on a made-up building, *Acme Riverside Plaza*:
+
+* **Windows:** install Python 3.13, then double-click `run_dashboard_sample.bat` (runs `install.bat` the first time).
+* **macOS / Linux:** `./run_dashboard_sample.sh` (creates `.venv`, installs `requirements.txt`).
+* Any platform with dependencies installed: `python -m firerisk.sample` → http://127.0.0.1:8765
+
+What you see and where it comes from:
+* **Every record is invented** (`firerisk/sample.py`): ~60 days of meter readings, daily checklists, repair and
+  incident logs, generator runs, an asset register and a confirmed emergency-lighting supply table, written to
+  `data/sample/` (git-ignored, re-created on each start with dates relative to today). No row, number or name comes
+  from the real building. Every screen shows a "SAMPLE DATA · fictional building" banner.
+* **The analysis is real:** the same rule engine computes the alerts, levels, timelines, chains of effects and
+  recommended actions from those records; nothing on screen is typed in as a result. The scenario combines an
+  abnormal electrical load (main and switchboard meters +60% for 4 days), a hot switchboard busbar repaired twice
+  before, water seeping into the switchboard room, a failed generator starter battery after a grid outage, a
+  fire-alarm loop fault, a smoke-fan fault and a jammed blower motor with a burn-out history.
+* **Meta Muse Spark:** called only with **your own** Meta Model API key (`setup_api_key.bat`, or `MODEL_API_KEY` in
+  `.env`); it then analyses the fictional records live. Without a key the dashboard says that no Meta AI analysis
+  exists - it never shows an invented AI result. Live runs on the real building are shown in the demo video and in
+  [`evidence/`](evidence/). English text of the Vietnamese-style sample records is written by the sample's author
+  (not AI).
+* Sample mode never reads `data/private/`: every data path is redirected to `data/sample/`, Google Drive sync and
+  demo mode are off (`tests/test_sample.py` checks this in a fresh process). Survey videos and SAM 3.1 frames are
+  not part of the sample (the real ones are private); those pages show "no survey video".
+
 ## The problem
 A building's logs already contain early fire-risk signals, but they are spread across systems and look minor
 on their own: a water-seepage report in the switchboard room, a heat-detector module fault, a jammed blower
@@ -65,7 +92,8 @@ conclusion. A video finding stays a finding (no risk level) until a person verif
 ## Data
 * Real data of one building ([Building]), used with the **written permission of the data owner** (approval of
   2026-10-30; conditions and how each is enforced: [`DATA_AUTHORIZATION.md`](DATA_AUTHORIZATION.md)). It is **private** and **not in this repository**. The app reads a
-  snapshot from `data/private/snapshot/` (git-ignored) described by `manifest.json`.
+  snapshot from `data/private/snapshot/` (git-ignored) described by `manifest.json`. To run the app without it,
+  use [sample mode](#try-it-sample-mode-fictional-building-no-private-data-needed) (fictional building).
 * Sources used: `Operations Data` (tabs: daily meter readings and checklists, asset repairs, incident and
   works log, generator log) and the vehicle-count workbook.
 * Survey videos: 14 videos of the building recorded 2026-10-27 to 2026-10-28, read from the author's Google Drive.
@@ -227,13 +255,14 @@ Every piece of content is labelled **SOURCE**, **DERIVED**, **RULE**, **META MUS
 The UI names each model part after the Meta model that made it; model IDs are `muse-spark-1.3` and `sam-3.1`.
 
 ## Tests
-`python -m pytest -q` — **243 tests (241 pass, 2 skipped** when the private real-data snapshot is absent; last run
+`python -m pytest -q` — **248 tests (246 pass, 2 skipped** when the private real-data snapshot is absent; last run
 2026-11-02). They cover: ported rules, labels and levels, new hazard rules, correlation, pipeline robustness on **test
 fixture** workbooks (duplicates, invalid values, missing/corrupt sources, late arrivals); the API; offline AI tests
 with a fake HTTP transport (clearly not the real API); Google Drive sync against a local mock of the Apps Script web
 app; the two alert systems and automatic analysis (no duplicate calls, failures, fallback, level unchanged); survey
 videos and video findings with TEST files and a fake Meta API; the agentic investigation (tool protocol, read-only tools, privacy of what is sent, caps, fallback); the data owner's
-conditions (documents and drawings refused before every AI upload, faces blurred locally); the local drawing probe
+conditions (documents and drawings refused before every AI upload, faces blurred locally); sample mode (only sample
+paths read, the designed scenario found by the rules, every sample text translated); the local drawing probe
 and local OCR of scanned drawings (numbers only, no network); the SAM 3.1
 client and parser, localization and its
 background run (fake SAM); demo-mode masking; and browser checks of the rendered pages with Playwright (English-only
@@ -282,7 +311,7 @@ scripts/             Meta API, tool-calling and SAM checks, Google Drive sync se
 apps_script/         Google Apps Script export web app (template, no IDs or token)
 evidence/            sanitized evidence of real API calls (no keys)
 baseline/            redacted copy of the pre-existing skill
-*.bat                Windows launchers
+*.bat                Windows launchers (run_dashboard_sample.bat / .sh: fictional sample building)
 ```
 
 ## Settings (`.env`, never committed)

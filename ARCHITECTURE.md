@@ -173,3 +173,13 @@ The rule level stays authoritative; tools cannot change data, levels, alarms or 
 | Whole building | The "Building" alert's chains start from the records of every fire-risk alert; `/api/building` → `building_chain` (chains + latest Meta Muse Spark story) shown in the Overview whole-building panel |
 | API / UI | `impact_chain` in `/api/alerts/{id}` (record titles translated for display); story + step diagram in section 2 of the alert page and in the drawer |
 
+
+## Sample mode (NEW, 2026-11-02) — `firerisk/sample.py`
+`python -m firerisk.sample` sets every data path (`FIRERISK_SITE_CONFIG`, `FIRERISK_SNAPSHOT_DIR`, `FIRERISK_DB`,
+`FIRERISK_POWER_LINKS`, media / video / frame / log folders) to `data/sample/` **before** any app module is imported,
+switches Google Drive sync and demo mode off, writes a fictional building's workbooks in the same column layout as the
+real sources (dates relative to today) and starts the normal server. The pipeline is unchanged: loaders → rules →
+alerts → chain of effects → dashboard. `/api/status` returns `sample_mode` and `ai_configured`; the dashboard shows a
+sample banner. English display text of the sample records comes from `data/sample/translations.json` (origin
+`sample_translation`, written by the sample's author), used only when `FIRERISK_SAMPLE_MODE=1`. Meta Muse Spark runs
+only with the user's own key.

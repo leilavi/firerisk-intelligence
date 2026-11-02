@@ -94,6 +94,18 @@ def glossary(s: str | None) -> str | None:
     return None
 
 
+def _sample_translations() -> dict[str, str]:
+    """Sample mode (firerisk/sample.py): fixed English for the fictional records; empty otherwise."""
+    import os
+    p = os.environ.get("FIRERISK_SAMPLE_TRANSLATIONS")
+    if not p or os.environ.get("FIRERISK_SAMPLE_MODE") != "1":
+        return {}
+    try:
+        return json.loads(Path(p).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 class Translator:
     def __init__(self, db_path: Path):
         self.db_path = db_path
@@ -105,6 +117,26 @@ class Translator:
         self.lock = threading.Lock()
         self.running = False
         self.last: dict = {}
+        self.sample = _sample_translations()
+
+    def _sample_en(self, s: str) -> str | None:
+        """Sample mode only: English written by the sample's author for the fictional records ("a | b" parts too)."""
+        if not self.sample:
+            return None
+        if s in self.sample:
+            return self.sample[s]
+        head, sep, tail = s.rpartition(": ")
+        if sep and head and not needs(tail):  # "<record title>: open fault" (equipment-alert headline)
+            h = self._sample_en(head)
+            if h:
+                return f"{h}: {tail}"
+        if len(s) >= 20:                     # a shortened record title (e.g. equipment-alert name cut at 40 chars)
+            full = [k for k in self.sample if k.startswith(s)]
+            if len(full) == 1:
+                return self.sample[full[0]]
+        parts = [p.strip() for p in s.split(" | ")]
+        out = [p if not needs(p) else (glossary(p) or self.sample.get(p)) for p in parts]
+        return " | ".join(out) if len(parts) > 1 and all(out) else None
 
     def _conn(self):
         c = sqlite3.connect(self.db_path)
@@ -121,11 +153,15 @@ class Translator:
         g = glossary(s)
         if g is not None:
             return g, "glossary"
+        t = self._sample_en(s)
+        if t:
+            return t, "sample_translation"
         t = self.cache.get(s)
         return (t, "ai_translation") if t else (None, None)
 
     def pending(self, strings) -> list[str]:
-        return sorted({s for s in strings if needs(s) and glossary(s) is None and s not in self.cache})
+        return sorted({s for s in strings if needs(s) and glossary(s) is None and s not in self.cache
+                       and not self._sample_en(s)})
 
     # --- translation (background) ------------------------------------------------------------------------------
     def translate(self, client, strings: list[str]) -> dict:
