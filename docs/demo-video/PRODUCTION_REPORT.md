@@ -3,7 +3,7 @@
 Date: 2026-11-02 · Final file: `FireRisk_Intelligence_Demo_Final.mp4` (2:59, 1920×1080, 30 fps, H.264 + AAC)
 
 ## What was inspected
-- Repository `leilavi/firerisk-intelligence` at commit c905844 (+ the author's PC copy, same code): rule engine
+- Repository `leilavi/firerisk-intelligence` at commit aa2d547 (+ the author's PC copy, same code): rule engine
   (`firerisk/impact_chain.py`, `power_links.py`, `equipment.py`), Meta Muse Spark investigation and agent
   (`firerisk/ai/investigation.py`, `ai/agentic.py`, citation check `validate()`), SAM 3.1 localization
   (`firerisk/localize.py`, `sam.py`), dashboard (`web/app.js`), demo mode (`firerisk/demo.py`).

@@ -294,7 +294,7 @@ in (1) frames of technical rooms (name plates), (2) two Muse Spark observations 
 **Built:** see CHANGELOG. Patterns are generated from the private site_config.json, so no building name is in the
 repository; tests use invented TEST names. Original videos are not blurred: demo mode does not serve them at all.
 **Incident:** the first push (e379dc4) had the real building name in two code comments; replaced within minutes by
-a717f0e (force-push of that one commit). Main history no longer contains it; the old commit may stay reachable on
+bdd500f (force-push of that one commit). Main history no longer contains it; the old commit may stay reachable on
 GitHub by its hash for a while.
 **Also fixed:** Vietnamese tab name in the "Source not updated" line (found because the test data turned 2 days old).
 
@@ -310,10 +310,10 @@ Manifest marked `reviewed: true` (08:35). Original frames untouched; copies stay
 ## 2026-10-29 08:36–08:50 — Author: "dashboard still shows 28 Oct" and wrong frame for AB-01A
 Checked in the author's browser pane on the running dashboard. (1) The drawer of the AB-01A risk used an MSB video
 linked by equipment to ANOTHER risk of the same zone alert (water in electrical rooms); equipment links now count
-only for their own risk (d4c1c1d); verified live: AB-01A shows the open motor terminal box from the wastewater room.
+only for their own risk (25351f5); verified live: AB-01A shows the open motor terminal box from the wastewater room.
 (2) The "28 Oct 15:06" on the briefing was the last successful Muse Spark analysis of ZONE-B1: 8 runs since 28 Oct
 16:38 had failed with invalid JSON because the answer was cut off at 8,000 completion tokens (reasoning included).
-Budget raised to 32,000 (47737f5). Live re-analysis 08:49: ok in 39 s, 9,712 completion tokens (4,077 reasoning),
+Budget raised to 32,000 (7e064a7). Live re-analysis 08:49: ok in 39 s, 9,712 completion tokens (4,077 reasoning),
 5 per-risk briefings, 0 invalid evidence citations - confirming the cause. Author confirmed the dashboard is correct.
 
 ## 2026-10-29 20:45–21:40 — Survey Video Findings illustration (UI only, scoped)
@@ -376,7 +376,7 @@ assuming. Sanitized summary saved to evidence/.
 ## 2026-10-30 21:05 — history rewrite (author identity)
 Commits `33d9fd4` and `c9e0c74` were made with the author's personal e-mail as git author by mistake. Both were
 re-authored to `Claude <noreply@anthropic.com>` (the identity used for this session's earlier commits) and force-pushed;
-file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empty). New hashes: `92d5bce`, `29e806d`.
+file contents and commit dates are unchanged (`git diff c9e0c74 6574cf0` is empty). New hashes: `97de6fd`, `6574cf0`.
 
 ## 2026-11-01 18:31–19:30 — Supply path of emergency lighting; verify colour
 * Author relayed the technician: emergency lights and exit signs are fed over 2Cx2.5mm² cable from the floor control
@@ -433,3 +433,13 @@ file contents and commit dates are unchanged (`git diff c9e0c74 29e806d` is empt
 * Take 15:15 on the author's PC: 0 errors, analysis of 12:29 current. SAM 3.1 located the cable in 1 of 3 frames;
   the video shows that frame and says so. Final MP4 2:59.0, −15.5 LUFS. A Vietnamese-subtitle copy was made for the
   author's review only.
+
+## 2026-11-02 19:09–19:35 — Building abbreviation removed from history
+* Repo audit before submission: no data, keys or media are tracked. Two code comments in `firerisk/demo.py`
+  (example regex for the branch prefix) used an abbreviation of the real building since commit `bdd500f` (was
+  `a717f0e`, 2026-10-29). Fixed in the current code first (19:09), then, with the author's consent, removed from
+  every commit from 2026-10-29 on with `git filter-repo --replace-text` limited to those commits (earlier commits
+  and their signatures untouched). Author/committer dates and messages kept; 46 commit hashes changed; the hashes
+  cited in README, this log and `docs/demo-video/PRODUCTION_REPORT.md` updated. Force-pushed to `main`.
+* Limit: GitHub may keep the old commits reachable by their full hash for some time; they are no longer part of
+  any branch.

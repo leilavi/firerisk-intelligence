@@ -265,9 +265,12 @@ remain under the author's responsibility.
 * **Disclosed history rewrites:** (1) 2026-10-27 14:34–14:40, before the first publication: personal data and the
   building's name replaced in file contents with `git filter-repo`; author/committer dates and messages kept, hashes
   changed. (2) 2026-10-29: commit `e379dc4`, which had the building's name in two code comments, was replaced on `main` minutes
-  after it was pushed. (3) 2026-10-30 21:05: the two latest commits (`33d9fd4`, `c9e0c74`, now `92d5bce`, `29e806d`)
+  after it was pushed. (3) 2026-10-30 21:05: the two latest commits (`33d9fd4`, `c9e0c74`, now `97de6fd`, `6574cf0`)
   had a personal e-mail as author; author re-set to the usual noreply identity, content and dates unchanged. All are
-  described in DEVELOPMENT_LOG.md.
+  (4) 2026-11-02 19:30: two code comments in `firerisk/demo.py` (commits from 2026-10-29 on) used an abbreviation
+  of the real building as an example; replaced with a made-up name in every commit from `bdd500f` (was `a717f0e`)
+  onward with `git filter-repo`; author/committer dates and messages kept, hashes of those commits changed (cited
+  hashes updated in the docs). All are described in DEVELOPMENT_LOG.md.
 
 ## Repository
 ```

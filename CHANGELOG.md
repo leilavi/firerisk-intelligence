@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased — SAM 3.1 visual localization (in progress)
+- History rewrite (2026-11-02, author's consent): an abbreviation of the real building, used as an example in two
+  code comments of `firerisk/demo.py` since 2026-10-29, replaced with a made-up name in every commit from that day on;
+  dates and messages kept, commit hashes changed; hashes cited in the docs updated. Disclosed in README.
 - Demo video (2026-11-02): final 2:59 video recorded from the real dashboard in demo mode; storyboard, production
   report, QA report and English subtitles in `docs/demo-video/`; recording/editing scripts in `scripts/demo_video/`.
 - Alert page, section 4: the citation check that runs on every Meta Muse Spark analysis is now shown also when it
