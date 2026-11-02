@@ -88,7 +88,7 @@ def name_patterns(site: dict | None = None) -> list[str]:
             continue
         words = [w for w in re.split(r"[\s\-_.]+", _fold(v)) if w]
         if key == "branch_prefix":
-            # e.g. "ĐX-Tower" -> [ĐD]X[\s\-_]*Tower
+            # e.g. "ĐX-Tower" -> [ĐD]X[\s\-_]*Tower (example name, not the real building)
             parts = [re.escape(w) for w in words]
             first = parts[0].replace("D", "[DĐđd]", 1) if parts and parts[0][:1].upper() == "D" else parts[0]
             pats.append(r"[\s\-_]*".join([first] + parts[1:]))
